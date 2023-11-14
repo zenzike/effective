@@ -1,8 +1,10 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Control.Effect.State where
 import Control.Monad.Trans.Class (MonadTrans, lift)
+import Control.Monad (join)
 import Data.Tuple (swap)
 
 import Control.Effect
@@ -23,11 +25,25 @@ data Local s x where
 
 type State s = '[Put s, Get s, Local s]
 
+put'
+  :: (Member (Put s) sig, Monad m)
+  => (?oalg :: Effs sig m (m ()) -> m (m ()))
+  => s -> m ()
+put' s = (join . ?oalg . inj) (Alg (Put s (return ())))
+
 put :: Member (Put s) sig => s -> Prog sig ()
-put s = injCall (Alg (Put s (return ())))
+put = put' where ?oalg = Call . fmap return
+-- put s = injCall (Alg (Put s (return ())))
+
+get' :: (Member (Get s) sig, Monad m)
+  => (?oalg :: Effs sig m (m s) -> m (m s))
+  => m s
+get' = (join . ?oalg . inj) (Alg (Get return))
+
 
 get :: Member (Get s) sig => Prog sig s
-get = injCall (Alg (Get return))
+get = get' where ?oalg = Call . fmap return
+-- get = injCall (Alg (Get return))
 
 local :: Member (Local s) sig => s -> Prog sig a -> Prog sig a
 local s p = injCall (Scp (Local s (fmap return p)))

@@ -25,6 +25,7 @@ import Control.Monad ( join, ap, liftM )
 import Control.Monad.Trans.Class
 
 import Data.SOP.Constraint ( All )
+import GHC.Classes (IP (..))
 
 type Effect = (Type -> Type) -> (Type -> Type)
 type Signature = Type -> Type
@@ -210,6 +211,10 @@ injCall = Call . inj
 prjCall :: Member sub sup => Prog sup a -> Maybe (Eff sub (Prog sup) (Prog sup a))
 prjCall (Call op) = prj op
 prjCall _         = Nothing
+
+instance Monad m => IP "oalg" (Effs sig m (m a) -> m a) where
+  ip = Call . fmap return
+
 
 type Handler
   :: [Signature]                         -- effs  : input effects

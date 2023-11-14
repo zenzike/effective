@@ -35,7 +35,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    base, transformers, ghc,
+    base, transformers, ghc, ghc-prim,
     containers,
     sop-core
 
