@@ -211,6 +211,33 @@ prjCall :: Member sub sup => Prog sup a -> Maybe (Eff sub (Prog sup) (Prog sup a
 prjCall (Call op) = prj op
 prjCall _         = Nothing
 
+data Handler' effs fs oeffs =
+  forall ts . All MonadTrans ts => 
+    Handler'
+    { run'  :: forall m . Monad m 
+           => (forall x . Effs oeffs m x -> m x)
+           -> (forall x . HComps ts m x -> m (Comps fs x))
+
+    , malg' :: forall m . Monad m
+           => (forall x . Effs oeffs m x -> m x)
+           -> (forall x . Effs effs (HComps ts m) (HComps ts m x) -> HComps ts m x)
+
+    , mfwd' :: forall m sig . Monad m
+           => (forall x . Effs sig m x -> m x)
+           -> (forall x . Effs sig (HComps ts m) x -> HComps ts m x)
+
+    , mret :: forall m x . x -> HComps ts m x
+    }
+
+foldM' :: forall m effs fs oeffs a .
+  (Monad m, Recompose fs)
+  => (forall a. Effs oeffs m a -> m a)
+  -> Handler' effs fs oeffs
+  -> Prog effs a -> m (Composes fs a)
+foldM' oalg (Handler' run malg mfwd mret)
+  = fmap recompose . run oalg . fold (malg @m oalg) mret
+
+
 type Handler
   :: [Signature]                         -- effs  : input effects
   -> [(Type -> Type) -> (Type -> Type)]  -- t     : monad transformer
@@ -248,28 +275,6 @@ handler runMonadT monadAlg monadFwd
       (const (fmap comps . runMonadT . hdecomps))
       (\oalg -> hcomps . monadAlg oalg . hmap hdecomps)
       (\alg  -> hcomps . monadFwd alg . hmap hdecomps)
-
-type Handler'
-  :: [Signature]                         -- effs  : input effects
-  -> [(Type -> Type) -> (Type -> Type)]  -- t     : monad transformer
-  -> [Type -> Type]                      -- f     : carrier type
-  -> [Signature]                         -- oeffs : output effects
-  -> Type
-data Handler' effs ts fs oeffs =
-  (All Functor fs, All MonadTrans ts) =>
-  Handler'
-  { run'  :: forall m . Monad m 
-          => (forall x . Effs oeffs m x -> m x)
-          -> (forall x . HComps ts m x -> m (Comps fs x))
-
-  , malg' :: forall m . Monad m
-          => (forall x . Effs oeffs m x -> m x)
-          -> (forall x . Effs effs (HComps ts m) x -> (HComps ts m) x)
-
-  , mfwd' :: forall m sig . Monad m
-          => (forall x . Effs sig m x -> m x)
-          -> (forall x . Effs sig (HComps ts m) x -> HComps ts m x)
-  }
 
 interp
   :: (forall m . Monad m

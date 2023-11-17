@@ -6,6 +6,9 @@ import Control.Monad.Trans.Class (MonadTrans, lift)
 import Control.Monad (join)
 import Data.Tuple (swap)
 
+import Data.Functor.Composes
+import Data.HFunctor.HComposes
+
 
 import Control.Effect
 import Data.HFunctor ( HFunctor(..) )
@@ -45,7 +48,6 @@ get = injCall (Alg (Get return))
 local :: Member (Local s) sig => s -> Prog sig a -> Prog sig a
 local s p = injCall (Scp (Local s (fmap return p)))
 
-
 instance HFunctor (S.StateT s) where
   hmap h (S.StateT p) = S.StateT (\s -> h (p s))
 
@@ -73,4 +75,37 @@ stateFwd alg (Effs effs)   = stateFwd (alg . Effs) effs
 
 state :: s -> Handler [Put s, Get s, Local s] '[S.StateT s] '[((,) s)] oeff
 state s = handler (fmap swap . flip S.runStateT s) stateAlg stateFwd
+
+-- | The `state_` handler deals with stateful operations and silenty
+-- discards the final state.
+state_ :: s -> Handler [Put s, Get s, Local s] '[S.StateT s] '[] oeff
+state_ s = 
+  Handler 
+    (\oalg -> fmap (CNil . fst) . flip S.runStateT s . hdecomps)
+    (\oalg -> hcomps . stateAlg oalg . hmap hdecomps)
+    (\alg  -> hcomps . stateFwd alg . hmap hdecomps)
+
+
+
+
+state' :: s -> Handler' [Put s, Get s, Local s] '[] '[]
+state' s = Handler' 
+    (\oalg -> fmap (CNil . fst) . flip S.runStateT s . hdecomps)
+    (\oalg -> hcomps . stateAlg' oalg . hmap hdecomps) -- hcomps . stateAlg oalg . hmap hdecomps)
+    (\alg  -> hcomps . stateFwd alg . hmap hdecomps)
+    undefined
+
+stateAlg'
+  :: Monad m
+  => (forall x. oeff m x -> m x)
+  -> (forall x.  Effs [Put s, Get s, Local s] (S.StateT s m) (HComps '[S.StateT s] m x) -> S.StateT s m x)
+stateAlg' oalg eff
+  | Just (Alg (Put s (HCons p))) <- prj eff =
+      do S.put s
+         hmap hrecompose p
+--   | Just (Alg (Get p)) <- prj eff =
+--       do s <- S.get
+--          return undefined
+--  | Just (Scp (Local s (S.StateT p))) <- prj eff =
+--      lift (fmap fst undefined)
 
