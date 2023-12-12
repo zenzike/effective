@@ -26,16 +26,16 @@ library
   default-language: GHC2021
   ghc-options:   -Wunused-foralls -Wunused-imports
   exposed-modules:
-    Control.Effect
-    Control.Effect.Cut
-    Control.Effect.Except
-    Control.Effect.IO
-    Control.Effect.Maybe
-    Control.Effect.Nondet
-    Control.Effect.Reader
-    Control.Effect.State
-    Control.Effect.Writer
-    Control.Monad.Graded
+    Control.Effects
+    -- Control.Effect.Cut
+    -- Control.Effect.Except
+    -- Control.Effect.IO
+    -- Control.Effect.Maybe
+    -- Control.Effect.Nondet
+    -- Control.Effect.Reader
+    -- Control.Effect.State
+    -- Control.Effect.Writer
+    -- Control.Monad.Graded
     Data.Functor.Composes
     Data.HFunctor
     Data.HFunctor.HCompose
