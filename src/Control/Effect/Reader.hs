@@ -48,6 +48,7 @@ readerAlg oalg eff
       R.local f p
       -- do r <- R.ask
       --    lift (p (f r))
+      -- TODO: This correspondence is interesting. What does it teach us?
 
 readerFwd
   :: Monad m

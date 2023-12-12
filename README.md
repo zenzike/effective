@@ -11,8 +11,7 @@ Scope](https://dl.acm.org/doi/10.1145/2633357.2633358) by Wu, Schrijvers, and
 Hinze.
 
 This README is a literate Haskell file and therefore can be executed. You can interact
-its contents with `cabal repl readme` and follow the examples. The langauge
-extensions and imports required are at the bottom of this file.
+with its contents with `cabal repl readme` and follow the examples. The language extensions and imports required are at the bottom of this file.
 
 
 Working with IO
@@ -338,7 +337,7 @@ elements is a monoid:
 ghci> handle writer (tell ["Hello", "World!"]) :: ([String], ())
 (["Hello","World!"],())
 ```
-Using this, values can be written as the ouput of a program.
+Using this, values can be written as the output of a program.
 
 Now the task is to interpret all `putStrLn` operations in terms of the
 `tell` operation:
@@ -410,7 +409,6 @@ prop_teletypeTick = property $ do
 -->
 
 
-
 Scoped Operations
 ------------------
 
@@ -425,14 +423,19 @@ retell f = interpret $
   \(Alg (Tell w k )) -> do tell (f w)
                            return k
 ```
-Simply but, every `tell w` is intercepted, and retold as `tell (f w)`. Thus,
+Simply put, every `tell w` is intercepted, and retold as `tell (f w)`. Thus,
 a simple message can be made louder at the flick of a switch:
 ```haskell ignore
-ghci> handle (retell (map toUpper) <&> writer @String) (tell "Stop shouting!")
-("STOP SHOUTING!",())
+ghci> handle (retell (map toUpper) <&> writer @String) (tell "get bigger!")
+("GET BIGGER!",())
 ```
-Some programs, however, required a more nuanced approach to modifying operations,
-so that only operations in a local scope are affected.
+The `retell` handler modifies the `tell` operations, and they are then
+turned into the final result with `writer`.
+
+Suppose the task is to censor language that can only be described as [nasty and
+frightful](https://en.wikipedia.org/wiki/Roald_Dahl_revision_controversy).
+A program designed around this task may need a more nuanced approach to
+retelling its input, with censoring only acceptable in certain regions of code.
 
 A scoped operation takes a program as one of its parameters, and interacts with
 operations in that program. For example, earlier the standard `writer` handler
@@ -444,6 +447,173 @@ The accompanying operation is `censor`:
 ```
 censor :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig 
 ```
+This takes a function `cipher :: w -> w` and a program `p :: Prog sig a`, and
+any `tell x` in `p` will be interpeted as `tell (cipher x)`. For instance
+here is a program that uses `censor` at particular points of the program,
+to help [Mr Hoppy](https://en.wikipedia.org/wiki/Esio_Trot) to tell a tortoise
+called Alfie to get bigger:
+```haskell
+hoppy :: Prog' '[Tell [String], Censor [String]] ()
+hoppy = do tell ["Hello Alfie!"]
+           censor @[String] (map reverse) $
+             do tell ["tortoise"]
+                censor @[String] (map (map toUpper)) $
+                  do tell ["get bigger!"]
+           tell ["Goodbye!"]
+```
+This applies the censor only to the `tell` operations under the `censor` operation.
+```haskell ignore
+ghci> handle writer hoppy :: ([String], ())
+(["Hello Alfie!","esiotrot","!REGGIB TEG","Goodbye!"],())
+```
+
+
+Hiding Operations
+------------------
+
+Since `censor` is an operation, it can be given different semantics. For instance,
+here is type of the `uncensor` handler:
+```haskell ignore
+uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[]
+```
+This handler removes all censorship from the program. The type promises that no other
+effects are generated, and that the result is pure.
+```haskell ignore
+ghci> handle (uncensors @[String] <&> writer @[String]) hello
+(["Hello world!","tortoise","get bigger!","Goodbye!"],())
+```
+One way to define `uncensors` is to process using the `writer_` handler (which
+discards its output) but where the `Tell` effects are hidden from it:
+```haskel
+uncensors_slow :: forall w . Monoid w => Handler '[Censor w] '[] '[]
+uncensors_slow = hide @'[Tell w] (writer_ @w)
+```
+The key combinator here is `hide`:
+```haskell ignore
+hide :: forall sigs effs oeffs f . (Injects (effs :\\ sigs) effs, Injects oeffs oeffs) 
+     => Handler effs            oeffs f
+     -> Handler (effs :\\ sigs) oeffs f
+```
+This takes in a handler, returns it where any effects provided by the type parameter `sigs`
+are hidden. While this works, the version in `Control.Effect.Writer` processes
+any `censor` by ignoring its argument, and does not accumulate any output, and
+is therefore more efficient.
+
+
+<!--
+There are many ways of defining `uncensors`.  One way to define `uncensors` is to forward the `Tell` effect to become an output effect
+and then process the remaining `Censor` effects with a version of `writer` that has
+all `Tell` effects hidden from it, and discards it output.
+```haskell ignore
+uncensors_slow :: forall w . Monoid w => Handler '[Tell w, Censor w] '[Tell w] '[]
+uncensors_slow = forward @'[Tell w] <&> (hide @'[Tell w] (writer_ @w))
+```
+A variation is to do this the other way around, resulting in a handler with a different
+signature. The two are equivalent since `Tell` and `Censor` will commute in these semantics.
+```haskell
+uncensors_slow' :: forall w . Monoid w => Handler '[Censor w, Tell w] '[Tell w] '[]
+uncensors_slow' = (hide @'[Tell w] (writer_ @w)) <&> forward @'[Tell w]
+```
+
+Yet another variation that processes the final result is to first run `writer`
+where all `Censor [String]` effects have been hidden from it, then to run
+`writer_`, which will process the `censor` operations, and discard any
+accumulated results.
+```haskell
+uncensors' :: forall w . Monoid w => Handler [Tell w, Censor w] '[] '[(,) w]
+uncensors' = hide @'[Censor w] (writer @w) <&> writer_ @w
+```
+There is still another strategy, which is is to remove all `Censor` effects from
+the program entirely, which can be done with:
+
+These manipulations all point to the _fusion calculus_ for handlers,
+which are laws that dictate how the fusion of operations behaves.
+
+Another way to censor the `tell` operations is with the `censors` handler:
+```haskell ignore
+censors :: forall w . Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w, Censor w] '[]
+```
+-->
+
+
+As a handler it would censor everything. What if we want to just affect part of
+the computation?
+```haskell
+login :: Prog' '[PutStrLn, GetLine, Censor [String], Tell [String]] ()
+login = do
+  xs <- getLine
+  case xs of
+    ""       -> do return ()
+    "secret" -> do putStrLn "Entering secret"
+                   tell @[String] ["Secret mode entered"]
+                   censor (map ("secret: " ++)) $ do tell @[String] ["secret"] 
+                                                     echo
+                   putStrLn "Exiting secret"
+                   login
+    _        -> do putStrLn xs
+                   login
+
+
+cipher :: [String] -> [String]
+cipher = fmap reverse
+
+-- The `writer` handler recongises only any censor with respect to tell.
+-- This censors the `"secret"` that was in the `tell`, but not any
+-- of the output in `putStrLn`.
+test :: IO ([String], ())
+test   = handleIO (writer @[String]) login
+
+-- Since all the `putStrLn` is turned into a tell, the censoring
+-- works for all the messages both from `tell` and `putStrLn` in the secret area.
+test2  = handleIO (putStrLnTell <&> writer @[String])  login
+
+-- here nothing is echoed using `putStrLn` because all of the putStrLn
+-- have been turned into tell operations, and then handled away into the final output.
+-- this has exactly the same behaviour as `test2`
+test3 = handleIO (putStrLnTell <&> writer @[String] <&> tellPutStrLn)  login
+
+tellPutStrLn :: Handler '[Tell [String]] '[PutStrLn] '[]
+tellPutStrLn = interpret $
+  \(Alg (Tell strs k)) -> do putStrLn (unwords strs)
+                             return k
+
+
+
+-- -- this will censor all the `putStrLn` content, the `tell` is untouched by the
+-- -- putStrLn censor, but is still affected by its own local censor. Notice that the writers
+-- -- have not interfered with each other.
+-- test4 = handleIO (censorPutStrLn reverse <&> writer @[String]) login
+-- 
+-- censorPutStrLn :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] '[]
+-- censorPutStrLn cipher = pipe putStrLnTell (censors (map cipher) <&> tellPutStrLn <&> writer_ @[String])
+
+
+-- this will censor all the `putStrLn` content, the `tell` is untouched by the
+-- putStrLn censor, but is still affected by its own local censor. Notice that the writers
+-- have not interfered with each other. `putStrLn` is not affected by the local censor.
+test5 = handleIO (censorPutStrLn' reverse <&> writer @[String]) login
+
+censorPutStrLn' :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] '[]
+censorPutStrLn' cipher = pipe putStrLnTell (censors (map cipher) <&> tellPutStrLn <&> writer_ @[String])
+
+
+-- this censors both putStrLn and tell together, both subject to the global and local censors
+-- In `test6` this is `reverse` and in `test7` it is initially `id`.
+test6 = handleIO (censorPutStrLn2 reverse <&> writer @[String]) login
+test7 = handleIO (censorPutStrLn2 id <&> writer @[String]) login
+
+censorPutStrLn2 :: (String -> String) -> Handler '[PutStrLn, Tell [String], Censor [String]] '[PutStrLn] '[]
+censorPutStrLn2 cipher = fuse putStrLnTell (censors (map cipher) <&> tellPutStrLn <&> writer_ @[String])
+
+-- This applies the global censor to putStrLn, and both putStrLn and tell are sensitive to any local censors.
+-- Censors are cumulative, so that putStrLn is affected by both the outer global sensor and the inner one.
+test8 = handleIO (censorPutStrLn3 reverse <&> writer @[String]) login
+
+censorPutStrLn3 :: (String -> String) -> Handler '[PutStrLn, Censor [String]] '[PutStrLn, Censor [String]] '[]
+censorPutStrLn3 cipher = weaken (putStrLnTell <&> censors (map cipher) <&> tellPutStrLn)
+```
+
+
 Members
 --------
 
@@ -485,6 +655,20 @@ considered more advanced and is detailed more carefully in the
 [documentation](docs/Graded.md).
 
 
+Forwarding 
+----------
+
+
+```haskell
+data Carrier c a b asig = Carrier 
+  { cfwd :: forall m . Monad m => m (c m) -> c m
+  , calg :: forall m . Monad m => asig (c m) -> c m
+  , crun :: forall m . Monad m => c m -> m b
+  , mgen :: forall m . Monad m => a -> c m }
+```
+
+
+
 Language Extensions
 --------------------
 
@@ -512,6 +696,8 @@ import Control.Effect.State
 import Control.Effect.Writer
 import Control.Effect.IO
 
+import Data.Char (toUpper)
+
 import Prelude hiding (putStrLn, getLine)
 ```
 
@@ -519,11 +705,13 @@ import Prelude hiding (putStrLn, getLine)
 We will hide the following from the README, because it is
 only for testing the documentaton itself.
 ```haskell top
-import Hedgehog
+import Hedgehog hiding (test, evalIO)
 import Hedgehog.Main
-import Hedgehog.Gen
+import Hedgehog.Gen hiding (map)
 import Hedgehog.Range
 
+props :: Group
+props = $$(discover)
 
 main :: IO ()
 main = defaultMain $ fmap checkParallel [props]
@@ -538,7 +726,3 @@ References
 
 [^Gordon1992]: A. Gordon. Functional Programming and Input/Output. PhD Thesis, King's College London. 1992
 
-```haskell top
-props :: Group
-props = $$(discover)
-```

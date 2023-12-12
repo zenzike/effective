@@ -5,6 +5,7 @@ module Control.Effect.State where
 import Control.Monad.Trans.Class (lift)
 import Data.Tuple (swap)
 
+import Data.Functor.Identity
 import Control.Effect
 import Data.Functor.Composes
 import qualified Control.Monad.Trans.State.Lazy as S
@@ -17,6 +18,8 @@ data Get s k where
   Get :: (s -> k) -> Get s k
   deriving Functor
 
+data WithState s k where
+  WithState :: (s -> s) -> k -> WithState s k
 
 
 type State s = '[Put s, Get s]
@@ -54,4 +57,49 @@ state s = handler (fmap swap . flip S.runStateT s) stateAlg stateFwd
 -- discards the final state.
 state_ :: s -> Handler [Put s, Get s] '[] '[]
 state_ s = Handler $ Handler' (\oalg -> fmap (CNil . fst) . flip S.runStateT s) stateAlg stateFwd
+
+state' :: forall s . Handler [Put s, Get s] '[] '[(->) s, (,) s]
+state' = Handler $ Handler' run alg fwd where
+  run :: forall m . Monad m
+      => (forall x . Effs '[] m x -> m x)
+      -> (forall x . (S.StateT s) m x -> m (Comps [(->) s, (,) s] x))
+  run oalg = fmap decompose . magic . S.runStateT
+    where magic :: (s -> m (x, s)) -> m (s -> (s, x))
+          magic f = undefined
+
+  alg :: (forall x . Effs '[] m x -> m x)
+      -> (forall x . Effs [Put s, Get s] (S.StateT s m) x -> S.StateT s m x)
+  alg _ = undefined
+
+  fwd :: (forall x . Effs sig m x -> m x)
+      -> (forall x . Effs sig (S.StateT s m) x -> S.StateT s m x)
+  fwd _ = undefined
+
+
+-- This is not a monad for get and put:
+-- this is an example where a modular handler does not forward
+-- a scoped operation. No runtime error should happen here,
+-- but this is not tracked by the type system.
+data StateC s m x = StateC { runStateC :: s -> m x }
+
+stateC :: forall s . s -> Carrier (StateC s) Identity '[Get s, Put s]
+stateC s = Carrier cfwd calg crun cgen where
+  cfwd :: forall m x . Monad m => m (StateC s m x) -> StateC s m x
+  cfwd mx = StateC $ \s -> do x <- mx
+                              runStateC x s
+
+  calg :: forall m x . Monad m
+    => Effs '[Get s, Put s] Identity (StateC s m x)
+    -> StateC s m x
+  calg eff
+    | Just (Alg (Get (k :: s -> StateC s m x))) <- prj eff =
+        StateC (\s -> runStateC (k s) s)
+    | Just (Alg (Put (s' :: s) k)) <- prj eff =
+        StateC (\s -> runStateC k s')
+
+  crun :: forall m x . Monad m => StateC s m x -> m (Identity x)
+  crun (StateC k) = fmap Identity (k s)
+
+  cgen :: forall m x . Monad m => x -> StateC s m x
+  cgen x = StateC (\s -> return x)
 

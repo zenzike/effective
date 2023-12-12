@@ -4,6 +4,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Control.Effect where
 
@@ -15,11 +16,13 @@ import Data.Functor.Composes
 import Data.HFunctor
 import Data.HFunctor.HCompose
 import Control.Monad.Trans.Identity
+import Control.Monad.Trans.Cont
 
 
 import Control.Monad ( join, ap, liftM )
 import qualified Control.Monad.Graded as Graded
 import Control.Monad.Trans.Class
+
 
 type Effect = (Type -> Type) -> (Type -> Type)
 type Signature = Type -> Type
@@ -174,11 +177,27 @@ joinAlg :: forall sig1 sig2 oeff t m .
 joinAlg falg galg oalg =
   heither @sig1 @sig2 (falg oalg) (galg oalg)
 
----------------------------------------
+
+data Prog''' (sigs :: [Signature]) a where
+  Return' :: a -> Prog''' sigs a
+  Call'   :: (Effs sigs) (Prog''' sigs) (Prog''' sigs a) -> Prog''' sigs a
+  Bind'   :: (Prog''' sigs x) -> (x -> Prog''' sigs a) -> Prog''' sigs a
+
+deriving instance Functor (Prog''' sigs)
+
+eval''' :: Monad m
+  => (forall x . Effs effs m x -> m x)
+  -> Prog''' effs a -> m a
+eval''' halg (Return' x) = return x
+eval''' halg (Call' op)  =
+  join (halg ((fmap (eval''' halg) . hmap (eval''' halg)) op))
+eval''' halg (Bind' op f) = eval''' halg op >>= fmap (eval''' halg) f
+
 type Prog' sig a = forall sig' . Members sig sig' => Prog sig' a
 data Prog (sigs :: [Signature]) a where
   Return :: a -> Prog sigs a
   Call   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
+
 
 instance Functor (Prog sigs) where
   fmap :: (a -> b) -> Prog sigs a -> Prog sigs b
@@ -265,15 +284,15 @@ type Handler'
   -> Type
 data Handler' effs oeffs t fs =
   Handler'
-  { run  :: forall m . Monad m
+  { hrun :: forall m . Monad m
          => (forall x . Effs oeffs m x -> m x)
          -> (forall x . t m x -> m (Comps fs x))
 
-  , malg :: forall m . Monad m
+  , halg :: forall m . Monad m
          => (forall x . Effs oeffs m x -> m x)
          -> (forall x . Effs effs (t m) x -> t m x)
 
-  , mfwd :: forall m sig . Monad m
+  , hfwd :: forall m sig . Monad m
          => (forall x . Effs sig m x -> m x)
          -> (forall x . Effs sig (t m) x -> t m x)
   }
@@ -473,6 +492,10 @@ pass :: forall sig effs oeffs fs .
   -> Handler (effs `Union` sig) ((oeffs :\\ sig) `Union` sig) fs
 pass h = fuse h (forward @sig)
 
+keep :: Handler effs oeffs f -> Handler effs (oeffs `Union` effs) f
+keep h = undefined
+
+
 
 forward :: Handler effs effs '[]
 forward = Handler $ Handler'
@@ -548,6 +571,11 @@ weaken
 weaken (Handler (Handler' run malg mfwd))
   = Handler (Handler' (\oalg -> run (oalg . injs)) (\oalg -> malg (oalg . injs) . injs) mfwd)
 
+hide
+  :: forall sigs effs oeffs f
+  .  (Injects (effs :\\ sigs) effs, Injects oeffs oeffs)
+  => Handler effs oeffs f -> Handler (effs :\\ sigs) oeffs f
+hide h = weaken h
 -- (\/)
 --   :: forall effs1 effs2 ts fs oeffs
 --   . (Append effs1 effs2)
@@ -589,6 +617,63 @@ weakenAlg
   -> (Effs eff  m x -> m x)
 weakenAlg alg = alg . injs
 
+-- Modular carriers
+-- ----------------
+--
+-- So far the carriers of our library have always been a monad:
+-- the algebras in a `Handler` are always of some monad `m`.
+-- However, this is not always possible or desirable.
+-- For example, although it is known that the (functorial)
+-- composition of two applicatives is applicative, the
+-- composition of two monads need not be a monad. Concretely,
+-- the composition of `m` and the list monad `[]` is not a monad
+-- (sometimes called `ListT` done wrong). It can be modelled
+-- by `m [x]` for all x. Such a functor can nevertheless be a carrier:
+data ListC m x = ListC (m [x])
 
+-- The caveat is that we can use this carrier for nondet computations so long
+-- as there are no scoped operations such as `search` or `once`.
+--
+-- Another example is ContT; since there only algebraic operations
+-- can be forwarded.
+data Carrier c f asig = Carrier
+  { crun :: forall m x . Monad m => c m x -> m (f x)
+  , calg :: forall m x . Monad m => Effs asig Identity (c m x) -> c m x
+  , cfwd :: forall m x . Monad m => m (c m x) -> c m x
+  , cgen :: forall m x . Monad m => x -> c m x
+  }
+
+newtype Carry (c :: (Type -> Type) -> Type -> Type)
+              (m :: Type -> Type)
+              a
+  = Carry (forall x . Cont (c m x) a)
+  deriving Functor
+
+convert :: forall c f asig . Functor f
+  => Carrier c f asig -> Handler' asig '[] (Carry c) '[f]
+convert (Carrier cfwd calg crun cgen) = Handler' run alg fwd where
+  run :: Monad m
+      => (forall x. Effs '[] m x -> m x)
+      -> (forall x. Carry c m x -> m (Comps '[f] x))
+  run oalg (Carry mx) = fmap comps $ (crun (runCont mx cgen))
+
+  alg :: forall m . Monad m
+      => (forall x. Effs '[] m x -> m x)
+      -> (forall x. Effs asig (Carry c m) x -> Carry c m x)
+  alg oalg = go calg oalg where
+    go :: forall asig'
+       . (forall m x . Monad m => Effs asig' Identity (c m x) -> c m x)
+       -> (forall x. Effs '[] m x -> m x)
+       -> (forall x. Effs asig' (Carry c m) x -> Carry c m x)
+    go calg oalg (Eff (Alg x)) = Carry (cont (\k -> calg (fmap k (Eff (Alg x)))))
+    go calg oalg (Eff (Scp x)) = error "convert: operations should be algebraic!"
+    go calg oalg (Effs x)      = go (calg . Effs) oalg x
+
+  fwd :: Monad m
+      => (forall x. Effs sig m x -> m x)
+      -> (forall x. Effs sig (Carry c m) x -> Carry c m x)
+  fwd oalg (Eff (Alg x)) = Carry (cont (\k -> (cfwd . oalg . Eff . Alg)(fmap k x)))
+  fwd oalg (Eff (Scp x)) = error "convert: Cannot forward scoped operations!"
+  fwd oalg (Effs (x))    = fwd (oalg . Effs) x
 
 

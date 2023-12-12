@@ -17,6 +17,7 @@ custom-setup
   setup-depends:
     base,
     Cabal
+--    Cabal >= 3.8.1.0
 
 source-repository head
   type: git
@@ -24,7 +25,7 @@ source-repository head
 
 library
   default-language: GHC2021
-  ghc-options:   -Wunused-foralls -Wunused-imports
+  ghc-options:
   exposed-modules:
     Control.Effect
     Control.Effect.Cut
@@ -46,7 +47,7 @@ library
     src
   build-depends:
     base, transformers, ghc,
-    containers,
+    containers, mtl
 
 test-suite docs
   type:          exitcode-stdio-1.0
