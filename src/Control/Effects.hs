@@ -16,7 +16,6 @@ import Data.HFunctor.HCompose
 
 import Control.Monad ( join, ap, liftM )
 
-
 type Effect = (Type -> Type) -> (Type -> Type)
 
 -- type Eff :: Signature -> Effect
