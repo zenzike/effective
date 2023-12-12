@@ -29,7 +29,7 @@ class EitherAlgScp sig where
   type EAlgScp sig :: Type -> Type
   eproject :: sig f a -> Either (Algebraic (EAlgScp sig) f a) (Scoped (EAlgScp sig) f a)
 
-instance {-# OVERLAPS #-} (JustAlg sig) => EitherAlgScp sig where
+instance {-# INCOHERENT #-} (JustAlg sig) => EitherAlgScp sig where
   type EAlgScp sig = JAlg sig
   eproject = Left
 
@@ -54,6 +54,22 @@ class JustScp sig where
 instance JustScp (Scoped lsig) where
   type JScp (Scoped lsig) = lsig
   sproject = id
+
+data Lan g h a where
+  Lan :: (g b -> a) -> h b -> Lan g h a
+
+data FusedSig sig m a where
+  FusedSig :: (forall x . ctx (n x) -> m (ctx x))
+           -> ctx ()
+           -> sig n a
+           -> FusedSig sig m a
+-- FusedSig sig m a -> m a
+--  is in bijection with
+-- alg :: forall ctx n . (forall x . ctx (n x) -> m (ctx x)) -> ctx () -> sig n a -> m (ctx a)
+class Fused sig where
+  type JFus sig :: Effect
+  fproject :: sig f a -> FusedSig (JFus sig) f a
+
 
 type Family = Effect -> Constraint
 
