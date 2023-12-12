@@ -29,13 +29,13 @@ class EitherAlgScp sig where
   type EAlgScp sig :: Type -> Type
   eproject :: sig f a -> Either (Algebraic (EAlgScp sig) f a) (Scoped (EAlgScp sig) f a)
 
-instance {-# INCOHERENT #-} (JustAlg sig) => EitherAlgScp sig where
-  type EAlgScp sig = JAlg sig
-  eproject = Left
+-- instance {-# INCOHERENT #-} (JustAlg sig) => EitherAlgScp sig where
+--   type EAlgScp sig = JAlg sig
+--   eproject = Left . Algebraic
 
-instance {-# OVERLAPS #-} (JustScp sig) => EitherAlgScp sig where
-  type EAlgScp sig = JScp sig
-  eproject = Right
+-- instance {-# OVERLAPS #-} (JustScp sig) => EitherAlgScp sig where
+--   type EAlgScp sig = JScp sig
+--   eproject = Right
 
 type JustAlg :: Effect -> Constraint
 class JustAlg sig where
@@ -120,41 +120,42 @@ type family ElemIndex (x :: a) (xs :: [a]) :: Nat where
   ElemIndex x (x ': xs) = Z
   ElemIndex x (_ ': xs) = S (ElemIndex x xs)
 
-class (Functor sig, HFunctor (Effs sigs)) => Member' sig sigs (n :: Nat) where
-  inj' :: SNat n -> Eff sig f a -> Effs sigs f a
-  prj' :: SNat n -> Effs sigs f a -> Maybe (Eff sig f a)
+type Member' :: Effect -> [Effect] -> Nat -> Constraint
+class (HFunctor sig, HFunctor (Effs sigs)) => Member' sig sigs (n :: Nat) where
+  inj' :: SNat n -> sig f a -> Effs sigs f a
+  prj' :: SNat n -> Effs sigs f a -> Maybe (sig f a)
 
 
-instance (Functor sig, (sigs' ~ (sig ': sigs))) => Member' sig sigs' Z where
-  inj' :: (Functor sig, sigs' ~ (sig : sigs)) => SNat Z -> Eff sig f a -> Effs sigs' f a
+instance (HFunctor sig, (sigs' ~ (sig ': sigs))) => Member' sig sigs' Z where
+  inj' :: (HFunctor sig, sigs' ~ (sig : sigs)) => SNat Z -> sig f a -> Effs sigs' f a
   inj' _ = Eff
 
-  prj' :: (Functor sig, sigs' ~ (sig : sigs)) => SNat Z -> Effs sigs' f a -> Maybe (Eff sig f a)
+  prj' :: (HFunctor sig, sigs' ~ (sig ': sigs)) => SNat Z -> Effs sigs' f a -> Maybe (sig f a)
   prj' _ (Eff x) = Just x
   prj' _ _        = Nothing
 
-instance (sigs' ~ (sig' ': sigs), Functor sig, Member' sig sigs n) => Member' sig sigs' (S n) where
+instance (sigs' ~ (sig' ': sigs), HFunctor sig, Member' sig sigs n) => Member' sig sigs' (S n) where
   inj' _ = Effs . inj' (SNat :: SNat n)
 
   prj' _ (Eff _)  = Nothing
   prj' _ (Effs x) = prj' (SNat :: SNat n) x
 
-type Member :: Signature -> [Signature] -> Constraint
+type Member :: Effect -> [Effect] -> Constraint
 class (Member' sig sigs (ElemIndex sig sigs)) => Member sig sigs where
-  inj :: Eff sig f a -> Effs sigs f a
-  prj :: Effs sigs m a -> Maybe (Eff sig m a)
+  inj :: sig f a -> Effs sigs f a
+  prj :: Effs sigs m a -> Maybe (sig m a)
 
 instance (Member' sig sigs (ElemIndex sig sigs)) => Member sig sigs where
   inj = inj' (SNat :: SNat (ElemIndex sig sigs))
   prj = prj' (SNat :: SNat (ElemIndex sig sigs))
 
-type family Members (xs :: [Signature]) (xys :: [Signature]) :: Constraint where
+type family Members (xs :: [Effect]) (xys :: [Effect]) :: Constraint where
   Members '[] xys       = ()
   Members (x ': xs) xys = (Member x xys, Members xs xys, Injects (x ': xs) xys)
 
 -- Injects xs ys means that all of xs is in xys
 -- Some other effects may be in xys, so xs <= ys
-type  Injects :: [Signature] -> [Signature] -> Constraint
+type  Injects :: [Effect] -> [Effect] -> Constraint
 class Injects xs xys where
   injs :: Effs xs f a -> Effs xys f a
 
@@ -173,7 +174,7 @@ hunion :: forall xs ys f a b
   => (Effs xs f a -> b) -> (Effs ys f a -> b) -> (Effs (xs `Union` ys) f a -> b)
 hunion xalg yalg = heither @xs @(ys :\\ xs) xalg (yalg . injs)
 
-type  Append :: [Signature] -> [Signature] -> Constraint
+type  Append :: [Effect] -> [Effect] -> Constraint
 class Append xs ys where
   heither :: (Effs xs h a -> b) -> (Effs ys h a -> b) -> (Effs (xs :++ ys) h a -> b)
 
@@ -230,24 +231,8 @@ joinAlg :: forall sig1 sig2 oeff t m .
 joinAlg falg galg oalg =
   heither @sig1 @sig2 (falg oalg) (galg oalg)
 
-
-data Prog''' (sigs :: [Signature]) a where
-  Return' :: a -> Prog''' sigs a
-  Call'   :: (Effs sigs) (Prog''' sigs) (Prog''' sigs a) -> Prog''' sigs a
-  Bind'   :: (Prog''' sigs x) -> (x -> Prog''' sigs a) -> Prog''' sigs a
-
-deriving instance Functor (Prog''' sigs)
-
-eval''' :: Monad m
-  => (forall x . Effs effs m x -> m x)
-  -> Prog''' effs a -> m a
-eval''' halg (Return' x) = return x
-eval''' halg (Call' op)  =
-  join (halg ((fmap (eval''' halg) . hmap (eval''' halg)) op))
-eval''' halg (Bind' op f) = eval''' halg op >>= fmap (eval''' halg) f
-
 type Prog' sig a = forall sig' . Members sig sig' => Prog sig' a
-data Prog (sigs :: [Signature]) a where
+data Prog (sigs :: [Effect]) a where
   Return :: a -> Prog sigs a
   Call   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
 
@@ -266,21 +251,6 @@ instance Applicative (Prog effs) where
 instance Monad (Prog effs) where
   Return x >>= f = f x
   Call op  >>= f = Call (fmap (>>= f) op)
-
-instance Graded.GradedMonad Prog where
-  type Unit Prog = '[] :: [Signature]
-  type Plus Prog effs effs' = Union effs effs'
-  type Inv Prog effs effs' =
-    ( Injects effs (Union effs effs')
-    , Injects effs' (Union effs effs'))
-
-  return = Return
-  (>>=) :: forall (i :: [Signature]) (j :: [Signature]) a b.
-           Graded.Inv Prog i j =>
-           Prog i a -> (a -> Prog j b) -> Prog (Graded.Plus Prog i j) b
-  (Return x)  >>= f = weakenProg (f x)
-  (Call op)   >>= f = Call ((hmap weakenProg . injs @i @(Union i j) . fmap (Graded.>>= f)) op)
-
 
 weakenProg :: forall effs effs' a
   .  Injects effs effs'
@@ -310,10 +280,10 @@ fold falg gen (Return x) = gen x
 fold falg gen (Call op)  =
   falg ((fmap (fold falg gen) . hmap (fold falg gen)) op)
 
-injCall :: Member sub sup => Eff sub (Prog sup) (Prog sup a) -> Prog sup a
+injCall :: Member sub sup => sub (Prog sup) (Prog sup a) -> Prog sup a
 injCall = Call . inj
 
-prjCall :: Member sub sup => Prog sup a -> Maybe (Eff sub (Prog sup) (Prog sup a))
+prjCall :: Member sub sup => Prog sup a -> Maybe (sub (Prog sup) (Prog sup a))
 prjCall (Call op) = prj op
 prjCall _         = Nothing
 
@@ -321,17 +291,18 @@ progAlg :: Effs sig (Prog sig) a -> Prog sig a
 progAlg = Call . fmap return
 
 type Handler
-  :: [Signature]                          -- effs  : input effects
-  -> [Signature]                          -- oeffs : output effects
+  :: [Effect]                             -- effs  : input effects
+  -> [Effect]                             -- oeffs : output effects
   -> [Type -> Type]                       -- f     : carrier type
+  -> Family                               -- fam   : forwarding family
   -> Type
 data Handler effs oeffs fs fam
   =  forall t . (HFunctor t, MonadTrans t)
   => Handler (Handler' effs oeffs t fs fam)
 
 type Handler'
-  :: [Signature]                          -- effs  : input effects
-  -> [Signature]                          -- oeffs : output effects
+  :: [Effect]                             -- effs  : input effects
+  -> [Effect]                             -- oeffs : output effects
   -> ((Type -> Type) -> (Type -> Type))   -- t     : monad transformer
   -> [Type -> Type]                       -- f     : carrier type
   -> Family                               -- fam   : forwarding family
@@ -347,7 +318,7 @@ data Handler' effs oeffs t fs fam =
          -> (forall x . Effs effs (t m) x -> t m x)
 
   , hfwd :: forall m (sig :: Effect)
-         . ( Monad m, fam sig )
+         . ( Monad m, fam sig , HFunctor sig )
          => (forall x . sig m x -> m x)
          -> (forall x . sig (t m) x -> t m x)
   }
@@ -359,29 +330,29 @@ handler
   -> (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs (t m) x -> t m x))
-  -> (forall m sigs . Monad m
-    => (forall x . Effs sigs m x -> m x)
-    -> (forall x . Effs sigs (t m) x -> t m x))
-  -> Handler effs oeffs '[f]
+  -> (forall m sigs . ( Monad m, fam sigs )
+    => (forall x . sigs m x -> m x)
+    -> (forall x . sigs (t m) x -> t m x))
+  -> Handler effs oeffs '[f] fam
 handler run malg mfwd = Handler (Handler' (const (fmap comps . run)) malg mfwd)
 
 
 -- TODO: A better error message for unsafePrj
 interpret
-  :: forall eff effs oeffs
+  :: forall eff effs oeffs fam
   .  Member eff effs
-  => (forall m x . Eff eff m x -> Prog oeffs x)
-  -> Handler effs oeffs '[]
+  => (forall m x . eff m x -> Prog oeffs x)
+  -> Handler effs oeffs '[] fam
 interpret f = interpret' (\oalg -> eval oalg . f . unsafePrj)
   where
-    unsafePrj :: Effs effs m x -> Eff eff m x
+    unsafePrj :: Effs effs m x -> eff m x
     unsafePrj x = case prj x of Just y -> y
 
 interpret'
   :: (forall m . Monad m
      => (forall x . Effs oeffs m x -> m x)
      -> (forall x . Effs effs m x -> m x))
-  -> Handler effs oeffs '[]
+  -> Handler effs oeffs '[] fam
 interpret' alg
   = Handler $ Handler'
       (const (\(IdentityT mx) -> fmap CNil mx))
@@ -458,7 +429,7 @@ fuse' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
       . mfwd1 (mfwd2 alg)
       . hmap getHCompose
 
-(<&>) :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 effs oeffs .
+(<&>) :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 effs oeffs fam .
   ( All Functor fs1, All Functor fs2, All Functor (fs2 :++ fs1)
   , Expose fs2
   , Append effs1 (effs2 :\\ effs1)
@@ -470,12 +441,12 @@ fuse' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
   , Injects (effs2 :\\ effs1) effs2
   , effs  ~ effs1 `Union` effs2
   , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 )
-  => Handler effs1 oeffs1 fs1
-  -> Handler effs2 oeffs2 fs2
-  -> Handler (effs1 `Union` effs2) ((oeffs1 :\\ effs2) `Union` oeffs2 ) (fs2 :++ fs1)
+  => Handler effs1 oeffs1 fs1 fam
+  -> Handler effs2 oeffs2 fs2 fam
+  -> Handler (effs1 `Union` effs2) ((oeffs1 :\\ effs2) `Union` oeffs2 ) (fs2 :++ fs1) fam
 (<&>) = fuse
 
-pipe :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 oeffs .
+pipe :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 oeffs fam .
   ( All Functor (fs2 :++ fs1)
   , Expose fs2
   , oeffs ~ ((oeffs1 :\\ effs2) `Union` oeffs2)
@@ -483,12 +454,12 @@ pipe :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 oeffs .
   , Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (oeffs1 :\\ effs2) oeffs )
-  => Handler effs1 oeffs1 fs1
-  -> Handler effs2 oeffs2 fs2
-  -> Handler effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (fs2 :++ fs1)
+  => Handler effs1 oeffs1 fs1 fam
+  -> Handler effs2 oeffs2 fs2 fam
+  -> Handler effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (fs2 :++ fs1) fam
 pipe (Handler h1) (Handler h2) = Handler (pipe' h1 h2)
 
-pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs .
+pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs fam .
   ( All Functor (fs2 :++ fs1)
   , MonadTrans t1
   , MonadTrans t2
@@ -500,9 +471,9 @@ pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs .
   , Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (oeffs1 :\\ effs2) oeffs )
-  => Handler' effs1 oeffs1 t1 fs1
-  -> Handler' effs2 oeffs2 t2 fs2
-  -> Handler' effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (HCompose t1 t2) (fs2 :++ fs1)
+  => Handler' effs1 oeffs1 t1 fs1 fam
+  -> Handler' effs2 oeffs2 t2 fs2 fam
+  -> Handler' effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (HCompose t1 t2) (fs2 :++ fs1) fam
 pipe' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
   Handler' run malg mfwd where
   run  :: forall m . Monad m
@@ -527,15 +498,15 @@ pipe' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
     . hmap getHCompose
 
   mfwd
-    :: forall m sig . Monad m
-    => (forall x. Effs sig m x -> m x)
-    -> forall x. Effs sig (HCompose t1 t2 m) x -> HCompose t1 t2 m x
+    :: forall m sig . (Monad m , fam sig)
+    => (forall x. sig m x -> m x)
+    -> forall x. sig (HCompose t1 t2 m) x -> HCompose t1 t2 m x
   mfwd alg
     = HCompose
     . mfwd1 (mfwd2 alg)
     . hmap getHCompose
 
-pass :: forall sig effs oeffs fs .
+pass :: forall sig effs oeffs fs fam .
   ( All Functor fs
   , Append effs (sig :\\ effs)
   , Append (oeffs :\\ sig) sig
@@ -544,16 +515,11 @@ pass :: forall sig effs oeffs fs .
   , Injects oeffs ((oeffs :\\ sig) :++ sig)
   , Injects (oeffs :\\ sig) ((oeffs :\\ sig) :++ (sig :\\ (oeffs :\\ sig)))
   , Injects (sig :\\ effs) sig)
-  => Handler effs oeffs fs
-  -> Handler (effs `Union` sig) ((oeffs :\\ sig) `Union` sig) fs
+  => Handler effs oeffs fs fam
+  -> Handler (effs `Union` sig) ((oeffs :\\ sig) `Union` sig) fs fam
 pass h = fuse h (forward @sig)
 
-keep :: Handler effs oeffs f -> Handler effs (oeffs `Union` effs) f
-keep h = undefined
-
-
-
-forward :: Handler effs effs '[]
+forward :: Handler effs effs '[] fam
 forward = Handler $ Handler'
   (const (\(IdentityT mx) -> fmap CNil mx))
   (\oalg -> IdentityT . oalg . hmap runIdentityT)
@@ -577,7 +543,7 @@ handle' (Handler' run malg mfwd)
   . run @Identity (absurdEffs . injs)
   . eval (malg (absurdEffs . injs))
 
-handleWith :: forall ieffs oeffs xeffs m fs a .
+handleWith :: forall ieffs oeffs xeffs m fs a fam .
   ( Monad m
   , Recompose fs
   , Append ieffs (xeffs :\\ ieffs)
@@ -585,7 +551,7 @@ handleWith :: forall ieffs oeffs xeffs m fs a .
   , Injects (xeffs :\\ ieffs) xeffs
   )
   => (forall x. Effs xeffs m x -> m x)
-  -> Handler ieffs oeffs fs
+  -> Handler ieffs oeffs fs fam
   -> Prog (ieffs `Union` xeffs) a -> m (Composes fs a)
 handleWith xalg (Handler (Handler' run malg mfwd))
   = fmap @m (recompose @fs @a)
@@ -619,19 +585,19 @@ handleWith xalg (Handler (Handler' run malg mfwd))
 
 
 weaken
-  :: forall ieffs ieffs' oeffs oeffs' ts fs
+  :: forall ieffs ieffs' oeffs oeffs' ts fs fam
   . ( Injects ieffs ieffs'
     , Injects oeffs oeffs'
     )
-  => Handler ieffs' oeffs fs
-  -> Handler ieffs oeffs' fs
+  => Handler ieffs' oeffs fs fam
+  -> Handler ieffs oeffs' fs fam
 weaken (Handler (Handler' run malg mfwd))
   = Handler (Handler' (\oalg -> run (oalg . injs)) (\oalg -> malg (oalg . injs) . injs) mfwd)
 
 hide
-  :: forall sigs effs oeffs f
+  :: forall sigs effs oeffs f fam
   .  (Injects (effs :\\ sigs) effs, Injects oeffs oeffs)
-  => Handler effs oeffs f -> Handler (effs :\\ sigs) oeffs f
+  => Handler effs oeffs f fam -> Handler (effs :\\ sigs) oeffs f fam
 hide h = weaken h
 -- (\/)
 --   :: forall effs1 effs2 ts fs oeffs
@@ -706,31 +672,33 @@ newtype Carry (c :: (Type -> Type) -> Type -> Type)
   = Carry (forall x . Cont (c m x) a)
   deriving Functor
 
-convert :: forall c f asig . Functor f
-  => Carrier c f asig -> Handler' asig '[] (Carry c) '[f]
-convert (Carrier cfwd calg crun cgen) = Handler' run alg fwd where
-  run :: Monad m
-      => (forall x. Effs '[] m x -> m x)
-      -> (forall x. Carry c m x -> m (Comps '[f] x))
-  run oalg (Carry mx) = fmap comps $ (crun (runCont mx cgen))
-
-  alg :: forall m . Monad m
-      => (forall x. Effs '[] m x -> m x)
-      -> (forall x. Effs asig (Carry c m) x -> Carry c m x)
-  alg oalg = go calg oalg where
-    go :: forall asig'
-       . (forall m x . Monad m => Effs asig' Identity (c m x) -> c m x)
-       -> (forall x. Effs '[] m x -> m x)
-       -> (forall x. Effs asig' (Carry c m) x -> Carry c m x)
-    go calg oalg (Eff (Alg x)) = Carry (cont (\k -> calg (fmap k (Eff (Alg x)))))
-    go calg oalg (Eff (Scp x)) = error "convert: operations should be algebraic!"
-    go calg oalg (Effs x)      = go (calg . Effs) oalg x
-
-  fwd :: Monad m
-      => (forall x. Effs sig m x -> m x)
-      -> (forall x. Effs sig (Carry c m) x -> Carry c m x)
-  fwd oalg (Eff (Alg x)) = Carry (cont (\k -> (cfwd . oalg . Eff . Alg)(fmap k x)))
-  fwd oalg (Eff (Scp x)) = error "convert: Cannot forward scoped operations!"
-  fwd oalg (Effs (x))    = fwd (oalg . Effs) x
+-- convert :: forall c f asig fam . Functor f
+--   => Carrier c f asig -> Handler' asig '[] (Carry c) '[f] JustAlg
+-- convert (Carrier cfwd calg crun cgen) = Handler' run alg fwd where
+--   run :: Monad m
+--       => (forall x. Effs '[] m x -> m x)
+--       -> (forall x. Carry c m x -> m (Comps '[f] x))
+--   run oalg (Carry mx) = fmap comps $ (crun (runCont mx cgen))
+-- 
+--   alg :: forall m . Monad m
+--       => (forall x. Effs '[] m x -> m x)
+--       -> (forall x. Effs asig (Carry c m) x -> Carry c m x)
+--   alg oalg = go calg oalg where
+--     go :: forall asig'
+--        . (forall m x . Monad m => Effs asig' Identity (c m x) -> c m x)
+--        -> (forall x. Effs '[] m x -> m x)
+--        -> (forall x. Effs asig' (Carry c m) x -> Carry c m x)
+--     go calg oalg (Eff (Alg x)) = Carry (cont (\k -> calg (fmap k (Eff (Alg x)))))
+--     go calg oalg (Eff (Scp x)) = error "convert: operations should be algebraic!"
+--     go calg oalg (Effs x)      = go (calg . Effs) oalg x
+-- 
+--   fwd :: ()
+--   fwd = undefined
+  -- fwd :: Monad m
+  --     => (forall x. Effs sig m x -> m x)
+  --     -> (forall x. Effs sig (Carry c m) x -> Carry c m x)
+  -- fwd oalg (Eff (Alg x)) = Carry (cont (\k -> (cfwd . oalg . Eff . Alg)(fmap k x)))
+  -- fwd oalg (Eff (Scp x)) = error "convert: Cannot forward scoped operations!"
+  -- fwd oalg (Effs (x))    = fwd (oalg . Effs) x
 
 
