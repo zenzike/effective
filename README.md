@@ -11,8 +11,7 @@ Scope](https://dl.acm.org/doi/10.1145/2633357.2633358) by Wu, Schrijvers, and
 Hinze.
 
 This README is a literate Haskell file and therefore can be executed. You can interact
-its contents with `cabal repl readme` and follow the examples. The langauge
-extensions and imports required are at the bottom of this file.
+with its contents with `cabal repl readme` and follow the examples. The language extensions and imports required are at the bottom of this file.
 
 
 Working with IO
@@ -338,7 +337,7 @@ elements is a monoid:
 ghci> handle writer (tell ["Hello", "World!"]) :: ([String], ())
 (["Hello","World!"],())
 ```
-Using this, values can be written as the ouput of a program.
+Using this, values can be written as the output of a program.
 
 Now the task is to interpret all `putStrLn` operations in terms of the
 `tell` operation:
@@ -410,7 +409,6 @@ prop_teletypeTick = property $ do
 -->
 
 
-
 Scoped Operations
 ------------------
 
@@ -425,7 +423,7 @@ retell f = interpret $
   \(Alg (Tell w k )) -> do tell (f w)
                            return k
 ```
-Simply but, every `tell w` is intercepted, and retold as `tell (f w)`. Thus,
+Simply put, every `tell w` is intercepted, and retold as `tell (f w)`. Thus,
 a simple message can be made louder at the flick of a switch:
 ```haskell ignore
 ghci> handle (retell (map toUpper) <&> writer @String) (tell "Stop shouting!")
