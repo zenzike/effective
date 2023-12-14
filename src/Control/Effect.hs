@@ -548,6 +548,11 @@ weaken
 weaken (Handler (Handler' run malg mfwd))
   = Handler (Handler' (\oalg -> run (oalg . injs)) (\oalg -> malg (oalg . injs) . injs) mfwd)
 
+hide
+  :: forall sigs effs oeffs f
+  .  (Injects (effs :\\ sigs) effs, Injects oeffs oeffs)
+  => Handler effs oeffs f -> Handler (effs :\\ sigs) oeffs f
+hide h = weaken h
 -- (\/)
 --   :: forall effs1 effs2 ts fs oeffs
 --   . (Append effs1 effs2)
