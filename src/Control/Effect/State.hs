@@ -5,6 +5,7 @@ module Control.Effect.State where
 import Control.Monad.Trans.Class (lift)
 import Data.Tuple (swap)
 
+import Data.Functor.Identity
 import Control.Effect
 import Data.Functor.Composes
 import qualified Control.Monad.Trans.State.Lazy as S
@@ -54,4 +55,31 @@ state s = handler (fmap swap . flip S.runStateT s) stateAlg stateFwd
 -- discards the final state.
 state_ :: s -> Handler [Put s, Get s] '[] '[]
 state_ s = Handler $ Handler' (\oalg -> fmap (CNil . fst) . flip S.runStateT s) stateAlg stateFwd
+
+-- The `StateC` carrier is not a monad, and this code shows how it can
+-- nevertheless be used to create a `Carrier`. In particular, the modular
+-- handler that arises does not forward a scoped operation. No runtime error
+-- should happen here, but this is not tracked by the type system.
+data StateC s m x = StateC { runStateC :: s -> m x }
+
+stateC :: forall s . s -> Carrier (StateC s) Identity '[Get s, Put s]
+stateC s = Carrier cfwd calg crun cgen where
+  cfwd :: forall m x . Monad m => m (StateC s m x) -> StateC s m x
+  cfwd mx = StateC $ \s -> do x <- mx
+                              runStateC x s
+
+  calg :: forall m x . Monad m
+    => Effs '[Get s, Put s] Identity (StateC s m x)
+    -> StateC s m x
+  calg eff
+    | Just (Alg (Get (k :: s -> StateC s m x))) <- prj eff =
+        StateC (\s -> runStateC (k s) s)
+    | Just (Alg (Put (s' :: s) k)) <- prj eff =
+        StateC (\s -> runStateC k s')
+
+  crun :: forall m x . Monad m => StateC s m x -> m (Identity x)
+  crun (StateC k) = fmap Identity (k s)
+
+  cgen :: forall m x . Monad m => x -> StateC s m x
+  cgen x = StateC (\s -> return x)
 
