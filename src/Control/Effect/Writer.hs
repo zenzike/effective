@@ -69,53 +69,6 @@ censors cipher = Handler $ Handler' run alg fwd where
       -> (forall x. Effs sig (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
   fwd oalg c = ReaderT (\f -> oalg $ hmap (flip runReaderT f) c)
 
-censors' :: forall w . Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[]
-censors' cipher = Handler $ Handler' run alg fwd where
-  run :: Monad m
-      => (forall x. Effs '[Tell w] m x -> m x)
-      -> (forall x. ReaderT (w -> w) m x -> m (Comps '[] x))
-  run oalg (ReaderT mx) = fmap CNil (mx cipher)
-
-  alg :: Monad m
-      => (forall x. Effs '[Tell w] m x -> m x)
-      -> (forall x. Effs '[Tell w, Censor w] (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
-  alg oalg eff
-    | Just (Alg (Tell w k)) <- prj eff =
-        do cipher <- ask
-           lift (oalg (Eff (Alg (Tell (cipher w) k))))
-    | Just (Scp (Censor (cipher' :: w -> w) k)) <- prj eff =
-        do cipher <- ask
-           lift (runReaderT k (cipher . cipher'))
-           -- lift (oalg (Effs (Eff (Scp (Censor cipher' (runReaderT k (cipher . cipher')))))))
-
-  fwd :: Monad m
-      => (forall x. Effs sig m x -> m x)
-      -> (forall x. Effs sig (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
-  fwd oalg c = ReaderT (\f -> oalg $ hmap (flip runReaderT f) c)
-
--- This should be equivalent to:
---   uncensors = hide @'[Censors w] (writer @w) <&> writer @w
--- uncensors :: forall w . Monoid w => Handler '[Tell w, Censor w] '[Tell w] '[]
--- uncensors = Handler $ Handler' run alg fwd where
---   run :: Monad m
---       => (forall x. Effs '[Tell w] m x -> m x)
---       -> (forall x. IdentityT m x -> m (Comps '[] x))
---   run oalg (IdentityT mx) = fmap CNil (mx)
---
---   alg :: Monad m
---       => (forall x. Effs '[Tell w] m x -> m x)
---       -> (forall x. Effs '[Tell w, Censor w] (IdentityT m) x -> IdentityT m x)
---   alg oalg eff
---     | Just (Alg (Tell w k)) <- prj eff =
---         lift (oalg (Eff (Alg (Tell w k))))
---     | Just (Scp (Censor (_ :: w -> w) k)) <- prj eff =
---         k
---
---   fwd :: Monad m
---       => (forall x. Effs sig m x -> m x)
---       -> (forall x. Effs sig (IdentityT m) x -> IdentityT m x)
---   fwd oalg c = IdentityT (oalg $ hmap runIdentityT c)
-
 uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[]
 uncensors = Handler $ Handler' run alg fwd where
   run :: Monad m
