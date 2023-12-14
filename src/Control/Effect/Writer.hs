@@ -6,7 +6,9 @@ import Control.Effect
 import Data.Tuple (swap)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Identity
 import qualified Control.Monad.Trans.Writer as W
+import Data.HFunctor
 import Data.Functor.Composes (Comps(CNil))
 
 data Tell w k where
@@ -45,6 +47,23 @@ censors cipher = Handler $ Handler' run alg fwd where
       => (forall x. Effs sig m x -> m x)
       -> (forall x. Effs sig (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
   fwd oalg c = ReaderT (\f -> oalg $ hmap (flip runReaderT f) c)
+
+uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[]
+uncensors = Handler $ Handler' run alg fwd where
+  run :: Monad m
+      => (forall x. Effs '[] m x -> m x)
+      -> (forall x. IdentityT m x -> m (Comps '[] x))
+  run oalg (IdentityT mx) = fmap CNil (mx)
+
+  alg :: Monad m
+      => (forall x. Effs '[] m x -> m x)
+      -> (forall x. Effs '[Censor w] (IdentityT m) x -> IdentityT m x)
+  alg oalg (Eff (Scp (Censor (_ :: w -> w) k))) = k
+
+  fwd :: Monad m
+      => (forall x. Effs sig m x -> m x)
+      -> (forall x. Effs sig (IdentityT m) x -> IdentityT m x)
+  fwd oalg c = IdentityT (oalg $ hmap runIdentityT c)
 
 writerAlg
   :: (Monad m, Monoid w)
