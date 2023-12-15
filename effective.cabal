@@ -27,6 +27,11 @@ library
   ghc-options:   -Wunused-foralls -Wunused-imports
   exposed-modules:
     Control.Effects
+    Control.Family.Base
+    Control.Family.Algebraic
+    Control.Family.Scoped
+    Control.Family.AlgScp
+    Control.Handler
     -- Control.Effect.Cut
     -- Control.Effect.Except
     -- Control.Effect.IO
