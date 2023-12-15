@@ -370,7 +370,9 @@ fuse :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 effs oeffs fam .
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
   , effs  ~ effs1 `Union` effs2
-  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 )
+  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 
+  , fam (Effs (oeffs1 :\\ effs2))
+  , fam (Effs effs2))
   => Handler effs1 oeffs1 fs1 fam
   -> Handler effs2 oeffs2 fs2 fam
   -> Handler (effs1 `Union` effs2) ((oeffs1 :\\ effs2) `Union` oeffs2 ) (fs2 :++ fs1) fam
@@ -391,7 +393,9 @@ fuse' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 effs oeffs fam .
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
   , effs  ~ effs1 `Union` effs2
-  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 )
+  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 
+  , fam (Effs (oeffs1 :\\ effs2))
+  , fam (Effs effs2))
   => Handler' effs1 oeffs1 t1 fs1 fam
   -> Handler' effs2 oeffs2 t2 fs2 fam
   -> Handler' effs oeffs (HCompose t1 t2) (fs2 :++ fs1) fam
@@ -421,7 +425,7 @@ fuse' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
       . hmap getHCompose
 
     mfwd
-      :: forall m sig . ( Monad m , fam sig )
+      :: forall m sig . ( Monad m , fam sig, HFunctor sig )
       => (forall x. sig m x -> m x)
       -> forall x. sig (HCompose t1 t2 m) x -> HCompose t1 t2 m x
     mfwd alg
@@ -439,6 +443,8 @@ fuse' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
   , Injects (oeffs1 :\\ effs2) oeffs, Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
+  , fam (Effs (oeffs1 :\\ effs2))
+  , fam (Effs effs2) 
   , effs  ~ effs1 `Union` effs2
   , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 )
   => Handler effs1 oeffs1 fs1 fam
@@ -453,7 +459,8 @@ pipe :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 oeffs fam .
   , Append (oeffs1 :\\ effs2) effs2
   , Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-  , Injects (oeffs1 :\\ effs2) oeffs )
+  , Injects (oeffs1 :\\ effs2) oeffs
+  , fam (Effs (oeffs1 :\\ effs2)) )
   => Handler effs1 oeffs1 fs1 fam
   -> Handler effs2 oeffs2 fs2 fam
   -> Handler effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (fs2 :++ fs1) fam
@@ -470,7 +477,8 @@ pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs fam .
   , Append (oeffs1 :\\ effs2) effs2
   , Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-  , Injects (oeffs1 :\\ effs2) oeffs )
+  , Injects (oeffs1 :\\ effs2) oeffs 
+  , fam (Effs (oeffs1 :\\ effs2)) )
   => Handler' effs1 oeffs1 t1 fs1 fam
   -> Handler' effs2 oeffs2 t2 fs2 fam
   -> Handler' effs1 ((oeffs1 :\\ effs2) `Union` oeffs2) (HCompose t1 t2) (fs2 :++ fs1) fam
@@ -498,7 +506,7 @@ pipe' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
     . hmap getHCompose
 
   mfwd
-    :: forall m sig . (Monad m , fam sig)
+    :: forall m sig . (Monad m , fam sig, HFunctor sig)
     => (forall x. sig m x -> m x)
     -> forall x. sig (HCompose t1 t2 m) x -> HCompose t1 t2 m x
   mfwd alg
@@ -514,7 +522,9 @@ pass :: forall sig effs oeffs fs fam .
   , Injects sig ((oeffs :\\ sig) :++ (sig :\\ (oeffs :\\ sig)))
   , Injects oeffs ((oeffs :\\ sig) :++ sig)
   , Injects (oeffs :\\ sig) ((oeffs :\\ sig) :++ (sig :\\ (oeffs :\\ sig)))
-  , Injects (sig :\\ effs) sig)
+  , Injects (sig :\\ effs) sig 
+  , fam (Effs (oeffs :\\ sig))
+  , fam (Effs sig) )
   => Handler effs oeffs fs fam
   -> Handler (effs `Union` sig) ((oeffs :\\ sig) `Union` sig) fs fam
 pass h = fuse h (forward @sig)
@@ -549,7 +559,7 @@ handleWith :: forall ieffs oeffs xeffs m fs a fam .
   , Append ieffs (xeffs :\\ ieffs)
   , Injects oeffs xeffs
   , Injects (xeffs :\\ ieffs) xeffs
-  )
+  , fam (Effs xeffs) )
   => (forall x. Effs xeffs m x -> m x)
   -> Handler ieffs oeffs fs fam
   -> Prog (ieffs `Union` xeffs) a -> m (Composes fs a)
