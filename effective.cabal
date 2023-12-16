@@ -36,6 +36,7 @@ library
     Control.Effect.State
     Control.Effect.Writer
     Control.Monad.Graded
+    Control.Monad.Trans.List
     Data.Functor.Composes
     Data.HFunctor
     Data.HFunctor.HCompose
