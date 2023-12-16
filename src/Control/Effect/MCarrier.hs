@@ -12,7 +12,6 @@ import Control.Handler
 import Control.Effects
 import Control.Family.Base
 import Control.Family.Algebraic
-import Data.Functor.Identity
 import Control.Monad.Trans.Cont
 import Data.Functor.Composes
 
@@ -47,7 +46,7 @@ newtype ContC (c :: (Type -> Type) -> Type -> Type) (m :: Type -> Type) x
   deriving Functor
 
 convert :: forall c f asig . (Functor f, Functor asig)
-  => Carrier c f asig -> Handler' '[Algebraic asig] '[] (ContC c) '[f] JustAlg
+  => Carrier c f asig -> Handler' '[Algebraic asig] '[] (ContC c) '[f] AlgFam
 convert (Carrier crun calg cfwd cgen) = Handler' run alg fwd where
   run :: Monad m
       => (forall x. Effs '[] m x -> m x)
@@ -60,7 +59,7 @@ convert (Carrier crun calg cfwd cgen) = Handler' run alg fwd where
   alg _ (Eff (Algebraic x)) = ContC (cont (\k -> calg (fmap k x)))
 
 
-  fwd :: (JustAlg sig, Monad m)
+  fwd :: (AlgFam sig, Monad m)
       => (forall x. sig m x -> m x)
       -> (forall x. sig (ContC c m) x -> ContC c m x)
   fwd alg op = let (Algebraic op') = aproject op
