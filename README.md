@@ -15,7 +15,7 @@ with its contents with `cabal repl readme` and follow the examples. The language
 
 
 Working with IO
-----------------
+---------------
 
 The `Teletype` example is a rite of passage for monadic IO [^Gordon1992] where
 the challenge is to show how IO of reading from and writing to the terminal can
@@ -26,10 +26,9 @@ output to the terminal using `putStrLn` until a blank line is received by
 ```haskell
 echo :: Prog' [GetLine, PutStrLn] ()
 echo = do str <- getLine
-          case str of
-            [] -> return ()
-            _  -> do putStrLn str
-                     echo
+          unless (null str) $
+            do putStrLn str
+               echo
 ```
 The type signature says that this is a program that requires
 both `GetLine` and `PutStrLn` operations.
@@ -47,7 +46,7 @@ terminal user is immediately echoed back out to the terminal.
 
 
 Working with Handlers
-----------------------
+---------------------
 
 A pure state effect is provided in `Effect.Control.State`, which supports
 `get` and `put` as operations that are indicated by `Get s` and `Put s`
@@ -135,7 +134,7 @@ handler.
 
 
 Forwarding Effects
--------------------
+------------------
 
 Now suppose that the task is to count the number of times `getLine` is called
 when the `echo` program is executed. One approach is to change the `echo`
@@ -146,10 +145,9 @@ echoTick :: Prog' '[GetLine, Get Int, Put Int, PutStrLn] ()
 echoTick =
   do str <- getLine
      incr
-     case str of
-       [] -> return ()
-       _  -> do putStrLn str
-                echoTick
+     unless (null str) $
+       do putStrLn str
+          echoTick
 ```
 To execute such a program that uses both state and IO
 requires a handler that is specialized to deal with IO:
@@ -197,9 +195,9 @@ getLineIncr
              '[GetLine, Get Int, Put Int]     -- output effects
              '[]                              -- output wrapper
 getLineIncr = interpret $
-  \(Alg (GetLine k)) -> do xs <- getLine
+  \(Alg (GetLine k)) -> do str <- getLine
                            incr
-                           return (k xs)
+                           return (k str)
 ```
 The handler says that it will deal with `[GetLine]` as an input effect,
 and will output the effects `[GetLine, Get Int, Put Int]`.
@@ -236,8 +234,8 @@ from the terminal. For instance, suppose the task is to get a line and return
 its length. This is achieved by the `getLineLength` program:
 ```haskell
 getLineLength :: Prog' '[GetLine] Int
-getLineLength = do xs <- getLine
-                   return (length xs)
+getLineLength = do str <- getLine
+                   return (length str)
 ```
 As before, this can be evaluated using `evalIO`:
 ```haskell ignore
@@ -645,10 +643,10 @@ are purely produced.
 Timestamps
 ----------
 
-Timestamps are often used in conjuction with logging so that the time a message
+Timestamps are often used in conjunction with logging so that the time a message
 is logged can be recorded. The traditional way of doing this might be to make
 a bespoke `logger` that ensures that there is a timestamp integrated into each
-occurence of the log:
+occurrence of the log:
 ```haskell
 logger :: String -> Prog' [Tell [(Integer, String)], GetCPUTime] ()
 logger str = do time <- getCPUTime
@@ -699,7 +697,7 @@ particular order in which certain effects should be handled, the `effective`
 library leaves this choice entirely to the handler.
 
 Graded Effects
----------------
+--------------
 
 There are two of defining operations using `effective`, which we will call
 _graded_ style and _member_ style. In graded style operations the signature
@@ -711,7 +709,7 @@ considered more advanced and is detailed more carefully in the
 
 
 Language Extensions
---------------------
+-------------------
 
 The `effective` library requires the `DataKinds` extension since
 this is used to keep track of effect signatures.
@@ -732,6 +730,7 @@ Imports
 This file has a number of imports:
 
 ```haskell top
+import Control.Monad (unless)
 import Control.Effect
 import Control.Effect.State
 import Control.Effect.Writer hiding (uncensors)
@@ -761,7 +760,7 @@ main = defaultMain $ fmap checkParallel [props]
 -->
 
 References
------------
+----------
 
 * [Effect Handlers in Scope. N. Wu, T. Schrijvers, R. Hinze. Haskell Symposium. 2014](https://dl.acm.org/doi/10.1145/2633357.2633358)
 * [Modular Models of Monoids with Operations. Z. Yang, N. Wu. ICFP. 2023](https://dl.acm.org/doi/10.1145/3607850)
