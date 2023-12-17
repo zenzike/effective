@@ -46,8 +46,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    base, transformers, ghc,
-    containers,
+    base, transformers
 
 test-suite docs
   type:          exitcode-stdio-1.0
