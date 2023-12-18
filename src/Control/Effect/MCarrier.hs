@@ -34,7 +34,7 @@ data ListC m x = ListC (m [x])
 --
 -- Another example is ContT; since there only algebraic operations
 -- can be forwarded.
-data Carrier c f asig = Carrier
+data MCarrier c f asig = MCarrier
   { crun :: forall m x . Monad m => c m x -> m (f x)
   , calg :: forall m x . Monad m => asig (c m x) -> c m x
   , cfwd :: forall m x . Monad m => m (c m x) -> c m x
@@ -46,8 +46,8 @@ newtype ContC (c :: (Type -> Type) -> Type -> Type) (m :: Type -> Type) x
   deriving Functor
 
 convert :: forall c f asig . (Functor f, Functor asig)
-  => Carrier c f asig -> Handler' '[Algebraic asig] '[] (ContC c) '[f] AlgFam
-convert (Carrier crun calg cfwd cgen) = Handler' run alg fwd where
+  => MCarrier c f asig -> Handler' '[Algebraic asig] '[] (ContC c) '[f] AlgFam
+convert (MCarrier crun calg cfwd cgen) = Handler' run alg fwd where
   run :: Monad m
       => (forall x. Effs '[] m x -> m x)
       -> (forall x. ContC c m x -> m (Comps '[f] x))

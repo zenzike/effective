@@ -74,10 +74,10 @@ handler run malg mfwd = Handler (Handler' (const (fmap comps . run)) malg mfwd)
 type ASHandler effs oeffs fs = Handler effs oeffs fs ASFam
 
 ashandler
-  :: forall t fs effs oeffs. (MonadTrans t, All Functor fs)
+  :: forall t fs effs oeffs. (MonadTrans t, Recompose fs)
   => (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
-    -> (forall x . t m x -> m (Comps fs x)))
+    -> (forall x . t m x -> m (Composes fs x)))
   -> (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs (t m) x -> t m x))
@@ -85,7 +85,12 @@ ashandler
     => (forall x . lsig (m x) -> m x)
     -> (forall x . lsig (t m x) -> t m x))
   -> Handler effs oeffs fs ASFam
-ashandler run malg scfwd = Handler (Handler' run malg mfwd) where
+ashandler mrun malg scfwd = Handler (Handler' mrun' malg mfwd) where
+  mrun' :: forall m . Monad m
+        => (forall x . Effs oeffs m x -> m x)
+        -> (forall x . t m x -> m (Comps fs x))
+  mrun' oalg t = fmap decompose (mrun oalg t)
+
   mfwd :: (Monad m, ASFam sig, HFunctor sig) 
        => (forall x. sig m x -> m x)
        -> (forall x. sig (t m) x -> t m x)
