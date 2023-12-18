@@ -94,18 +94,19 @@ ashandler run malg scfwd = Handler (Handler' run malg mfwd) where
     | (Right (Scoped op'))   <- asproject op = scfwd (alg . asinjectScp) op'
 
 
+-- A translation of effects maps every operation in effs to a term in oeffs.
+type Translation effs oeffs = forall m x . Effs effs m x -> Prog oeffs x
 
--- TODO: A better error message for unsafePrj
-interpret
-  :: forall eff effs oeffs fam
-  .  Member eff effs
-  => (forall m x . eff m x -> Prog oeffs x)
-  -> Handler effs oeffs '[] fam
-interpret f = interpret' (\oalg -> eval oalg . f . unsafePrj)
+-- A translation of operations define a modular handler.
+interpret :: forall effs oeffs fam .
+             Translation effs oeffs -> Handler effs oeffs '[] fam
+interpret tr = interpret' ftr
   where
-    unsafePrj :: Effs effs m x -> eff m x
-    unsafePrj x = case prj x of Just y -> y
+    ftr :: forall m . Monad m => (forall x. Effs oeffs m x -> m x)
+       -> (forall x. Effs effs m x -> m x)
+    ftr oalg op = eval oalg (tr op)
 
+-- Translations can also be given in an impredicative encoding.
 interpret'
   :: (forall m . Monad m
      => (forall x . Effs oeffs m x -> m x)
