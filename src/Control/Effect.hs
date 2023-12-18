@@ -290,17 +290,11 @@ handler
   -> Handler effs oeffs '[f]
 handler run malg mfwd = Handler (Handler' (const (fmap comps . run)) malg mfwd)
 
-
--- TODO: A better error message for unsafePrj
 interpret
-  :: forall eff effs oeffs
-  .  Member eff effs
-  => (forall m x . Eff eff m x -> Prog oeffs x)
-  -> Handler effs oeffs '[]
-interpret f = interpret' (\oalg -> eval oalg . f . unsafePrj)
-  where
-    unsafePrj :: Effs effs m x -> Eff eff m x
-    unsafePrj x = case prj x of Just y -> y
+  :: forall eff oeffs
+  . Functor eff => (forall m x . Eff eff m x -> Prog oeffs x)
+  -> Handler '[eff] oeffs '[]
+interpret f = interpret' (\oalg -> eval oalg . f . \(Eff x) -> x)
 
 interpret'
   :: (forall m . Monad m
