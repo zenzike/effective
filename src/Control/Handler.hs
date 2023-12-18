@@ -11,14 +11,13 @@ module Control.Handler where
 
 import Control.Effects
 import Control.Family.Base
+import Control.Family.AlgScp
 import Data.List.Kind
 import Data.Functor.Identity
 import Data.Functor.Composes
 import Data.HFunctor
 import Data.HFunctor.HCompose
 import Control.Monad.Trans.Identity
-import Control.Monad.Trans.Cont
-import Control.Monad ( join, ap, liftM )
 import Control.Monad.Trans.Class
 
 type Handler
@@ -28,7 +27,7 @@ type Handler
   -> Family                               -- fam   : forwarding family
   -> Type
 data Handler effs oeffs fs fam
-  =  forall t . (HFunctor t, MonadTrans t)
+  =  forall t . MonadTrans t
   => Handler (Handler' effs oeffs t fs fam)
 
 type Handler'
@@ -48,24 +47,52 @@ data Handler' effs oeffs t fs fam =
          => (forall x . Effs oeffs m x -> m x)
          -> (forall x . Effs effs (t m) x -> t m x)
 
+-- TODO: hfwd should also take in an oalg :: (forall x . Effs oeffs m x -> m x).
   , hfwd :: forall m (sig :: Effect)
-         . ( Monad m, fam sig , HFunctor sig )
+         . (Monad m, fam sig , HFunctor sig)
          => (forall x . sig m x -> m x)
          -> (forall x . sig (t m) x -> t m x)
   }
 
-
+-- TODO: f should be fs. The `run` argument should be more general as well.
 handler
-  :: (MonadTrans t, HFunctor t, Functor f)
+  :: (MonadTrans t, Functor f)
   => (forall m a . Monad m => t m a -> m (f a))
   -> (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs (t m) x -> t m x))
-  -> (forall m sigs . ( Monad m, fam sigs )
+  -> (forall m sigs . (Monad m, fam sigs, HFunctor sigs)
     => (forall x . sigs m x -> m x)
     -> (forall x . sigs (t m) x -> t m x))
   -> Handler effs oeffs '[f] fam
 handler run malg mfwd = Handler (Handler' (const (fmap comps . run)) malg mfwd)
+
+
+-- The following is a convenient interface for handlers for the family of
+-- algebraic-or-scoped operations. Only the forwarder for scoped operations
+-- needs to be passed in, since algebraic operations have a canonical forwarding.
+type ASHandler effs oeffs fs = Handler effs oeffs fs ASFam
+
+ashandler
+  :: forall t fs effs oeffs. (MonadTrans t, All Functor fs)
+  => (forall m . Monad m
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . t m x -> m (Comps fs x)))
+  -> (forall m . Monad m
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . Effs effs (t m) x -> t m x))
+  -> (forall m lsig . (Functor lsig, Monad m)     -- a forwarder for scoped operations
+    => (forall x . lsig (m x) -> m x)
+    -> (forall x . lsig (t m x) -> t m x))
+  -> Handler effs oeffs fs ASFam
+ashandler run malg scfwd = Handler (Handler' run malg mfwd) where
+  mfwd :: (Monad m, ASFam sig, HFunctor sig) 
+       => (forall x. sig m x -> m x)
+       -> (forall x. sig (t m) x -> t m x)
+  mfwd alg op
+    | (Left (Algebraic op')) <- asproject op = lift (alg (asinjectAlg op'))
+    | (Right (Scoped op'))   <- asproject op = scfwd (alg . asinjectScp) op'
+
 
 
 -- TODO: A better error message for unsafePrj
@@ -113,8 +140,6 @@ fuse' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 effs oeffs fam .
   ( All Functor (fs2 :++ fs1)
   , MonadTrans t1
   , MonadTrans t2
-  , HFunctor t1
-  , HFunctor t2
   , Expose fs2
   , Append effs1 (effs2 :\\ effs1)
   , Append (oeffs1 :\\ effs2) (oeffs2 :\\ (oeffs1 :\\ effs2))
@@ -201,8 +226,6 @@ pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs fam .
   ( All Functor (fs2 :++ fs1)
   , MonadTrans t1
   , MonadTrans t2
-  , HFunctor t1
-  , HFunctor t2
   , Expose fs2
   , oeffs ~ ((oeffs1 :\\ effs2) `Union` oeffs2)
   , Append (oeffs1 :\\ effs2) effs2
@@ -326,7 +349,7 @@ handleWith xalg (Handler (Handler' run malg mfwd))
 
 
 weaken
-  :: forall ieffs ieffs' oeffs oeffs' ts fs fam
+  :: forall ieffs ieffs' oeffs oeffs' fs fam
   . ( Injects ieffs ieffs'
     , Injects oeffs oeffs'
     )
@@ -380,4 +403,3 @@ weakenAlg
   => (Effs eff' m x -> m x)
   -> (Effs eff  m x -> m x)
 weakenAlg alg = alg . injs
-

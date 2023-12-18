@@ -1,7 +1,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Control.Family.AlgScp where
+module Control.Family.AlgScp 
+  ( ASFam (..)
+  , module Control.Family.Algebraic
+  , module Control.Family.Scoped
+  ) where
 
 import Control.Family.Base
 import Control.Family.Algebraic

@@ -48,6 +48,7 @@ library
     Data.HFunctor.HComposes
     Data.CutList
     Data.List.Kind
+    Data.EitherF
   hs-source-dirs:
     src
   build-depends:
