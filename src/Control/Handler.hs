@@ -54,18 +54,23 @@ data Handler' effs oeffs t fs fam =
          -> (forall x . sig (t m) x -> t m x)
   }
 
--- TODO: f should be fs. The `run` argument should be more general as well.
 handler
-  :: (MonadTrans t, Functor f)
-  => (forall m a . Monad m => t m a -> m (f a))
+  :: forall t fs effs oeffs fam. (MonadTrans t, Recompose fs)
+  => (forall m . Monad m
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . t m x -> m (Composes fs x)))
   -> (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs (t m) x -> t m x))
   -> (forall m sigs . (Monad m, fam sigs, HFunctor sigs)
     => (forall x . sigs m x -> m x)
     -> (forall x . sigs (t m) x -> t m x))
-  -> Handler effs oeffs '[f] fam
-handler run malg mfwd = Handler (Handler' (const (fmap comps . run)) malg mfwd)
+  -> Handler effs oeffs fs fam
+handler mrun malg mfwd = Handler (Handler' mrun' malg mfwd) where
+  mrun' :: forall m . Monad m
+        => (forall x . Effs oeffs m x -> m x)
+        -> (forall x . t m x -> m (Comps fs x))
+  mrun' oalg t = fmap decompose (mrun oalg t)
 
 
 -- The following is a convenient interface for handlers for the family of
@@ -85,12 +90,7 @@ ashandler
     => (forall x . lsig (m x) -> m x)
     -> (forall x . lsig (t m x) -> t m x))
   -> Handler effs oeffs fs ASFam
-ashandler mrun malg scfwd = Handler (Handler' mrun' malg mfwd) where
-  mrun' :: forall m . Monad m
-        => (forall x . Effs oeffs m x -> m x)
-        -> (forall x . t m x -> m (Comps fs x))
-  mrun' oalg t = fmap decompose (mrun oalg t)
-
+ashandler mrun malg scfwd = handler mrun malg mfwd where
   mfwd :: (Monad m, ASFam sig, HFunctor sig) 
        => (forall x. sig m x -> m x)
        -> (forall x. sig (t m) x -> t m x)
