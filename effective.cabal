@@ -9,6 +9,7 @@ author:              Nicolas Wu
 maintainer:          nicolas.wu@gmail.com
 -- copyright:
 category:            Control
+test:                True
 build-type:          Custom
 extra-source-files:
     docs/*.md
@@ -55,21 +56,21 @@ library
     base, transformers, ghc,
     containers,
 
--- test-suite docs
---   type:          exitcode-stdio-1.0
---   build-depends: base, transformers, effective, hedgehog
---   main-is:       Main.hs
---   ghc-options:   -threaded
---   hs-source-dirs: docs
---   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
---   default-language: GHC2021
---   other-modules:
---     Error,
---     Graded,
---     Nondet,
---     Parser,
---     State,
--- 
+test-suite docs
+  type:          exitcode-stdio-1.0
+  build-depends: base, transformers, effective, hedgehog
+  main-is:       Main.hs
+  ghc-options:   -threaded
+  hs-source-dirs: docs
+  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+  default-language: GHC2021
+  other-modules:
+    Error,
+    Graded,
+    Nondet,
+    Parser,
+    State,
+
 -- test-suite readme
 --   type:          exitcode-stdio-1.0
 --   ghc-options:   -threaded -pgmL markdown-unlit

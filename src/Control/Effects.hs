@@ -13,7 +13,7 @@ import Data.Kind ( Type, Constraint )
 import Data.List.Kind
 import Data.HFunctor
 import Data.HFunctor.HCompose
-
+import qualified Control.Monad.Graded as Graded
 import Control.Monad ( join, ap, liftM )
 
 
@@ -190,6 +190,22 @@ instance Applicative (Prog effs) where
 instance Monad (Prog effs) where
   Return x >>= f = f x
   Call op  >>= f = Call (fmap (>>= f) op)
+
+
+instance Graded.GradedMonad Prog where
+  type Unit Prog = '[] :: [Effect]
+  type Plus Prog effs effs' = Union effs effs'
+  type Inv Prog effs effs' =
+    ( Injects effs (Union effs effs')
+    , Injects effs' (Union effs effs'))
+
+  return = Return
+  (>>=) :: forall (i :: [Effect]) (j :: [Effect]) a b.
+           Graded.Inv Prog i j =>
+           Prog i a -> (a -> Prog j b) -> Prog (Graded.Plus Prog i j) b
+  (Return x)  >>= f = weakenProg (f x)
+  (Call op)   >>= f = Call ((hmap weakenProg . injs @i @(Union i j) . fmap (Graded.>>= f)) op)
+
 
 weakenProg :: forall effs effs' a
   .  Injects effs effs'
