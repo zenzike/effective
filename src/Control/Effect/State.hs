@@ -13,6 +13,10 @@ import Data.Functor.Identity
 import Control.Effects
 import qualified Control.Monad.Trans.State.Lazy as S
 
+type State s = '[Put s, Get s]
+type Put s = Algebraic (Put' s)
+type Get s = Algebraic (Get' s)
+
 data Put' s k where
   Put :: s -> k -> Put' s k
   deriving Functor
@@ -20,10 +24,6 @@ data Put' s k where
 data Get' s k where
   Get :: (s -> k) -> Get' s k
   deriving Functor
-
-type Put s = Algebraic (Put' s)
-type Get s = Algebraic (Get' s)
-type State s = '[Put s, Get s]
 
 put :: Member (Put s) sig => s -> Prog sig ()
 put s = (Call . inj) (Algebraic (Put s (return ())))

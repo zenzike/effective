@@ -40,7 +40,7 @@ library
     -- Control.Effect.Nondet
     -- Control.Effect.Reader
     Control.Effect.State
-    -- Control.Effect.Writer
+    Control.Effect.Writer
     -- Control.Monad.Graded
     Data.Functor.Composes
     Data.HFunctor
