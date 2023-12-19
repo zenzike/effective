@@ -12,23 +12,24 @@ import Control.Monad.Trans.Identity
 import qualified Control.Monad.Trans.Writer as W
 import Data.HFunctor
 
-type Tell w = Algebraic (Tell' w)
 
 data Tell' w k where
   Tell :: w -> k -> Tell' w k
   deriving Functor
 
+type Tell w = Algebraic (Tell' w)
+
 tell :: Monoid w => w -> Prog' '[Tell w] ()
 tell w = (Call . inj) (Algebraic (Tell w (return ())))
-
-type Censor w = Scoped (Censor' w)
 
 data Censor' w k where
   Censor :: (w -> w) -> k -> Censor' w k
   deriving Functor
 
+type Censor w = Scoped (Censor' w)
+
 censor :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig a
-censor cipher p = (Call . inj) (Scoped (Censor cipher (fmap return p)))
+censor cipher p = injCall (Scoped (Censor cipher (fmap return p)))
 
 -- Amazingly this handler can forward operations from any family.
 censors :: forall w fam . Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w, Censor w] '[] fam
