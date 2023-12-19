@@ -8,26 +8,32 @@ import Prelude hiding (or)
 
 import Data.HFunctor ( HFunctor(..) )
 
-import Control.Effect
+import Control.Effects
+import Control.Handler
+import Control.Family.AlgScp
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad ( ap, liftM )
 import Control.Monad.Trans.Class ( MonadTrans(..) )
 import Control.Arrow ( Arrow(second) )
 
 
-data Stop a where
-  Stop :: Stop a
+data Stop' a where
+  Stop :: Stop' a
   deriving Functor
+
+type Stop = Algebraic Stop'
 
 stop :: Members '[Stop] sig => Prog sig a
-stop  = injCall (Alg Stop)
+stop  = injCall (Algebraic Stop)
 
-data Or a where
-  Or :: a -> a -> Or a
+data Or' a where
+  Or :: a -> a -> Or' a
   deriving Functor
 
+type Or = Algebraic Or'
+
 or :: Members '[Or] sig => Prog sig a -> Prog sig a -> Prog sig a
-or x y = injCall (Alg (Or x y))
+or x y = injCall (Algebraic (Or x y))
 
 
 instance (Members [Or, Stop] sig) => Alternative (Prog sig) where
@@ -37,27 +43,9 @@ instance (Members [Or, Stop] sig) => Alternative (Prog sig) where
   (<|>) :: Members [Or, Stop] sig => Prog sig a -> Prog sig a -> Prog sig a
   (<|>) = or
 
+
 select :: Members [Or, Stop] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
-
-nondetAlg
-  :: (MonadTrans t, Alternative (t m) , Monad m)
-  => (forall x. Effs oeff m x -> m x)
-  -> (forall x. Effs [Stop , Or] (t m) x -> t m x)
-nondetAlg oalg eff
-  | Just (Alg Stop)     <- prj eff = empty
-  | Just (Alg (Or x y)) <- prj eff = return x <|> return y
-
-nondetFwd
-  :: (Monad m)
-  => (forall x. Effs sig m x -> m x)
-  -> forall x. Effs sig (ListT m) x -> ListT m x
-nondetFwd alg (Eff (Alg x)) = lift  (alg (Eff (Alg x)))
-nondetFwd alg (Eff (Scp x)) = ListT (alg (Eff (Scp (fmap runListT x))))
-nondetFwd alg (Effs effs)   = nondetFwd (alg . Effs) effs
-
-nondet :: Handler [Stop, Or] '[] '[[]]
-nondet = handler runListT' nondetAlg nondetFwd
 
 newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
   deriving Functor
@@ -94,16 +82,35 @@ instance MonadTrans ListT where
   lift :: Monad m => m a -> ListT m a
   lift = ListT . liftM (\x -> Just (x, empty))
 
+nondetAlg
+  :: (MonadTrans t, Alternative (t m) , Monad m)
+  => (forall x. Effs oeff m x -> m x)
+  -> (forall x. Effs [Stop , Or] (t m) x -> t m x)
+nondetAlg oalg eff
+  | Just (Algebraic Stop)     <- prj eff = empty
+  | Just (Algebraic (Or x y)) <- prj eff = return x <|> return y
+
+nondetFwd
+  :: (Monad m, Functor lsig)
+  => (forall x. lsig (m x) -> m x)
+  -> forall x. lsig (ListT m x) -> ListT m x
+nondetFwd alg x = ListT (alg (fmap runListT x))
+
+nondet :: ASHandler [Stop, Or] '[] '[[]]
+nondet = ashandler (\_ -> runListT') nondetAlg nondetFwd
+
 
 -------------------------------
 -- Example: Backtracking (and Culling?)
-data Once a where
-  Once :: a -> Once a
+data Once' a where
+  Once :: a -> Once' a
   deriving Functor
+
+type Once = Scoped Once'
 
 once
   :: Member Once sig => Prog sig a -> Prog sig a
-once p = injCall (Scp (Once (fmap return p)))
+once p = injCall (Scoped (Once (fmap return p)))
 
 -- Everything can be handled together. Here is the non-modular way
 -- list :: (Member (Or) sig, Member (Stop) sig, Member (Once) sig) => Prog sig a -> [a]
@@ -111,18 +118,18 @@ list :: Prog [Stop, Or, Once] a -> [a]
 list = eval halg where
   halg :: Effs [Stop, Or, Once] [] a -> [a]
   halg op
-    | Just (Alg Stop)          <- prj op = []
-    | Just (Alg (Or x y))      <- prj op = [x, y]
-    | Just (Scp (Once []))     <- prj op = []
-    | Just (Scp (Once (x:xs))) <- prj op = [x]
+    | Just (Algebraic Stop)          <- prj op = []
+    | Just (Algebraic (Or x y))      <- prj op = [x, y]
+    | Just (Scoped (Once []))        <- prj op = []
+    | Just (Scoped (Once (x:xs)))    <- prj op = [x]
 
 backtrackAlg
   :: Monad m => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Stop, Or, Once] (ListT m) x -> ListT m x)
 backtrackAlg oalg op
-  | Just (Alg Stop)     <- prj op = empty
-  | Just (Alg (Or x y)) <- prj op = return x <|> return y
-  | Just (Scp (Once p)) <- prj op =
+  | Just (Algebraic Stop)     <- prj op = empty
+  | Just (Algebraic (Or x y)) <- prj op = return x <|> return y
+  | Just (Scoped (Once p))    <- prj op =
     ListT $ do mx <- runListT p
                case mx of
                  Nothing       -> return Nothing
@@ -134,7 +141,7 @@ backtrackOnceAlg
   => (forall x . oeff m x -> m x)
   -> (forall x . Effs '[Once] (ListT m) x -> ListT m x)
 backtrackOnceAlg oalg op
-  | Just (Scp (Once p)) <- prj op =
+  | Just (Scoped (Once p)) <- prj op =
     ListT $ do mx <- runListT p
                case mx of
                  Nothing       -> return Nothing
@@ -147,14 +154,6 @@ backtrackAlg' = joinAlg nondetAlg backtrackOnceAlg
 -- TODO: The alternative with monad transformers is painful.
 -- TODO: this becomes interesting when different search strategies are used
 
+backtrack :: ASHandler [Stop, Or, Once] '[] '[[]]
+backtrack = ashandler (\_ -> runListT') backtrackAlg' nondetFwd
 
-backtrackFwd
-  :: (Monad m)
-  => (forall x. Effs sig m x -> m x)
-  -> forall x. Effs sig (ListT m) x -> ListT m x
-backtrackFwd alg (Eff (Alg x)) = lift (alg (Eff (Alg x)))
-backtrackFwd alg (Eff (Scp x)) = ListT (alg (Eff (Scp (fmap runListT x))))
-backtrackFwd alg (Effs effs)   = backtrackFwd (alg . Effs) effs
-
-backtrack :: Handler [Stop, Or, Once] '[] '[[]]
-backtrack = handler runListT' backtrackAlg' backtrackFwd
