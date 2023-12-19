@@ -33,7 +33,7 @@ library
     Control.Family.AlgScp
     Control.Handler
     Control.Effect.MCarrier
-    -- Control.Effect.Cut
+    Control.Effect.Cut
     -- Control.Effect.Except
     -- Control.Effect.IO
     Control.Effect.Maybe
