@@ -4,49 +4,51 @@
 
 module Control.Effect.Maybe where
 
-import Control.Effect
-
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.Class (lift)
+import Control.Effects
+import Control.Handler
+import Control.Family.AlgScp
 
 -- TODO: Consider renaming catch/Throw/Catch to lobby/Exit/Enter
 
-data Catch k where
-  Catch :: k -> k -> Catch k
+data Catch' k where
+  Catch :: k -> k -> Catch' k
   deriving Functor
+
+type Catch = Scoped Catch'
 
 catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
-catch p q = injCall (Scp (Catch (fmap return p) (fmap return q)))
+catch p q = injCall (Scoped (Catch (fmap return p) (fmap return q)))
 
-data Throw k where
-  Throw :: Throw k
+data Throw' k where
+  Throw :: Throw' k
   deriving Functor
 
+type Throw = Algebraic Throw'
+
 throw :: Member Throw sig => Prog sig a
-throw = injCall (Alg Throw)
+throw = injCall (Algebraic Throw)
 
 exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
 exceptAlg _ eff
-  | Just (Alg Throw) <- prj eff
+  | Just (Algebraic Throw) <- prj eff
       = MaybeT (return Nothing)
-  | Just (Scp (Catch p q)) <- prj eff
+  | Just (Scoped (Catch p q)) <- prj eff
       = MaybeT $ do mx <- runMaybeT p
                     case mx of
                       Nothing -> runMaybeT q
                       Just x  -> return (Just x)
 
 exceptFwd
-  :: Monad m
-  => (forall x. Effs sigs m x -> m x)
-  -> (forall x. Effs sigs (MaybeT m) x -> MaybeT m x)
-exceptFwd alg (Eff (Alg x)) = lift (alg (Eff (Alg x)))
-exceptFwd alg (Eff (Scp x)) = MaybeT (alg (Eff (Scp (fmap runMaybeT x))))
-exceptFwd alg (Effs effs)   = exceptFwd (alg . Effs) effs
+  :: (Functor lsig, Monad m)
+  => (forall x. lsig (m x) -> m x)
+  -> (forall x. lsig (MaybeT m x) -> MaybeT m x)
+exceptFwd alg x = MaybeT (alg (fmap runMaybeT x))
 
-except :: Handler [Throw, Catch] '[] '[Maybe]
-except = handler runMaybeT exceptAlg exceptFwd
+except :: ASHandler [Throw, Catch] '[] '[Maybe]
+except = ashandler (const runMaybeT) exceptAlg exceptFwd
 
 -- multiple semantics such as retry after handling is difficult in MTL
 -- without resorting to entirely different newtype wrapping through
@@ -60,9 +62,9 @@ retryAlg :: Monad m
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
 retryAlg _ eff
-  | Just (Alg Throw) <- prj eff
+  | Just (Algebraic Throw) <- prj eff
       = MaybeT (return Nothing)
-  | Just (Scp (Catch p q)) <- prj eff = MaybeT $ loop p q
+  | Just (Scoped (Catch p q)) <- prj eff = MaybeT $ loop p q
       where
         loop p q =
           do mx <- runMaybeT p
@@ -73,6 +75,6 @@ retryAlg _ eff
                                Just y  -> loop p q
                Just x  -> return (Just x)
 
-retry :: Handler [Throw, Catch] '[] '[Maybe]
-retry = handler runMaybeT retryAlg exceptFwd
+retry :: ASHandler [Throw, Catch] '[] '[Maybe]
+retry = ashandler (const runMaybeT) retryAlg exceptFwd
 

@@ -89,7 +89,7 @@ ashandler
   -> (forall m lsig . (Functor lsig, Monad m)     -- a forwarder for scoped operations
     => (forall x . lsig (m x) -> m x)
     -> (forall x . lsig (t m x) -> t m x))
-  -> Handler effs oeffs fs ASFam
+  -> ASHandler effs oeffs fs
 ashandler mrun malg scfwd = handler mrun malg mfwd where
   mfwd :: (Monad m, ASFam sig, HFunctor sig) 
        => (forall x. sig m x -> m x)
@@ -98,6 +98,29 @@ ashandler mrun malg scfwd = handler mrun malg mfwd where
     | (Left (Algebraic op')) <- asproject op = lift (alg (asinjectAlg op'))
     | (Right (Scoped op'))   <- asproject op = scfwd (alg . asinjectScp) op'
 
+-- To define a modular handler in the family of algebraic operations,
+-- the forwarding function can be omitted. Note also that `effs` doesn't
+-- have to be an algebraic operation.
+ahandler
+  :: forall t fs effs oeffs. (MonadTrans t, Recompose fs)
+  => (forall m . Monad m
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . t m x -> m (Composes fs x)))
+  -> (forall m . Monad m
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . Effs effs (t m) x -> t m x))
+  -> Handler effs oeffs fs AlgFam
+ahandler mrun malg = handler mrun malg mfwd where
+  mfwd :: (Monad m, AlgFam sig, HFunctor sig) 
+       => (forall x. sig m x -> m x)
+       -> (forall x. sig (t m) x -> t m x)
+  mfwd alg op
+    | (Algebraic op') <- aproject op = lift (alg (ainject' op'))
+
+-- Every handler can be weakened to a handler in the family of algebraic operations.
+toAlgHdl :: Recompose fs 
+         => Handler effs oeffs fs fam -> Handler effs oeffs fs AlgFam
+toAlgHdl (Handler (Handler' r a _)) = ahandler (\o x -> fmap recompose (r o x)) a
 
 -- A translation of effects maps every operation in effs to a term in oeffs.
 type Translation effs oeffs = forall m x . Effs effs m x -> Prog oeffs x
