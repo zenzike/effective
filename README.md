@@ -67,9 +67,9 @@ members.
 This program can be executed by using a handler. For state, the usual
 handler is given by:
 ```haskell ignore
-state :: s -> Handler '[Put s, Get s]  -- input effects
-                      '[]              -- output effects
-                      '[((,) s)]       -- output wrapper
+state :: s -> ASHandler '[Put s, Get s]  -- input effects
+                        '[]              -- output effects
+                        '[((,) s)]       -- output wrapper
 ```
 The signature of the handler tells us how it behaves:
 * The input effects are `Put s` and `Get s`.
@@ -105,7 +105,7 @@ Notice that the `state` handler returns the final state as well as the final
 return value of the program. A variation of the `state` handler is `state_`,
 which does not return the final state:
 ```haskell ignore
-state_ :: s -> Handler [Put s, Get s] '[] '[]
+state_ :: s -> ASHandler [Put s, Get s] '[] '[]
 ```
 Here the final output wrapper is `'[]`, and so applying this to a program
 of type `Prog sig a` will simply return a value of type `a`.
@@ -193,13 +193,14 @@ Here is how to write a handler that intercepts a `getLine` operation, only to
 emit it again while also incrementing a counter in the state:
 ```haskell
 getLineIncr
-  :: Handler '[GetLine]                       -- input effects
-             '[GetLine, Get Int, Put Int]     -- output effects
-             '[]                              -- output wrapper
+  :: ASHandler '[GetLine]                       -- input effects
+               '[GetLine, Get Int, Put Int]     -- output effects
+               '[]                              -- output wrapper
 getLineIncr = interpret $ 
-  \(Alg (GetLine k)) -> do xs <- getLine
-                           incr
-                           return (k xs)
+  \(Eff (Algebraic (GetLine k))) -> 
+    do xs <- getLine
+       incr
+       return (k xs)
 ```
 The handler says that it will deal with `[GetLine]` as an input effect,
 but and will output the effects `[GetLine, Get Int, Put Int]`.
@@ -207,9 +208,9 @@ but and will output the effects `[GetLine, Get Int, Put Int]`.
 Now the task is to connect this handler with `state`. This can
 be achieved with a `pipe`:
 ```haskell
-getLineIncrState :: Handler '[GetLine]   -- input effects
-                            '[GetLine]   -- output effects
-                            '[(,) Int]   -- output wrapper
+getLineIncrState :: ASHandler '[GetLine]   -- input effects
+                              '[GetLine]   -- output effects
+                              '[(,) Int]   -- output wrapper
 getLineIncrState
   = pipe getLineIncr (state (0 :: Int))
 ```
@@ -250,13 +251,14 @@ list of strings. Here is how `getLine` can be interpreted in terms of the
 operations `get` and `put` from a state containing a list of strings:
 ```haskell
 getLineState
-  :: Handler '[GetLine] '[Get [String], Put [String]] '[]
+  :: Handler '[GetLine] '[Get [String], Put [String]] '[] fam
 getLineState = interpret $
-  \(Alg (GetLine k)) -> do xss <- get
-                           case xss of
-                             []        -> return (k "")
-                             (xs:xss') -> do put xss'
-                                             return (k xs)
+  \(Eff (Algebraic (GetLine k))) -> 
+    do xss <- get
+       case xss of
+         []        -> return (k "")
+         (xs:xss') -> do put xss'
+                         return (k xs)
 ```
 The signature of `getLineState` says that it is a handler that recognises
 `GetLine` operations and interprets them in terms of some output effects in
@@ -270,10 +272,10 @@ effects. These can be handled by a state handler. The output of the
 `getLineState` handler can be piped into the `state` handler to produce
 a new handler. Here are two variations:
 ```haskell
-getLinePure :: [String] -> Handler '[GetLine] '[] '[(,) [String]]
+getLinePure :: [String] -> ASHandler '[GetLine] '[] '[(,) [String]]
 getLinePure str = pipe getLineState (state str)
 
-getLinePure_ :: [String] -> Handler '[GetLine] '[] '[]
+getLinePure_ :: [String] -> ASHandler '[GetLine] '[] '[]
 getLinePure_ str = pipe getLineState (state_ str)
 ```
 Now we have a means of executing a program that contains only a |GetLine| effect,
@@ -342,15 +344,16 @@ Using this, values can be written as the output of a program.
 Now the task is to interpret all `putStrLn` operations in terms of the
 `tell` operation:
 ```haskell
-putStrLnTell :: Handler '[PutStrLn] '[Tell [String]] '[]
+putStrLnTell :: Handler '[PutStrLn] '[Tell [String]] '[] fam
 putStrLnTell = interpret $
-  \(Alg (PutStrLn str k)) -> do tell [str]
-                                return k
+  \(Eff (Algebraic (PutStrLn str k))) ->
+     do tell [str]
+        return k
 ```
 This can in turn be piped into the `writer` handler to make
 a pure version of `putStrLn`:
 ```haskell
-putStrLnPure :: Handler '[PutStrLn] '[] '[(,) [String]]
+putStrLnPure :: ASHandler '[PutStrLn] '[] '[(,) [String]]
 putStrLnPure = pipe putStrLnTell writer
 ```
 Now, a pure handler for both `putStrLn` and `getLine` can
@@ -358,7 +361,7 @@ be defined as the fusion of `putStrLnPure` and `getLinePure`.
 ```haskell
 teletypePure 
   :: [String]
-  -> Handler '[GetLine, PutStrLn] '[] '[(,) [String]]
+  -> ASHandler '[GetLine, PutStrLn] '[] '[(,) [String]]
 teletypePure str = fuse (getLinePure_ str) putStrLnPure
 ```
 The `fuse` combinator takes two handlers and creates one that accepts the union
@@ -389,7 +392,7 @@ to interpret `getLine` before passing the resulting `getLine` to `teletypePure`:
 ```haskell
 teletypeTick
   :: [String]
-  -> Handler '[GetLine, PutStrLn] '[] '[(,) [String], (,) Int]
+  -> ASHandler '[GetLine, PutStrLn] '[] '[(,) [String], (,) Int]
 teletypeTick str = fuse getLineIncrState (teletypePure str)
 ```
 This can be executed using `handle`, passing in the 
@@ -418,10 +421,11 @@ with handlers. An example of this is to apply a transformation to all the
 interpreting handler called `retell` is defined, which takes in a function used
 to modify output:
 ```haskell
-retell :: forall w w' . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] '[]
+retell :: forall w w' fam . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] '[] fam
 retell f = interpret $
-  \(Alg (Tell w k )) -> do tell (f w)
-                           return k
+  \(Eff (Algebraic (Tell w k ))) -> 
+    do tell (f w)
+       return k
 ```
 Simply put, every `tell w` is intercepted, and retold as `tell (f w)`. Thus,
 a simple message can be made louder at the flick of a switch:
@@ -516,6 +520,8 @@ this is used to keep track of effect signatures.
 
 ```haskell top
 {-# LANGUAGE DataKinds #-}    -- Used for the list of effects
+{-# LANGUAGE GADTs#-}
+{-# LANGUAGE TypeFamilies #-}
 ```
 <!--
 The following pragma is only needed for the testing framework.
@@ -530,12 +536,15 @@ Imports
 This file has a number of imports:
 
 ```haskell top
-import Control.Effect
+import Control.Effects
+import Control.Handler
+import Control.Family.AlgScp
 import Control.Effect.State
 import Control.Effect.Writer
 import Control.Effect.IO
 
 import Prelude hiding (putStrLn, getLine)
+import Data.Char (toUpper)
 ```
 
 <!--
@@ -544,7 +553,7 @@ only for testing the documentaton itself.
 ```haskell top
 import Hedgehog
 import Hedgehog.Main
-import Hedgehog.Gen
+import Hedgehog.Gen hiding (map)
 import Hedgehog.Range
 
 
