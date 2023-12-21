@@ -58,3 +58,10 @@ instance (AlgFam sig, AlgFam (Effs sigs)) => AlgFam (Effs (sig ': sigs)) where
 
 absurdVoidAlg :: Algebraic VoidF f a -> b
 absurdVoidAlg (Algebraic x) = absurdVoidF x
+
+class ShowAlgOp (lsig :: Type -> Type) where
+  showAlgOperator :: lsig x -> String
+  showAlgOperands :: Show x => lsig x -> String 
+
+instance (ShowAlgOp lsig, Show a) => Show (Algebraic lsig f a) where
+  show (Algebraic x) = showAlgOperator x ++ " (" ++ showAlgOperands x ++ ") "

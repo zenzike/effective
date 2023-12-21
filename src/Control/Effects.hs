@@ -12,7 +12,6 @@ module Control.Effects where
 import Data.Kind ( Type, Constraint )
 import Data.List.Kind
 import Data.HFunctor
-import Data.HFunctor.HCompose
 import qualified Control.Monad.Graded as Graded
 import Control.Monad ( join, ap, liftM )
 
@@ -29,6 +28,7 @@ type Effect = (Type -> Type) -> (Type -> Type)
 --   hmap h (Alg x) = Alg x
 --   hmap h (Scp x) = Scp (fmap h x)
 
+-- TODO: rename this?
 type Effs :: [Effect] -> Effect
 data Effs sigs f a where
   Eff  :: HFunctor sig => sig f a -> Effs (sig ': sigs) f a
@@ -175,7 +175,6 @@ data Prog (sigs :: [Effect]) a where
   Return :: a -> Prog sigs a
   Call   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
 
-
 instance Functor (Prog sigs) where
   fmap :: (a -> b) -> Prog sigs a -> Prog sigs b
   fmap = liftM
@@ -244,3 +243,22 @@ prjCall _         = Nothing
 
 progAlg :: Effs sig (Prog sig) a -> Prog sig a
 progAlg = Call . fmap return
+
+
+-- Show instances
+type ShowFunctor :: (Type -> Type) -> Constraint
+type ShowFunctor f = forall c. Show c => Show (f c)
+
+type ShowHFunctor :: ((Type -> Type) -> (Type -> Type)) -> Constraint
+type ShowHFunctor h = forall f a. (Show a, ShowFunctor f) => Show (h f a)
+
+instance Show (Effs '[] f a) where
+  show = absurdEffs
+
+instance (ShowHFunctor sig, ShowHFunctor (Effs sigs), ShowFunctor f, Show a) => Show (Effs (sig ': sigs) f a) where
+  show (Eff x)  = show x
+  show (Effs x) = show x
+
+instance (Show a, ShowHFunctor (Effs sigs)) => Show (Prog sigs a) where
+  show (Return x) = "Ret " ++ show x
+  show (Call op)  = show op

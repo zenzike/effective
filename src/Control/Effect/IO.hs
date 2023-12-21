@@ -54,3 +54,11 @@ handleIO
   -> Prog (ieffs `Union` xeffs) a -> IO (Composes fs a)
 handleIO = handleWith algIO
 
+
+instance ShowAlgOp GetLine' where
+  showAlgOperator _ = "GetLine"
+  showAlgOperands (GetLine k) = "xyz |-> " ++ show (k "xyz")
+
+instance ShowAlgOp PutStrLn' where
+  showAlgOperator (PutStrLn str _) = "PutStrLn " ++ str
+  showAlgOperands (PutStrLn _ x) = show x
