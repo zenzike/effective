@@ -10,7 +10,7 @@ import Prelude hiding (or)
 
 import Control.Applicative
 
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Effect.Cut
 import Control.Effect.Nondet

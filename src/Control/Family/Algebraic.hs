@@ -4,7 +4,7 @@ module Control.Family.Algebraic where
 
 import Control.Family.Base
 import Data.EitherF
-import Control.Effects
+import Control.Effect ( Effs(..), absurdEffs )
 import Data.HFunctor
 
 newtype Algebraic (lsig :: Type -> Type)

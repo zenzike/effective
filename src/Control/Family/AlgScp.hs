@@ -11,7 +11,7 @@ import Control.Family.Base
 import Control.Family.Algebraic
 import Control.Family.Scoped
 import Data.EitherF
-import Control.Effects
+import Control.Effect
 import Data.HFunctor
 
 type ASFam :: Effect -> Constraint

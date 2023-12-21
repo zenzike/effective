@@ -5,7 +5,7 @@
 module Control.Effect.Maybe where
 
 import Control.Monad.Trans.Maybe
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 

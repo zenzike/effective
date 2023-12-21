@@ -8,6 +8,6 @@ module Control.Family.Base
   ) where
 
 import Data.Kind ( Type, Constraint )
-import Control.Effects
+import Control.Effect
 
 type Family = Effect -> Constraint

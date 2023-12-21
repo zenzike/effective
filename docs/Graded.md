@@ -7,7 +7,7 @@
 ```haskell top:1
 module Graded where
 
-import Control.Effects
+import Control.Effect
 import Control.Family.AlgScp
 import qualified Control.Effect.State as State
 import Control.Effect.State hiding (get, put)

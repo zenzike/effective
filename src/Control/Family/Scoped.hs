@@ -5,7 +5,7 @@ module Control.Family.Scoped where
 
 import Control.Family.Base
 import Data.EitherF
-import Control.Effects
+import Control.Effect
 import Data.HFunctor
 
 newtype Scoped (lsig :: Type -> Type)

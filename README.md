@@ -536,7 +536,7 @@ Imports
 This file has a number of imports:
 
 ```haskell top
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 import Control.Effect.State

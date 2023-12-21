@@ -10,7 +10,7 @@ import Data.EitherF
 import Data.Tuple (swap)
 
 import Data.Functor.Identity
-import Control.Effects
+import Control.Effect
 import qualified Control.Monad.Trans.State.Lazy as S
 
 data Put' s k where

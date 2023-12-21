@@ -3,7 +3,7 @@
 
 module Control.Effect.Reader where
 
-import Control.Effects
+import Control.Effect
 import Control.Family.AlgScp
 import Control.Handler
 import Data.HFunctor

@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Control.Effect.Writer where
-import Control.Effects
+import Control.Effect
 import Data.Tuple (swap)
 import Control.Family.AlgScp
 import Control.Handler

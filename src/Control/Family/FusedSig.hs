@@ -3,7 +3,7 @@
 module Control.Family.FusedSig (FusedSig, FusedFam) where
 
 import Control.Family.Base
-import Control.Effects
+import Control.Effect
 
 data Lan g h a where
   Lan :: (g b -> a) -> h b -> Lan g h a

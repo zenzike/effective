@@ -2,7 +2,7 @@
 
 module Control.Effect.IO where
 
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 import Data.List.Kind

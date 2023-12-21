@@ -8,7 +8,7 @@ import Prelude hiding (or)
 
 import Data.HFunctor ( HFunctor(..) )
 
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 import Control.Applicative ( Alternative(empty, (<|>)) )

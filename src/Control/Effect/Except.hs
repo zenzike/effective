@@ -4,7 +4,7 @@
 
 module Control.Effect.Except where
 
-import Control.Effects
+import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 import Control.Monad.Trans.Except

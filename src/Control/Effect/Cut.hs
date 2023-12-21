@@ -3,7 +3,7 @@
 
 module Control.Effect.Cut where
 
-import Control.Effects
+import Control.Effect
 import Control.Effect.Nondet
 import Control.Handler
 import Control.Family.AlgScp

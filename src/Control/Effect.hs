@@ -7,7 +7,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE IncoherentInstances #-}
 
-module Control.Effects where
+module Control.Effect where
 
 import Data.Kind ( Type, Constraint )
 import Data.List.Kind

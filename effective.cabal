@@ -27,7 +27,7 @@ library
   default-language: GHC2021
   ghc-options:   -Wunused-foralls -Wunused-imports
   exposed-modules:
-    Control.Effects
+    Control.Effect
     Control.Family.Base
     Control.Family.Algebraic
     Control.Family.Scoped
