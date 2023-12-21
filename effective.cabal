@@ -48,6 +48,17 @@ library
   build-depends:
     base, transformers
 
+test-suite test
+  type:          exitcode-stdio-1.0
+  build-depends: base, transformers, effective, hedgehog
+  main-is:       Main.hs
+  ghc-options:   -threaded
+  hs-source-dirs: test
+  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+  default-language: GHC2021
+  other-modules:
+    Nondet
+
 test-suite docs
   type:          exitcode-stdio-1.0
   build-depends: base, transformers, effective, hedgehog
