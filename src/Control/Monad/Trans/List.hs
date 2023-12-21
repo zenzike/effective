@@ -4,7 +4,7 @@ import Control.Monad.Trans.Class ( MonadTrans(..) )
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Data.HFunctor ( HFunctor(..) )
 import Control.Arrow ( Arrow(second) )
-import Control.Monad ( ap, liftM )
+import Control.Monad ( ap, liftM, MonadPlus(..) )
 
 newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
   deriving Functor
@@ -37,6 +37,7 @@ instance Monad m => Alternative (ListT m) where
   ListT mxs <|> ListT mys = ListT $
     mxs >>= maybe mys (return . Just . second (<|> ListT mys))
 
+instance Monad m => MonadPlus (ListT m) where
 instance MonadTrans ListT where
   lift :: Monad m => m a -> ListT m a
   lift = ListT . liftM (\x -> Just (x, empty))
