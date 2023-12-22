@@ -580,9 +580,15 @@ tellPutStrLn = interpret $
                                          return k
 ```
 This chain of handlers might be called `censorsPutStrLn`:
-```haskell ignore
-censorsPutStrLn :: ([String] -> [String])
-                -> Handler [PutStrLn, Tell [String], Censor [String]] '[PutStrLn] '[] fam
+```haskell
+censorsPutStrLn
+  :: (fam (Effs '[Tell [String]]), fam (Effs '[]),
+      fam (Effs [Tell [String], Censor [String]]))
+  => ([String] -> [String])
+  -> Handler '[PutStrLn, Tell [String], Censor [String]]
+             '[PutStrLn]
+             '[]
+              fam
 censorsPutStrLn cipher = putStrLnTell <&> censors cipher <&> tellPutStrLn
 ```
 The ensuing chain of handlers seems to do the job:
@@ -591,6 +597,14 @@ ghci> handle (censorsPutStrLn id <&> teletypePure ["Hello world!"])
              shoutEcho
 (["HELLO WORLD!"],())
 ```
+<!--
+```haskell
+prop_shouty :: Property
+prop_shouty = property $ do
+  handle (censorsPutStrLn id <&> teletypePure ["Hello world!"]) shoutEcho
+    === (["HELLO WORLD!"],())
+```
+-->
 However, things can get muddled if the program contains a mixture
 of `tell` and `putStrLn` operations.
 
@@ -606,6 +620,14 @@ It is tempting to execute the program with the following:
 ghci> handle (censorsPutStrLn id <&> teletypePure ["Hello world!"]) logShoutEcho
 (["Entering shouty echo","HELLO WORLD!"],())
 ```
+<!--
+```haskell
+prop_logShouty :: Property
+prop_logShouty = property $ do
+  handle (censorsPutStrLn id <&> teletypePure ["Hello world!"]) logShoutEcho
+    === (["Entering shouty echo","HELLO WORLD!"],())
+```
+-->
 It seems to work, but the problem is that the logged messages are treated
 in exactly the same way as the pure `putStrLn` values: everything is
 accumulated into the same list of strings. The problem is exasperated
@@ -624,10 +646,17 @@ a `putStrLn` originally, and those that are part of the program.
 The solution is simple: the `tell` operations to do with logging
 should be handled _before_ the teletype effects are handled:
 ```haskell ignore
-ghci> handle (writer @[String] <&> censorsPutStrLn id <&> teletypePure ["Hello wor
-ld!"]) logShoutEcho
+ghci> handle (writer @[String] <&> censorsPutStrLn id <&> teletypePure ["Hello world!"]) logShoutEcho
 (["HELLO WORLD!"],(["Entering shouty echo"],()))
 ```
+<!--
+```haskell
+prop_logShoutEcho :: Property
+prop_logShoutEcho = property $ do
+  handle (writer @[String] <&> censorsPutStrLn id <&> teletypePure ["Hello world!"]) logShoutEcho
+    === (["HELLO WORLD!"],(["Entering shouty echo"],()))
+```
+-->
 This pure version separates the two kinds of logged messages; those
 that come from `tell` are processed first (and so in the inner tuple),
 and then the messages from `putStrLn` are on the outside.

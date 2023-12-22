@@ -32,7 +32,6 @@ tree = or (or (return 1)
 prop_list :: Property
 prop_list = property $
   sort (list tree) === [1 .. 6]
-  where
 
 -- genNondet :: (Members '[Or, Stop] sig, MonadGen m) => m (Prog sig Int)
 genNondet :: (MonadGen m) => m (Prog '[Stop, Or, Once] Int)

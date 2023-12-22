@@ -91,7 +91,7 @@ ashandler
     -> (forall x . lsig (t m x) -> t m x))
   -> ASHandler effs oeffs fs
 ashandler mrun malg scfwd = handler mrun malg mfwd where
-  mfwd :: (Monad m, ASFam sig, HFunctor sig) 
+  mfwd :: (Monad m, ASFam sig, HFunctor sig)
        => (forall x. sig m x -> m x)
        -> (forall x. sig (t m) x -> t m x)
   mfwd alg op
@@ -157,7 +157,7 @@ fuse :: forall effs1 effs2 oeffs1 oeffs2 fs1 fs2 effs oeffs fam .
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
   , effs  ~ effs1 `Union` effs2
-  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 
+  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2
   , fam (Effs (oeffs1 :\\ effs2))
   , fam (Effs effs2))
   => Handler effs1 oeffs1 fs1 fam
@@ -178,7 +178,7 @@ fuse' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 effs oeffs fam .
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
   , effs  ~ effs1 `Union` effs2
-  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 
+  , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2
   , fam (Effs (oeffs1 :\\ effs2))
   , fam (Effs effs2))
   => Handler' effs1 oeffs1 t1 fs1 fam
@@ -229,7 +229,7 @@ fuse' (Handler' run1 malg1 mfwd1) (Handler' run2 malg2 mfwd2) =
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
   , Injects (effs2 :\\ effs1) effs2
   , fam (Effs (oeffs1 :\\ effs2))
-  , fam (Effs effs2) 
+  , fam (Effs effs2)
   , effs  ~ effs1 `Union` effs2
   , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2 )
   => Handler effs1 oeffs1 fs1 fam
@@ -260,7 +260,7 @@ pipe' :: forall effs1 effs2 oeffs1 oeffs2 t1 t2 fs1 fs2 oeffs fam .
   , Append (oeffs1 :\\ effs2) effs2
   , Injects oeffs2 oeffs
   , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-  , Injects (oeffs1 :\\ effs2) oeffs 
+  , Injects (oeffs1 :\\ effs2) oeffs
   , fam (Effs (oeffs1 :\\ effs2)) )
   => Handler' effs1 oeffs1 t1 fs1 fam
   -> Handler' effs2 oeffs2 t2 fs2 fam
@@ -305,7 +305,7 @@ pass :: forall sig effs oeffs fs fam .
   , Injects sig ((oeffs :\\ sig) :++ (sig :\\ (oeffs :\\ sig)))
   , Injects oeffs ((oeffs :\\ sig) :++ sig)
   , Injects (oeffs :\\ sig) ((oeffs :\\ sig) :++ (sig :\\ (oeffs :\\ sig)))
-  , Injects (sig :\\ effs) sig 
+  , Injects (sig :\\ effs) sig
   , fam (Effs (oeffs :\\ sig))
   , fam (Effs sig) )
   => Handler effs oeffs fs fam
