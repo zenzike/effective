@@ -705,9 +705,8 @@ The `effective` library requires the `DataKinds` extension since
 this is used to keep track of effect signatures.
 
 ```haskell top
-{-# LANGUAGE DataKinds #-}    -- Used for the list of effects
-{-# LANGUAGE GADTs#-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE DataKinds #-}     -- Used for the list of effects
+{-# LANGUAGE GADTs #-}         -- Pattern match on GADTs
 ```
 <!--
 The following pragma is only needed for the testing framework.
