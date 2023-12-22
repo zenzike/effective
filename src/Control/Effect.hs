@@ -252,13 +252,9 @@ type ShowFunctor f = forall c. Show c => Show (f c)
 type ShowHFunctor :: ((Type -> Type) -> (Type -> Type)) -> Constraint
 type ShowHFunctor h = forall f a. (Show a, ShowFunctor f) => Show (h f a)
 
-instance Show (Effs '[] f a) where
-  show = absurdEffs
+deriving instance Show (Effs '[] f a)
 
-instance (ShowHFunctor sig, ShowHFunctor (Effs sigs), ShowFunctor f, Show a) => Show (Effs (sig ': sigs) f a) where
-  show (Eff x)  = show x
-  show (Effs x) = show x
+deriving instance (ShowHFunctor sig, ShowHFunctor (Effs sigs), ShowFunctor f, Show a)
+  => Show (Effs (sig ': sigs) f a)
 
-instance (Show a, ShowHFunctor (Effs sigs)) => Show (Prog sigs a) where
-  show (Return x) = "Ret " ++ show x
-  show (Call op)  = show op
+deriving instance (Show a, ShowHFunctor (Effs sigs)) => Show (Prog sigs a)

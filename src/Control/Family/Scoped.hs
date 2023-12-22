@@ -53,9 +53,15 @@ instance (ScpFam sig, ScpFam (Effs sigs)) => ScpFam (Effs (sig ': sigs)) where
 absurdVoidScp :: Scoped VoidF f a -> b
 absurdVoidScp (Scoped x) = absurdVoidF x
 
-class ShowScpOp (lsig :: Type -> Type) where
-  showScpOperator :: lsig (f x) -> String
-  showScpOperands :: (Show (f x)) => lsig (f x) -> String 
+-- class ShowScpOp (lsig :: Type -> Type) where
+--   showScpOperator :: lsig (f x) -> String
+--   showScpOperands :: (Show (f x)) => lsig (f x) -> String 
+-- 
+-- instance (ShowScpOp lsig, Show (f a)) => Show (Scoped lsig f a) where
+--   show (Scoped x) = showScpOperator x ++ " {" ++ showScpOperands x ++ "} "
 
-instance (ShowScpOp lsig, Show (f a)) => Show (Scoped lsig f a) where
-  show (Scoped x) = showScpOperator x ++ " {" ++ showScpOperands x ++ "} "
+deriving instance
+  ( ShowFunctor lsig
+  , ShowFunctor f
+  , Show a)
+  => Show (Scoped lsig f a)
