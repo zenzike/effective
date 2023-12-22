@@ -3,7 +3,6 @@
 module Control.Family.FusedSig (FusedSig, FusedFam) where
 
 import Control.Family.Base
-import Control.Effect
 
 data Lan g h a where
   Lan :: (g b -> a) -> h b -> Lan g h a
@@ -20,6 +19,6 @@ data FusedSig sig m a where
 
 class FusedFam sig where
   type FusSig sig :: Effect
-  fproject :: sig f a -> FusedSig (FusedFam sig) f a
-  finject :: FusedSig (FusedFam sig) f a -> sig f a
+  fproject :: sig f a -> FusedSig (FusSig sig) f a
+  finject :: FusedSig (FusSig sig) f a -> sig f a
 
