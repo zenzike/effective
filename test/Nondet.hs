@@ -33,15 +33,16 @@ prop_list = property $
   sort (list tree) === [1 .. 6]
 
 -- genNondet :: (Members '[Or, Stop] sig, MonadGen m) => m (Prog sig Int)
--- genNondet = Gen.recursive Gen.choice
---   [ pure stop ]
---   [ or <$> genNondet <*> genNondet]
--- 
--- prop_list' :: Property
--- prop_list' = property $ do
---   tree <- forAll genNondet
---   lift $ putStrLn (show tree)
---   sort (list tree) === reverse (list tree)
+genNondet :: (MonadGen m) => m (Prog '[Stop, Or, Once] Int)
+genNondet = Gen.recursive Gen.choice
+   [ pure (stop :: Prog '[Stop, Or, Once] Int) ]
+   [ or <$> genNondet <*> genNondet]
+
+prop_list' :: Property
+prop_list' = property $ do
+  tree <- forAll genNondet
+  lift $ putStrLn (show tree)
+  sort (list tree) === reverse (list tree)
 
 props :: Group
 props = $$(discover)
