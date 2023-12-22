@@ -582,13 +582,10 @@ tellPutStrLn = interpret $
 This chain of handlers might be called `censorsPutStrLn`:
 ```haskell
 censorsPutStrLn
-  :: (fam (Effs '[Tell [String]]), fam (Effs '[]),
-      fam (Effs [Tell [String], Censor [String]]))
-  => ([String] -> [String])
-  -> Handler '[PutStrLn, Tell [String], Censor [String]]
-             '[PutStrLn]
-             '[]
-              fam
+  :: ([String] -> [String])
+  -> ASHandler '[PutStrLn, Tell [String], Censor [String]] -- input effects
+               '[PutStrLn]                                 -- output effects
+               '[]                                         -- output wrapper
 censorsPutStrLn cipher = putStrLnTell <&> censors cipher <&> tellPutStrLn
 ```
 The ensuing chain of handlers seems to do the job:

@@ -51,6 +51,5 @@ prop_once = property $ do
   tree <- forAll genNondet
   diff (length (handle backtrack (once (tree)))) (<=) 1
 
-
 props :: Group
 props = $$(discover)
