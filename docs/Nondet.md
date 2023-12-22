@@ -18,6 +18,7 @@ module Nondet where
 import Prelude hiding (or)
 
 import Control.Effect
+import Control.Handler
 import Control.Effect.Cut
 import Control.Effect.Nondet
 

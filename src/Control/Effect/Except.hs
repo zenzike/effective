@@ -5,42 +5,45 @@
 module Control.Effect.Except where
 
 import Control.Effect
+import Control.Handler
+import Control.Family.AlgScp
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Class (lift)
 
-data Throw e k where
-  Throw :: e -> Throw e k
+data Throw' e k where
+  Throw :: e -> Throw' e k
   deriving Functor
+
+type Throw e = Algebraic (Throw' e)
 
 throw :: forall e sig a . (Member (Throw e) sig) => e -> Prog sig a
-throw e = (Call . inj @(Throw e)) (Alg (Throw e))
+throw e = (injCall @(Throw e)) (Algebraic (Throw e))
 
-data Catch e k where
-  Catch :: k -> (e -> k) -> Catch e k
+data Catch' e k where
+  Catch :: k -> (e -> k) -> Catch' e k
   deriving Functor
+
+type Catch e = Scoped (Catch' e)
 
 exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Throw e, Catch e] (ExceptT e m) x -> ExceptT e m x)
 exceptAlg _ eff
-  | Just (Alg (Throw e)) <- prj eff
+  | Just (Algebraic (Throw e)) <- prj eff
       = ExceptT (return (Left e))
-  | Just (Scp (Catch p h)) <- prj eff
+  | Just (Scoped (Catch p h)) <- prj eff
       = ExceptT $ do mx <- runExceptT p
                      case mx of
                        Left e  -> runExceptT (h e)
                        Right x -> return (Right x)
 
 exceptFwd
-  :: Monad m
-  => (forall x. Effs sigs m x -> m x)
-  -> (forall x. Effs sigs (ExceptT e m) x -> ExceptT e m x)
-exceptFwd alg (Eff (Alg x)) = lift (alg (Eff (Alg x)))
-exceptFwd alg (Eff (Scp x)) = ExceptT (alg (Eff (Scp (fmap runExceptT x))))
-exceptFwd alg (Effs effs)   = exceptFwd (alg . Effs) effs
+  :: (Functor lsig, Monad m)
+  => (forall x. lsig (m x) -> m x)
+  -> (forall x. lsig (ExceptT e m x) -> ExceptT e m x)
+exceptFwd alg x = ExceptT (alg (fmap runExceptT x))
 
-except :: Handler [Throw e, Catch e] '[] '[Either e]
-except = handler runExceptT exceptAlg exceptFwd
+except :: ASHandler [Throw e, Catch e] '[] '[Either e]
+except = ashandler (\_ -> runExceptT) exceptAlg exceptFwd
 
 -- multiple semantics such as retry after handling is difficult in MTL
 -- without resorting to entirely different newtype wrapping through
@@ -54,9 +57,9 @@ retryAlg :: Monad m
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Throw e, Catch e] (ExceptT e m) x -> ExceptT e m x)
 retryAlg _ eff
-  | Just (Alg (Throw e)) <- prj eff
+  | Just (Algebraic (Throw e)) <- prj eff
       = ExceptT (return (Left e))
-  | Just (Scp (Catch p h)) <- prj eff = ExceptT $ loop p h
+  | Just (Scoped (Catch p h)) <- prj eff = ExceptT $ loop p h
       where
         loop p h =
           do mx <- runExceptT p
@@ -67,6 +70,5 @@ retryAlg _ eff
                               Right y  -> loop p h
                Right x  -> return (Right x)
 
-retry :: Handler [Throw e, Catch e] '[] '[Either e]
-retry = handler runExceptT retryAlg exceptFwd
-
+retry :: ASHandler [Throw e, Catch e] '[] '[Either e]
+retry = ashandler (\_ -> runExceptT) retryAlg exceptFwd

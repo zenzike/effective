@@ -9,6 +9,7 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Control.Effect
+import Control.Handler
 import Control.Effect.Maybe
 
 monus :: Int -> Int -> Prog' '[Throw] Int

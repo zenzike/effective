@@ -10,6 +10,7 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
 
 import Control.Effect
+import Control.Handler
 import Control.Effect.State
 import Control.Effect.Maybe
 import Control.Monad (replicateM_)
@@ -43,9 +44,9 @@ catchDecr' :: Prog [Get Int, Put Int, Throw, Catch] ()
 catchDecr' = catchDecr @[Get Int, Put Int, Throw, Catch]
 
 globalState
-  :: s -> Handler '[Throw, Catch, Put s, Get s]
-                  '[]
-                  '[(,) s, Maybe]
+  :: s -> ASHandler '[Throw, Catch, Put s, Get s]
+                    '[]
+                    '[(,) s, Maybe]
 globalState s = except <&> state s
 
 -- This is global state because the `Int` is decremented
@@ -57,9 +58,9 @@ example_globalState = property $
     (0,Just ())
 
 localState
-  :: s -> Handler '[Put s, Get s, Throw, Catch]
-                  '[]
-                  '[Maybe, ((,) s)]
+  :: s -> ASHandler '[Put s, Get s, Throw, Catch]
+                    '[]
+                    '[Maybe, ((,) s)]
 localState s = state s <&> except
 
 -- With local state, the state is reset to its value

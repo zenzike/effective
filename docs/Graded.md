@@ -8,6 +8,7 @@
 module Graded where
 
 import Control.Effect
+import Control.Family.AlgScp
 import qualified Control.Effect.State as State
 import Control.Effect.State hiding (get, put)
 import Control.Effect.Maybe hiding (catch, throw)
@@ -117,7 +118,7 @@ catch
      , Injects sig' sig''
      , sig'' ~ Insert Catch (Union sig sig'))
   => Prog sig a -> Prog sig' a -> Prog sig'' a
-catch p q = injCall (Scp (Catch
+catch p q = injCall (Scoped (Catch
   (fmap return (weakenProg p))
   (fmap return (weakenProg q))))
 ```

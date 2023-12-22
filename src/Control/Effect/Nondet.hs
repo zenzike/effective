@@ -10,22 +10,28 @@ import Control.Monad.Trans.Class ( MonadTrans(..) )
 import Control.Effect
 import Control.Monad.Trans.List ( runListT', ListT(..) )
 import Control.Monad.Trans.State ( StateT(..), withStateT, get, put  )
+import Control.Handler
+import Control.Family.AlgScp
 import Control.Applicative ( Alternative(empty, (<|>)) )
 
 
-data Stop a where
-  Stop :: Stop a
+data Stop' a where
+  Stop :: Stop' a
   deriving (Functor, Show)
+
+type Stop = Algebraic Stop'
 
 stop :: Members '[Stop] sig => Prog sig a
-stop  = injCall (Alg Stop)
+stop  = injCall (Algebraic Stop)
 
-data Or a where
-  Or :: a -> a -> Or a
+data Or' a where
+  Or :: a -> a -> Or' a
   deriving (Functor, Show)
 
+type Or = Algebraic Or'
+
 or :: Members '[Or] sig => Prog sig a -> Prog sig a -> Prog sig a
-or x y = injCall (Alg (Or x y))
+or x y = injCall (Algebraic (Or x y))
 
 
 instance (Members [Or, Stop] sig) => Alternative (Prog sig) where
@@ -34,6 +40,7 @@ instance (Members [Or, Stop] sig) => Alternative (Prog sig) where
 
   (<|>) :: Members [Or, Stop] sig => Prog sig a -> Prog sig a -> Prog sig a
   (<|>) = or
+
 
 select :: Members [Or, Stop] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
@@ -48,50 +55,56 @@ nondetAlg
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Stop , Or] (t m) x -> t m x)
 nondetAlg oalg eff
-  | Just (Alg Stop)     <- prj eff = empty
-  | Just (Alg (Or x y)) <- prj eff = return x <|> return y
+  | Just (Algebraic Stop)     <- prj eff = empty
+  | Just (Algebraic (Or x y)) <- prj eff = return x <|> return y
 
 nondetFwd
-  :: (Monad m)
-  => (forall x. Effs sig m x -> m x)
-  -> forall x. Effs sig (ListT m) x -> ListT m x
-nondetFwd alg (Eff (Alg x)) = lift  (alg (Eff (Alg x)))
-nondetFwd alg (Eff (Scp x)) = ListT (alg (Eff (Scp (fmap runListT x))))
-nondetFwd alg (Effs effs)   = nondetFwd (alg . Effs) effs
+  :: (Monad m, Functor lsig)
+  => (forall x. lsig (m x) -> m x)
+  -> forall x. lsig (ListT m x) -> ListT m x
+nondetFwd alg x = ListT (alg (fmap runListT x))
 
-nondet :: Handler [Stop, Or] '[] '[[]]
-nondet = handler runListT' nondetAlg nondetFwd
+nondet :: ASHandler [Stop, Or] '[] '[[]]
+nondet = ashandler (\_ -> runListT') nondetAlg nondetFwd
 
 -------------------------------
 -- Example: Backtracking (and Culling?)
-data Once a where
-  Once :: a -> Once a
+data Once' a where
+  Once :: a -> Once' a
   deriving (Functor, Show)
+
+type Once = Scoped Once'
 
 once
   :: Member Once sig => Prog sig a -> Prog sig a
-once p = injCall (Scp (Once (fmap return p)))
+once p = injCall (Scoped (Once (fmap return p)))
 
-data Search a where
-  Search :: a -> Search a
+data Search' a where
+  Search :: a -> Search' a
   deriving Functor
+
+type Search = Scoped Search'
 
 search :: Member Search sig => Prog sig a -> Prog sig a
-search p = injCall (Scp (Search (fmap return p)))
+search p = injCall (Scoped (Search (fmap return p)))
 
-data Depth a where
-  Depth :: Int -> a -> Depth a
+data Depth' a where
+  Depth :: Int -> a -> Depth' a
   deriving Functor
+
+type Depth = Scoped Depth'
 
 depth :: Member Depth sig => Int -> Prog sig a -> Prog sig a
-depth d p = injCall (Scp (Depth d (fmap return p)))
+depth d p = injCall (Scoped (Depth d (fmap return p)))
 
-data DBS a where
-  DBS :: Int -> a -> DBS a
+data DBS' a where
+  DBS :: Int -> a -> DBS' a
   deriving Functor
 
+type DBS = Scoped DBS'
+
 dbs :: Member DBS sig => Int -> Prog sig a -> Prog sig a
-dbs d p = injCall (Scp (DBS d (fmap return p)))
+dbs d p = injCall (Scoped (DBS d (fmap return p)))
 
 -- searchOnce :: Handler '[Search] '[Once] '[]
 -- searchOnce = interpret undefined
@@ -104,18 +117,18 @@ list :: Prog [Stop, Or, Once] a -> [a]
 list = eval halg where
   halg :: Effs [Stop, Or, Once] [] a -> [a]
   halg op
-    | Just (Alg Stop)          <- prj op = []
-    | Just (Alg (Or x y))      <- prj op = [x, y]
-    | Just (Scp (Once []))     <- prj op = []
-    | Just (Scp (Once (x:xs))) <- prj op = [x]
+    | Just (Algebraic Stop)          <- prj op = []
+    | Just (Algebraic (Or x y))      <- prj op = [x, y]
+    | Just (Scoped (Once []))        <- prj op = []
+    | Just (Scoped (Once (x:xs)))    <- prj op = [x]
 
 backtrackAlg
   :: Monad m => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Stop, Or, Once] (ListT m) x -> ListT m x)
 backtrackAlg oalg op
-  | Just (Alg Stop)     <- prj op = empty
-  | Just (Alg (Or x y)) <- prj op = return x <|> return y
-  | Just (Scp (Once p)) <- prj op =
+  | Just (Algebraic Stop)     <- prj op = empty
+  | Just (Algebraic (Or x y)) <- prj op = return x <|> return y
+  | Just (Scoped (Once p))    <- prj op =
     ListT $ do mx <- runListT p
                case mx of
                  Nothing       -> return Nothing
@@ -127,7 +140,7 @@ backtrackOnceAlg
   => (forall x . oeff m x -> m x)
   -> (forall x . Effs '[Once] (ListT m) x -> ListT m x)
 backtrackOnceAlg oalg op
-  | Just (Scp (Once p)) <- prj op =
+  | Just (Scoped (Once p)) <- prj op =
     ListT $ do mx <- runListT p
                case mx of
                  Nothing       -> return Nothing
@@ -161,24 +174,16 @@ backtrackDepthAlg
   => (forall x . oeff m x -> m x)
   -> (forall x . Effs '[Stop, Or, Depth] (StateT Int (ListT m)) x -> StateT Int (ListT m) x)
 backtrackDepthAlg oalg op
-  | Just (Alg Stop)     <- prj op = empty
-  | Just (Alg (Or x y)) <- prj op =
+  | Just (Algebraic Stop)     <- prj op = empty
+  | Just (Algebraic (Or x y)) <- prj op =
       do d <- get
          if d == 0
            then empty
            else (put (d - 1) >> pure x) <|> (put (d - 1) >> pure y)
-  | Just (Scp (Depth d p)) <- prj op = withStateT (const d) p
+  | Just (Scoped (Depth d p)) <- prj op = withStateT (const d) p
+backtrack :: ASHandler [Stop, Or, Once] '[] '[[]]
+backtrack = ashandler (\_ -> runListT') backtrackAlg' nondetFwd
 
-backtrackFwd
-  :: (Monad m)
-  => (forall x. Effs sig m x -> m x)
-  -> forall x. Effs sig (ListT m) x -> ListT m x
-backtrackFwd alg (Eff (Alg x)) = lift (alg (Eff (Alg x)))
-backtrackFwd alg (Eff (Scp x)) = ListT (alg (Eff (Scp (fmap runListT x))))
-backtrackFwd alg (Effs effs)   = backtrackFwd (alg . Effs) effs
-
-backtrack :: Handler [Stop, Or, Once] '[] '[[]]
-backtrack = handler runListT' backtrackAlg' backtrackFwd
 
 
 -- searchWith :: Handler '[Stop, Or, Once, Search] '[] '[[]]

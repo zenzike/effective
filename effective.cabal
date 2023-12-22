@@ -27,6 +27,12 @@ library
   ghc-options:   -Wunused-foralls -Wunused-imports
   exposed-modules:
     Control.Effect
+    Control.Family.Base
+    Control.Family.Algebraic
+    Control.Family.Scoped
+    Control.Family.AlgScp
+    Control.Handler
+    Control.Effect.MCarrier
     Control.Effect.Cut
     Control.Effect.Except
     Control.Effect.IO
@@ -43,6 +49,7 @@ library
     Data.HFunctor.HComposes
     Data.CutList
     Data.List.Kind
+    Data.EitherF
   hs-source-dirs:
     src
   build-depends:
