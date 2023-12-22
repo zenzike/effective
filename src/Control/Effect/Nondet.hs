@@ -6,20 +6,18 @@ module Control.Effect.Nondet where
 
 import Prelude hiding (or)
 
-import Data.HFunctor ( HFunctor(..) )
-
+import Control.Monad.Trans.Class ( MonadTrans(..) )
 import Control.Effect
+import Control.Monad.Trans.List ( runListT', ListT(..) )
+import Control.Monad.Trans.State ( StateT(..), withStateT, get, put  )
 import Control.Handler
 import Control.Family.AlgScp
 import Control.Applicative ( Alternative(empty, (<|>)) )
-import Control.Monad ( ap, liftM )
-import Control.Monad.Trans.Class ( MonadTrans(..) )
-import Control.Arrow ( Arrow(second) )
 
 
 data Stop' a where
   Stop :: Stop' a
-  deriving Functor
+  deriving (Functor, Show)
 
 type Stop = Algebraic Stop'
 
@@ -28,7 +26,7 @@ stop  = injCall (Algebraic Stop)
 
 data Or' a where
   Or :: a -> a -> Or' a
-  deriving Functor
+  deriving (Functor, Show)
 
 type Or = Algebraic Or'
 
@@ -47,40 +45,10 @@ instance (Members [Or, Stop] sig) => Alternative (Prog sig) where
 select :: Members [Or, Stop] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
 
-newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
-  deriving Functor
-
-runListT' :: Monad m => ListT m a -> m [a]
-runListT' (ListT mmxs) =
-  do mxs <- mmxs
-     case mxs of
-       Nothing         -> return []
-       Just (x, mmxs') -> (x :) <$> runListT' mmxs'
-
-instance HFunctor ListT where
-  hmap :: (Functor f, Functor g) => (forall x1. f x1 -> g x1) -> ListT f x -> ListT g x
-  hmap h (ListT mx) = ListT (fmap (fmap (fmap (hmap h))) (h mx))
-
-foldListT :: Monad m => (a -> m b -> m b) -> m b -> ListT m a -> m b
-foldListT k ys (ListT mxs) = mxs >>= maybe ys (\(x,xs) -> k x (foldListT k ys xs))
-
-instance Monad m => Applicative (ListT m) where
-  pure x = ListT (pure (Just (x, empty)))
-  (<*>) = ap
-
-instance Monad m => Monad (ListT m) where
-  (>>=) :: Monad m => ListT m a -> (a -> ListT m b) -> ListT m b
-  m >>= f = ListT $ foldListT (\x l -> runListT $ f x <|> ListT l) (return Nothing) m
-
-instance Monad m => Alternative (ListT m) where
-  empty = ListT (return Nothing)
-  (<|>) :: Monad m => ListT m a -> ListT m a -> ListT m a
-  ListT mxs <|> ListT mys = ListT $
-    mxs >>= maybe mys (return . Just . second (<|> ListT mys))
-
-instance MonadTrans ListT where
-  lift :: Monad m => m a -> ListT m a
-  lift = ListT . liftM (\x -> Just (x, empty))
+selects :: [a] -> Prog' [Or, Stop] (a, [a])
+selects []      =  empty
+selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
+                                            return (y, x:ys)
 
 nondetAlg
   :: (MonadTrans t, Alternative (t m) , Monad m)
@@ -99,18 +67,49 @@ nondetFwd alg x = ListT (alg (fmap runListT x))
 nondet :: ASHandler [Stop, Or] '[] '[[]]
 nondet = ashandler (\_ -> runListT') nondetAlg nondetFwd
 
-
 -------------------------------
 -- Example: Backtracking (and Culling?)
 data Once' a where
   Once :: a -> Once' a
-  deriving Functor
+  deriving (Functor, Show)
 
 type Once = Scoped Once'
 
 once
   :: Member Once sig => Prog sig a -> Prog sig a
 once p = injCall (Scoped (Once (fmap return p)))
+
+data Search' a where
+  Search :: a -> Search' a
+  deriving Functor
+
+type Search = Scoped Search'
+
+search :: Member Search sig => Prog sig a -> Prog sig a
+search p = injCall (Scoped (Search (fmap return p)))
+
+data Depth' a where
+  Depth :: Int -> a -> Depth' a
+  deriving Functor
+
+type Depth = Scoped Depth'
+
+depth :: Member Depth sig => Int -> Prog sig a -> Prog sig a
+depth d p = injCall (Scoped (Depth d (fmap return p)))
+
+data DBS' a where
+  DBS :: Int -> a -> DBS' a
+  deriving Functor
+
+type DBS = Scoped DBS'
+
+dbs :: Member DBS sig => Int -> Prog sig a -> Prog sig a
+dbs d p = injCall (Scoped (DBS d (fmap return p)))
+
+-- searchOnce :: Handler '[Search] '[Once] '[]
+-- searchOnce = interpret undefined
+
+-- searchWith strategy = interpret ... strategy ...
 
 -- Everything can be handled together. Here is the non-modular way
 -- list :: (Member (Or) sig, Member (Stop) sig, Member (Once) sig) => Prog sig a -> [a]
@@ -154,6 +153,38 @@ backtrackAlg' = joinAlg nondetAlg backtrackOnceAlg
 -- TODO: The alternative with monad transformers is painful.
 -- TODO: this becomes interesting when different search strategies are used
 
+-- backtrackDepthAlg
+--   :: Monad m
+--   => (forall x . oeff m x -> m x)
+--   -> (forall x . Effs '[Stop, Or, Depth] (ReaderT Int (ListT m)) x -> ReaderT Int (ListT m) x)
+-- backtrackDepthAlg oalg op
+--   | Just (Alg Stop)        <- prj op = ReaderT (const empty)
+--   | Just (Alg (Or x y))    <- prj op = ReaderT (\d -> if d == 0
+--                                                         then empty
+--                                                         else _)
+--   | Just (Scp (Depth d p)) <- prj op =
+--       ReaderT (\d' -> ListT (do mx <- runListT (runReaderT p d)
+--                                 case mx of
+--                                   Nothing       -> return Nothing
+--                                   Just (x, mxs) -> return (Just (x, mxs))
+--       ))
+
+backtrackDepthAlg
+  :: Monad m
+  => (forall x . oeff m x -> m x)
+  -> (forall x . Effs '[Stop, Or, Depth] (StateT Int (ListT m)) x -> StateT Int (ListT m) x)
+backtrackDepthAlg oalg op
+  | Just (Algebraic Stop)     <- prj op = empty
+  | Just (Algebraic (Or x y)) <- prj op =
+      do d <- get
+         if d == 0
+           then empty
+           else (put (d - 1) >> pure x) <|> (put (d - 1) >> pure y)
+  | Just (Scoped (Depth d p)) <- prj op = withStateT (const d) p
 backtrack :: ASHandler [Stop, Or, Once] '[] '[[]]
 backtrack = ashandler (\_ -> runListT') backtrackAlg' nondetFwd
 
+
+
+-- searchWith :: Handler '[Stop, Or, Once, Search] '[] '[[]]
+-- searchWith = handler runListT' backtrackAlg' backtrackFwd

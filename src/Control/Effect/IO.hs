@@ -2,6 +2,7 @@
 
 module Control.Effect.IO where
 
+import qualified System.CPUTime
 import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
@@ -23,8 +24,14 @@ type PutStrLn = Algebraic PutStrLn'
 putStrLn :: Members '[PutStrLn] sig => String -> Prog sig ()
 putStrLn str = injCall (Algebraic (PutStrLn str (return ())))
 
+data GetCPUTime' k = GetCPUTime (Integer -> k) deriving Functor
+type GetCPUTime = Algebraic GetCPUTime'
 
-algIO :: Effs [GetLine, PutStrLn] IO a -> IO a
+getCPUTime :: Members '[GetCPUTime] sig => Prog sig Integer
+getCPUTime = injCall (Algebraic (GetCPUTime return))
+
+
+algIO :: Effs [GetLine, PutStrLn, GetCPUTime] IO a -> IO a
 algIO eff
   | Just (Algebraic (GetLine k))    <- prj eff =
       do str <- Prelude.getLine
@@ -32,6 +39,9 @@ algIO eff
   | Just (Algebraic (PutStrLn str k)) <- prj eff =
       do Prelude.putStrLn str
          return k
+  | Just (Algebraic (GetCPUTime k)) <- prj eff =
+      do time <- System.CPUTime.getCPUTime
+         return (k time)
 
 algPutStrLn :: Effs '[PutStrLn] IO a -> IO a
 algPutStrLn eff
@@ -39,7 +49,7 @@ algPutStrLn eff
       do Prelude.putStrLn str
          return k
 
-evalIO :: Prog [GetLine, PutStrLn] a -> IO a
+evalIO :: Prog [GetLine, PutStrLn, GetCPUTime] a -> IO a
 evalIO = eval algIO
 
 handleIO
@@ -48,8 +58,8 @@ handleIO
     , Injects oeffs xeffs
     , Injects (xeffs :\\ ieffs) xeffs
     , Recompose fs
-    , fam (Effs '[GetLine, PutStrLn])
-    , xeffs ~ '[GetLine, PutStrLn] )
+    , fam (Effs '[GetLine, PutStrLn, GetCPUTime])
+    , xeffs ~ '[GetLine, PutStrLn, GetCPUTime] )
   => Handler ieffs oeffs fs fam
   -> Prog (ieffs `Union` xeffs) a -> IO (Composes fs a)
 handleIO = handleWith algIO

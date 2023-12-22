@@ -15,7 +15,7 @@ with its contents with `cabal repl readme` and follow the examples. The language
 
 
 Working with IO
-----------------
+---------------
 
 The `Teletype` example is a rite of passage for monadic IO [^Gordon1992] where
 the challenge is to show how IO of reading from and writing to the terminal can
@@ -26,16 +26,15 @@ output to the terminal using `putStrLn` until a blank line is received by
 ```haskell
 echo :: Prog' [GetLine, PutStrLn] ()
 echo = do str <- getLine
-          case str of
-            [] -> return ()
-            _  -> do putStrLn str
-                     echo
+          unless (null str) $
+            do putStrLn str
+               echo
 ```
 The type signature says that this is a program that requires
 both `GetLine` and `PutStrLn` operations.
 
 The most obvious interpretation of `getLine` and `putLine` is to invoke their
-corresponding values from the prelude. Indeed, when all of the operations of a
+corresponding values from the prelude. Indeed, when all the operations of a
 program are standard Prelude IO operations, it is enough to simply evaluate the
 program using `evalIO`:
 ```haskell ignore
@@ -47,7 +46,7 @@ terminal user is immediately echoed back out to the terminal.
 
 
 Working with Handlers
-----------------------
+---------------------
 
 A pure state effect is provided in `Effect.Control.State`, which supports
 `get` and `put` as operations that are indicated by `Get s` and `Put s`
@@ -114,7 +113,7 @@ ghci> handle (state_ "Hello!") (do xs <- get @String; return (length xs))
 6
 ```
 
-The effect of `handle h p` is to use the handler `h` to remove _all_ of the
+The effect of `handle h p` is to use the handler `h` to remove _all_ the
 effects in interpreting the program `p`. This relates to both the effects
 of the program and effects output by a handler.
 Trying to apply a handler that does not fully evaluate the effects in `p` will
@@ -135,7 +134,7 @@ handler.
 
 
 Forwarding Effects
--------------------
+------------------
 
 Now suppose that the task is to count the number of times `getLine` is called
 when the `echo` program is executed. One approach is to change the `echo`
@@ -146,13 +145,12 @@ echoTick :: Prog' '[GetLine, Get Int, Put Int, PutStrLn] ()
 echoTick =
   do str <- getLine
      incr
-     case str of
-       [] -> return ()
-       _  -> do putStrLn str
-                echoTick
+     unless (null str) $
+       do putStrLn str
+          echoTick
 ```
 To execute such a program that uses both state and IO
-requires a handler that is specialised to deal with IO:
+requires a handler that is specialized to deal with IO:
 ```haskell
 exampleEchoTick :: IO (Int, ())
 exampleEchoTick = handleIO (state (0 :: Int)) echoTick
@@ -167,7 +165,7 @@ world!
 
 (3,())
 ```
-This demonstrates how unhandled effects that are recognised by I/O can be
+This demonstrates how unhandled effects that are recognized by I/O can be
 forwarded and dealt with after the execution of the handler.
 
 
@@ -176,7 +174,7 @@ Intercepting Operations
 
 Forwarding effects to I/O works in many situations, but sometimes it is rather
 crude: the power of effects is in their ability to intercept and interpret
-operations. 
+operations.
 
 Suppose the task is now to count all instances of `getLine` in the
 entire program. Adding `incr` after every `getLine` may require a large
@@ -186,7 +184,7 @@ incorporates `incr`, but that is not necessarily better.
 
 Better would be to allow a different interpretation of `getLine` that
 automatically increments a variable: then the `echo` program could
-remain exactly the same. To do this, the `getLine` operation must 
+remain exactly the same. To do this, the `getLine` operation must
 be intercepted.
 
 Here is how to write a handler that intercepts a `getLine` operation, only to
@@ -196,14 +194,14 @@ getLineIncr
   :: ASHandler '[GetLine]                       -- input effects
                '[GetLine, Get Int, Put Int]     -- output effects
                '[]                              -- output wrapper
-getLineIncr = interpret $ 
-  \(Eff (Algebraic (GetLine k))) -> 
-    do xs <- getLine
+getLineIncr = interpret $
+  \(Eff (Algebraic (GetLine k))) ->
+    do str <- getLine
        incr
-       return (k xs)
+       return (k str)
 ```
 The handler says that it will deal with `[GetLine]` as an input effect,
-but and will output the effects `[GetLine, Get Int, Put Int]`.
+and will output the effects `[GetLine, Get Int, Put Int]`.
 
 Now the task is to connect this handler with `state`. This can
 be achieved with a `pipe`:
@@ -214,7 +212,7 @@ getLineIncrState :: ASHandler '[GetLine]   -- input effects
 getLineIncrState
   = pipe getLineIncr (state (0 :: Int))
 ```
-This can then be executed using `handleIO`, which will deal with 
+This can then be executed using `handleIO`, which will deal with
 the residual `GetLine` effect:
 ```haskell ignore
 ghci> handleIO getLineIncrState echo
@@ -237,8 +235,8 @@ from the terminal. For instance, suppose the task is to get a line and return
 its length. This is achieved by the `getLineLength` program:
 ```haskell
 getLineLength :: Prog' '[GetLine] Int
-getLineLength = do xs <- getLine
-                   return (length xs)
+getLineLength = do str <- getLine
+                   return (length str)
 ```
 As before, this can be evaluated using `evalIO`:
 ```haskell ignore
@@ -260,9 +258,9 @@ getLineState = interpret $
          (xs:xss') -> do put xss'
                          return (k xs)
 ```
-The signature of `getLineState` says that it is a handler that recognises
+The signature of `getLineState` says that it is a handler that recognizes
 `GetLine` operations and interprets them in terms of some output effects in
-`oeff`, which consist of `Get [String]` and `Put [String]`. Interpeting
+`oeff`, which consist of `Get [String]` and `Put [String]`. Interpreting
 effects in terms of other, more primitive, effects allows other handlers to
 deal with those more primitive effects.
 
@@ -278,7 +276,7 @@ getLinePure str = pipe getLineState (state str)
 getLinePure_ :: [String] -> ASHandler '[GetLine] '[] '[]
 getLinePure_ str = pipe getLineState (state_ str)
 ```
-Now we have a means of executing a program that contains only a |GetLine| effect,
+Now we have a means of executing a program that contains only a `GetLine` effect,
 and extracting the resulting string:
 ```haskell ignore
 handle (getLinePure ["hello", "world!"]) :: Prog '[GetLine] a -> ([String], a)
@@ -327,11 +325,11 @@ redirected to do something pure.
 Outputting pure values is managed by the `writer` handler, in combination
 with the `tell` operation:
 ```haskell ignore
-writer :: Monoid w => Handler '[Tell w, Censor w] '[] '[(,) w]
+writer :: Monoid w => Handler '[Tell w] '[] '[(,) w]
 tell   :: Monoid w => w -> Prog' '[Tell w] ()
 ```
-The `Censor w` effect will be discussed later on, and can be safely ignored for
-now.
+The signatures tell us that `tell` introduces the `Tell` effect, and
+`writer` handles this effect.
 
 The following simple example returns a list of strings, since a list of
 elements is a monoid:
@@ -359,15 +357,15 @@ putStrLnPure = pipe putStrLnTell writer
 Now, a pure handler for both `putStrLn` and `getLine` can
 be defined as the fusion of `putStrLnPure` and `getLinePure`.
 ```haskell
-teletypePure 
+teletypePure
   :: [String]
   -> ASHandler '[GetLine, PutStrLn] '[] '[(,) [String]]
 teletypePure str = fuse (getLinePure_ str) putStrLnPure
 ```
 The `fuse` combinator takes two handlers and creates one that accepts the union
 of their signatures. The handlers are run in sequence so that the output of the
-first handler is fed into the input of the second. Any any remaining output
-operations are combined and become te output of the fusion.
+first handler is fed into the input of the second. Any remaining output
+operations are combined and become the output of the fusion.
 
 Now the `echo` program can be executed in an entirely pure context:
 ```haskell ignore
@@ -378,9 +376,9 @@ ghci> handle (teletypePure ["Hello", "world!"]) echo
 ```haskell
 prop_teletypePure :: Property
 prop_teletypePure = property $ do
-  xxs <- forAll $ list (linear 0 1000) (string (linear 0 100) ascii)
-  let xxs' = takeWhile (/= "") xxs
-  handle (teletypePure xxs) echo === (xxs', ())
+  xss <- forAll $ list (linear 0 1000) (string (linear 0 100) ascii)
+  let xss' = takeWhile (/= "") xss
+  handle (teletypePure xss) echo === (xss', ())
 ```
 -->
 The return value of `()` comes from the result of `echo` itself, and the list
@@ -395,7 +393,7 @@ teletypeTick
   -> ASHandler '[GetLine, PutStrLn] '[] '[(,) [String], (,) Int]
 teletypeTick str = fuse getLineIncrState (teletypePure str)
 ```
-This can be executed using `handle`, passing in the 
+This can be executed using `handle`, passing in the
 list of inputs to be fed to `getLine`:
 ```haskell ignore
 ghci> handle (teletypeTick ["Hello", "world!"]) echo
@@ -405,20 +403,20 @@ ghci> handle (teletypeTick ["Hello", "world!"]) echo
 ```haskell
 prop_teletypeTick :: Property
 prop_teletypeTick = property $ do
-  xxs <- forAll $ list (linear 0 1000) (string (linear 0 100) ascii)
-  let xxs' = takeWhile (/= "") xxs
-  handle (teletypeTick xxs) echo === (xxs', (length xxs' + 1, ()))
+  xss <- forAll $ list (linear 0 1000) (string (linear 0 100) ascii)
+  let xss' = takeWhile (/= "") xss
+  handle (teletypeTick xss) echo === (xss', (length xss' + 1, ()))
 ```
 -->
 
 
 Scoped Operations
-------------------
+-----------------
 
 Intercepting operations and changing their behaviour is typical when working
 with handlers. An example of this is to apply a transformation to all the
 `tell` operations, so that everything is in uppercase. To this, another
-interpreting handler called `retell` is defined, which takes in a function used
+interpreting handler called `retell` can be defined, which takes in a function used
 to modify output:
 ```haskell
 retell :: forall w w' fam . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] '[] fam
@@ -442,37 +440,225 @@ A program designed around this task may need a more nuanced approach to
 retelling its input, with censoring only acceptable in certain regions of code.
 
 A scoped operation takes a program as one of its parameters, and interacts with
-operations in that program. For example, earlier the standard `writer` handler
-was shown to work with a `Censor` effect:
-```haskell ignore
-writer :: Monoid w => Handler '[Tell w, Censor w] '[] '[(,) w]
+operations in that program. For example, the `Censor` effect is
+introduced by the accompanying `censor` operation, and is handled
+using the `censors` handler:
 ```
-The accompanying operation is `censor`:
+censor  :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig
+censors :: Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[]
 ```
-censor :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig 
-```
-This takes a function `cipher :: w -> w` and a program `p :: Prog sig a`, and
-any `tell x` in `p` will be interpeted as `tell (cipher x)`. For instance
-here is a program that uses `censor` at particular points of the program,
-to help [Mr Hoppy](https://en.wikipedia.org/wiki/Esio_Trot) to tell a tortoise
+The result of the `censors cipher` handler is to first apply the `cipher`
+to any `tell`, just like `retell` above. However, when a `censor cipher' p` operation
+is encountered, the result is to additionally apply `cipher'` to any `tell`
+in `p`. In this way, nested `censors` will have their ciphers accumulated.
+
+For instance, here is a program that uses `censor` at
+particular points of the program, to help
+[Mr Hoppy](https://en.wikipedia.org/wiki/Esio_Trot) to tell a tortoise
 called Alfie to get bigger:
 ```haskell
 hoppy :: Prog' '[Tell [String], Censor [String]] ()
 hoppy = do tell ["Hello Alfie!"]
-           censor @[String] (map reverse) $
+           censor @[String] backwards $
              do tell ["tortoise"]
-                censor @[String] (map (map toUpper)) $
+                censor @[String] shout $
                   do tell ["get bigger!"]
            tell ["Goodbye!"]
+
+backwards, shout :: [String] -> [String]
+backwards = map reverse
+shout     = map (map toUpper)
 ```
-This applies the censor only to the `tell` operations under the `censor` operation.
+To evaluate this program, the `censors` handler is created with an initial
+cipher which is `id` so that the messages not under a `censor` are not affected:
 ```haskell ignore
-ghci> handle writer hoppy :: ([String], ())
+ghci> handle (censors @[String] id <&> writer) hoppy :: ([String], ())
 (["Hello Alfie!","esiotrot","!REGGIB TEG","Goodbye!"],())
+```
+Notice how `"get bigger!"` is both reversed and made uppercase because
+the ciphers have been accumulated.
+<!--
+```haskell
+prop_esiotrot :: Property
+prop_esiotrot = property $ do
+  handle (censors @[String] id <&> writer) hoppy === (["Hello Alfie!","esiotrot","!REGGIB TEG","Goodbye!"],())
+```
+-->
+
+Hiding Operations
+-----------------
+
+Since `censor` is an operation, it can be given different semantics by a
+different handler. For instance, here is type of the `uncensor` handler:
+```haskell ignore
+uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[]
+```
+This handler removes all censorship from the program. The type promises that no other
+effects are generated, and that the result is pure.
+```haskell ignore
+ghci> handle (uncensors @[String] <&> writer @[String]) hello
+(["Hello world!","tortoise","get bigger!","Goodbye!"],())
+```
+One way to define `uncensors` is to process all `censor` operations with
+`censors id`, followed by the `writer_` handler (which discards its output) to
+remove any generated `tell` operations. To prevent this handler from touching
+any `tell` operations that were in the program before censor, the `hide`
+combinator removes them from being seen:
+```haskell
+uncensors :: forall w fam . Monoid w => Handler '[Censor w] '[] '[] ASFam
+uncensors = hide @'[Tell w] (censors @w id <&> writer_ @w)
+```
+The key combinator here is `hide`:
+```haskell ignore
+hide :: forall sigs effs oeffs f . (Injects (effs :\\ sigs) effs, Injects oeffs oeffs)
+     => Handler effs            oeffs f
+     -> Handler (effs :\\ sigs) oeffs f
+```
+This takes in a handler, returns it where any effects provided by the type parameter `sigs`
+are hidden. While this works, the version in `Control.Effect.Writer` processes
+any `censor` by ignoring its argument, and does not accumulate any output, and
+is therefore more efficient.
+<!--
+```haskell
+prop_uncensors :: Property
+prop_uncensors = property $ do
+  handle (uncensors @[String] <&> writer) hoppy === (["Hello Alfie!","tortoise","get bigger!","Goodbye!"],())
+
+prop_uncensors' :: Property
+prop_uncensors' = property $ do
+  handle (W.uncensors @[String] <&> writer) hoppy === (["Hello Alfie!","tortoise","get bigger!","Goodbye!"],())
+```
+-->
+
+Censoring `PutStrLn`
+--------------------
+
+The `censors` handler is designed to work with the interaction between `censor`
+and `tell`. Suppose the task is now to censor the `echo` program.
+It is easy enough to see how a variation of `retell` could be written,
+by interpreting `PutStrLn` operations:
+```haskell
+rePutStrLn :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] '[] fam
+rePutStrLn f = interpret $
+  \(Eff (Algebraic (PutStrLn str k))) -> do putStrLn (f str)
+                                            return k
+```
+
+```haskell ignore
+ghci> handle (rePutStrLn (map toUpper) <&> teletypePure ["tortoise"]) echo
+(["TORTOISE"],())
+```
+<!--
+```haskell
+prop_rePutStrLn :: Property
+prop_rePutStrLn = property $ do
+  xss <- forAll $ list (linear 0 1000) (string (linear 0 100) ascii)
+  let xss' = takeWhile (/= "") xss
+  handle (rePutStrLn (map toUpper) <&> teletypePure xss) echo
+    === (map (map toUpper) xss',())
+```
+-->
+
+A more localized approach is to use the `censor` operation so
+that a censored echo can be used:
+```haskell
+shoutEcho :: Prog' [Censor [String], GetLine, PutStrLn] ()
+shoutEcho = censor shout echo
+```
+The censoring in this program cannot be handled with the `censors` handler by
+itself, since it simply has the wrong type: it works with `Tell` rather than
+`PutStrLn` operations.
+
+Rather than writing a custom handler from scratch, one attempt is to
+first transform any `putStrLn` operation into a `tell` using
+`putStrLnTell`, then apply the `censors` handler, and finally
+turn any `tell` back into `putStrLn` with using `tellPutStrLn`:
+```haskell
+tellPutStrLn :: Handler '[Tell [String]] '[PutStrLn] '[] fam
+tellPutStrLn = interpret $
+  \(Eff (Algebraic (Tell strs k))) -> do putStrLn (unwords strs)
+                                         return k
+```
+This chain of handlers might be called `censorsPutStrLn`:
+```haskell ignore
+censorsPutStrLn :: ([String] -> [String])
+                -> Handler [PutStrLn, Tell [String], Censor [String]] '[PutStrLn] '[] fam
+censorsPutStrLn cipher = putStrLnTell <&> censors cipher <&> tellPutStrLn
+```
+The ensuing chain of handlers seems to do the job:
+```haskell ignore
+ghci> handle (censorsPutStrLn id <&> teletypePure ["Hello world!"])
+             shoutEcho
+(["HELLO WORLD!"],())
+```
+However, things can get muddled if the program contains a mixture
+of `tell` and `putStrLn` operations.
+
+For example, here is a program that uses `tell` to log the fact
+that the shouty echo program is being entered before doing so:
+```haskell
+logShoutEcho :: Prog' '[PutStrLn, GetLine, Censor [String], Tell [String]] ()
+logShoutEcho = do tell ["Entering shouty echo"]
+                  shoutEcho
+```
+It is tempting to execute the program with the following:
+```haskell ignore
+ghci> handle (censorsPutStrLn id <&> teletypePure ["Hello world!"]) logShoutEcho
+(["Entering shouty echo","HELLO WORLD!"],())
+```
+It seems to work, but the problem is that the logged messages are treated
+in exactly the same way as the pure `putStrLn` values: everything is
+accumulated into the same list of strings. The problem is exasperated
+when `handleIO` is used: the logged messages are immediately output to the
+terminal:
+```haskell ignore
+ghci> handleIO (censorsPutStrLn id) logShoutEcho
+Entering shouty echo:
+Hang on, that's a log message!
+HANG ON, THAT'S A LOG MESSAGE!
+```
+The reason is that the `censorsPutStrLn` handler is interpreting all the `tell`
+operations into `putStrLn`: it cannot discriminate between those that came from
+a `putStrLn` originally, and those that are part of the program.
+
+The solution is simple: the `tell` operations to do with logging
+should be handled _before_ the teletype effects are handled:
+```haskell ignore
+ghci> handle (writer @[String] <&> censorsPutStrLn id <&> teletypePure ["Hello wor
+ld!"]) logShoutEcho
+(["HELLO WORLD!"],(["Entering shouty echo"],()))
+```
+This pure version separates the two kinds of logged messages; those
+that come from `tell` are processed first (and so in the inner tuple),
+and then the messages from `putStrLn` are on the outside.
+
+This even works with `handleIO`:
+```haskell ignore
+ghci> handleIO (writer @[String] <&> censorsPutStrLn id) logShoutEcho
+Ah, that's better
+AH, THAT'S BETTER
+
+(["Entering shouty echo"],())
+```
+The `putStrLn` messages are correctly censored, and the log messages
+are purely produced.
+
+
+Timestamps
+----------
+
+Timestamps are often used in conjunction with logging so that the time a message
+is logged can be recorded. The traditional way of doing this might be to make
+a bespoke `logger` that ensures that there is a timestamp integrated into each
+occurrence of the log:
+```haskell
+logger :: String -> Prog' [Tell [(Integer, String)], GetCPUTime] ()
+logger str = do time <- getCPUTime
+                tell [(time, str)]
 ```
 
 Members
---------
+-------
 
 There are three scenarios to consider when trying to engineer a fit between a
 program (shaft) of type `Prog effs a` and a handler (hole) of type `Handler
@@ -501,7 +687,7 @@ particular order in which certain effects should be handled, the `effective`
 library leaves this choice entirely to the handler.
 
 Graded Effects
----------------
+--------------
 
 There are two of defining operations using `effective`, which we will call
 _graded_ style and _member_ style. In graded style operations the signature
@@ -513,9 +699,9 @@ considered more advanced and is detailed more carefully in the
 
 
 Language Extensions
---------------------
+-------------------
 
-The `effective` library requires the `DataKinds` extenion since
+The `effective` library requires the `DataKinds` extension since
 this is used to keep track of effect signatures.
 
 ```haskell top
@@ -525,7 +711,7 @@ this is used to keep track of effect signatures.
 ```
 <!--
 The following pragma is only needed for the testing framework.
-```haskell top 
+```haskell top
 {-# LANGUAGE TemplateHaskell #-}
 ```
 -->
@@ -536,12 +722,16 @@ Imports
 This file has a number of imports:
 
 ```haskell top
+import Control.Monad (unless)
 import Control.Effect
 import Control.Handler
 import Control.Family.AlgScp
 import Control.Effect.State
-import Control.Effect.Writer
+import Control.Effect.Writer hiding (uncensors)
+import qualified Control.Effect.Writer as W
 import Control.Effect.IO
+
+import Data.Char (toUpper)
 
 import Prelude hiding (putStrLn, getLine)
 import Data.Char (toUpper)
@@ -551,11 +741,13 @@ import Data.Char (toUpper)
 We will hide the following from the README, because it is
 only for testing the documentaton itself.
 ```haskell top
-import Hedgehog
+import Hedgehog hiding (test, evalIO)
 import Hedgehog.Main
 import Hedgehog.Gen hiding (map)
 import Hedgehog.Range
 
+props :: Group
+props = $$(discover)
 
 main :: IO ()
 main = defaultMain $ fmap checkParallel [props]
@@ -563,14 +755,10 @@ main = defaultMain $ fmap checkParallel [props]
 -->
 
 References
------------
+----------
 
 * [Effect Handlers in Scope. N. Wu, T. Schrijvers, R. Hinze. Haskell Symposium. 2014](https://dl.acm.org/doi/10.1145/2633357.2633358)
 * [Modular Models of Monoids with Operations. Z. Yang, N. Wu. ICFP. 2023](https://dl.acm.org/doi/10.1145/3607850)
 
 [^Gordon1992]: A. Gordon. Functional Programming and Input/Output. PhD Thesis, King's College London. 1992
 
-```haskell top
-props :: Group
-props = $$(discover)
-```
