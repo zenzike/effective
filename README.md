@@ -10,8 +10,357 @@ Wu, as well as [Effect Handlers in
 Scope](https://dl.acm.org/doi/10.1145/2633357.2633358) by Wu, Schrijvers, and
 Hinze.
 
-This README is a literate Haskell file and therefore can be executed. You can interact
-with its contents with `cabal repl readme` and follow the examples. The language extensions and imports required are at the bottom of this file.
+This README is a literate Haskell file and therefore can be executed. You can
+interact with its contents with `cabal repl readme` and follow the examples. The
+language extensions and imports required are at the bottom of this file.
+
+
+Constructing Programs with Operations
+-------------------------------------
+
+A key idea in this framework is to use the type of a program to keep track
+of the different operations that are used. Programs are constructed
+by combining the syntax and types of smaller programs appropriately.
+
+Programs in this library are given by the `Prog sig a` type, which is a program
+parameterized by a signature described by a type-level list `sig` of signatures,
+and returning a value of type `a`.
+
+The simplest program simply returns a pure value and has no effects:
+```haskell ignore
+return :: a -> Prog' '[] a
+```
+The type `'[]` is a type-level list, prefixed by a quote mark to distinguish
+it from the type of an ordinary list.
+
+More interesting programs are constructed using operations that are allowed by
+the signature.
+For instance, `Get` and `Put` effects are used to interact with a single-cell
+state, where two operations are provided:
+```haskell ignore
+put :: s -> Prog' '[Put s] ()
+get :: Prog' '[Get s] s
+```
+The operation `put x` will put the value `x` into the cell, and the operation
+`get` will retrieve it. These operations are provided in `Effect.Control.State`.
+To help the type checker, we will often annotate the type `s` by writing
+`put @s x` and `get @s`.
+
+The `do` notation provides a way to put programs together that use such
+operations. Here is a program that will return `True` if the value
+in the program is `0`:
+```haskell
+isZero :: Prog' '[Get Int] Bool
+isZero = do x <- get @Int
+            return (x == 0)
+```
+This program uses `x <- get @Int` to bind the result of getting an `Int` to `x`,
+and the next line returns the result of `x == 0`.
+
+For example, here is a program that increments the number in a state
+and returns it:
+```haskell
+incr :: Prog' '[Put Int, Get Int] ()
+incr = do x <- get @Int
+          put @Int (x + 1)
+```
+In order to keep the program modular, the effects in `effs` are given by a
+constraint on the input type, saying that `Put Int` and `Get Int` are its
+members.
+
+A natural question arises: how is it possible to combine the programs `put` and
+`get` when their effect signatures are different? There are several
+equivalent ways of giving the type of `incr`:
+```haskell ignore
+incr :: Prog' '[Get Int, Put Int] ()
+incr :: Members '[Get Int, Put Int] sig => Prog sig ()
+incr :: (Member (Get Int) sig, Member (Put Int) sig) => Prog sig ()
+```
+The distinction between `Prog` and `Prog'` is subtle, but important. The
+definition of `Prog'` is exactly:
+```haskell ignore
+type Prog' sig a = forall sig' . Members sig sig' => Prog sig' a
+```
+This says that the signature `sig'` in `Prog sig' a` is any signature
+that is constrained to accept all of the effects in `sig`. The `Members`
+constraint ensures that the order of effects in `sig` is irrelevant,
+but is also what allows `get` and `put` to be combined.
+The type of `get` and `put` can be expanded to:
+```haskell ignore
+put :: Members '[Put s] sig => s -> Prog sig ()
+get :: Members '[Get s] sig => Prog sig s
+```
+These signatures agree when `sig` is `'[Put s, Get s]`, `'[Get s, Put s]`,
+or in fact, any list that contains both `Put s` and `Get s`.
+
+Note that in the type of `Prog sig a` the order of effects in a signature list
+is important: the type `Prog '[Put s, Get s] ()` does not unify with
+`Prog '[Get s, Put s] ()`. When constructing a program it is useful to be as
+flexible as possible by using a constrained signature. Thus, using
+`Prog' '[Put s, Get s] ()` or `Prog' '[Get s, Put s] ()` is equivalent
+since they desugar to the definition that uses the `Members` constraint.
+
+
+Deconstructing Programs with Handlers
+-------------------------------------
+
+Using `return` and operations such as `put` and `get` allows a user to
+_construct_ an effectful program. However, these programs have no default
+semantics. In order to execute them, they must be _deconstructed_ using
+an _effect handler_ that gives them semantics.
+
+For state, the usual semantics is given by the `state` handler:
+```haskell ignore
+state :: s -> ASHandler '[Put s, Get s]  -- input effects
+                        '[]              -- output effects
+                        '[((,) s)]       -- output wrapper
+```
+The signature of the handler tells us how it behaves:
+* The input effects are `Put s` and `Get s`.
+* The output effects are empty
+* The output of this handler wraps the result with the functor `((,) s)` When
+`state s` is used to handle a program of type `Prog effs a`, the initial state
+is given by `s`, and the the output will be the functor `((,) s)` applied to the
+value of the program `a`, which is simply `(s, a)`.
+
+Executing the `incr` program with this handler can be achieved as follows:
+```haskell ignore
+ghci> handle (state 41) incr :: (Int, ())
+(42,())
+```
+Since the program has type `Prog effs ()`, with a pure value of `()`,
+the result of applying the handler is `((,) Int)` applied to `()`,
+thus giving back `(Int, ())`.
+
+More sophisticated programs can be constructed by combining simpler ones, of
+course:
+```haskell ignore
+ghci> handle (state 41) (do incr; isZero :: Prog' '[Put Int, Get Int] Bool) :: (Int, Bool)
+(42,False)
+```
+Note that a type signature for the program is often required: Haskell cannot
+always infer the types that are intended.
+
+The type of the `state` handler promises to handle both `Put s` and `Get s`
+operations, and so it can work with programs that use both, or
+either one of these. Here is a program that only uses `Get String`:
+```haskell
+getStringLength :: Prog' '[Get String] Int
+getStringLength = do xs <- get @String
+                     return (length xs)
+```
+It can be handled using `state`:
+```haskell ignore
+ghci> handle (state "Hello!") getStringLength
+("Hello!",6)
+```
+Notice that the `state` handler returns the final state as well as the final
+return value of the program. A variation of the `state` handler is `state_`,
+which does not return the final state:
+```haskell ignore
+state_ :: s -> ASHandler [Put s, Get s] '[] '[]
+```
+Here the final output wrapper is `'[]`, and so applying this to a program
+of type `Prog sig a` will simply return a value of type `a`.
+```haskell ignore
+ghci> handle (state_ "Hello!") (do xs <- get @String; return (length xs))
+6
+```
+The result of `handle h p` is to use the handler `h` to remove _all_ the
+effects in interpreting the program `p`. This relates to both the effects
+of the program and the effects output by a handler.
+
+
+Exceptions and Scoped Effects
+-----------------------------
+
+The classic example of an effect handler is for throwing and catching
+exceptions. The `throw` operation is given by:
+```haskell ignore
+throw :: Prog' '[Throw e] a
+```
+This operation throws an exception that should be dealt with elsewhere.
+
+The operation that catches an error is `catch`, which is an example of a
+_scoped_ effect:
+```haskell ignore
+catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
+```
+This signature uses the `Member` constraint to describe the effects
+in `sig`, ensuring that the signatures of these different programs match (using
+`Prog'` would not work as intended, since the signatures would each
+have their own constraints on `sig` and need not be the same signature).
+
+The intended effect of `catch p q` is to attempt the computation `p`,
+and if an error is thrown to resume with the code in `q`. This is
+the semantics offered by `except`:
+```haskell ignore
+except :: ASHandler [Throw, Catch] '[] '[Maybe]
+```
+Notice that this promises to deal with `Throw` and `Catch` operations,
+but also wraps the output in a `Maybe`. When a successful result `x` ensues
+then it is `Just x`, but any unhandled effects result in `Nothing`:
+
+For some trivial examples that show the interaction between `throw` and
+`catch`:
+```haskell ignore
+ghci> handle except (return 42)
+Just 42
+ghci> handle except (throw)
+Nothing
+ghci> handle except (catch (return 42) (return 22))
+Just 42
+ghci> handle except (catch (throw) (return 22))
+Just 22
+```
+Note that there is nothing special about the return program of `catch`,
+in that it may itself throw an exception or even contain a nested `catch`:
+```haskell ignore
+ghci> handle except (catch (throw) (throw))
+Nothing
+ghci> handle except (catch (throw) (catch (throw) (return 22)))
+Just 22
+```
+
+Semanatic Flexibility
+---------------------
+
+A program can be given multiple semantics by choosing different handlers to
+take care of the effects. This semantic flexibility allows the program
+to be reinterpreted easily without having to rewrite it.
+
+For instance, the `exceptCount` handler is a variation that counts
+the number of exceptions that were caught in the execution of the program.
+Here is its signature:
+```haskell ignore
+catchCount :: ASHandler '[Catch, Throw] '[] '[((,) Int), Maybe]
+```
+This returns the result of the program wrapped in both the counter as an
+`Int` and the state of the exception so that a program that returns a value of
+type `a` will result in an interpretation of type `(Int, Maybe a)`.
+
+For instance, here is how `catchCount` deals with `catch` in various
+scenarios:
+```
+ghci> handle catchCount (catch (return 42) (return 22))
+(0,Just 42)
+
+ghci> handle catchCount (catch (throw) (return 22))
+(1,Just 22)
+
+ghci> handle catchCount (catch (throw) (catch (throw) (return 22)))
+(2,Just 22)
+
+ghci> handle catchCount (do catch (throw) (catch (throw) (return 32))
+                            catch (throw) (return 10)
+                            catch (return 4) (throw))
+(3,Just 4)
+```
+Although the original program is unchanged, different handlers offer different
+insights into the same program. Changing the handler back to `except` would
+avoid counting the number of exceptions caught.
+
+An alternative handler might ignore all
+the handling clauses in `catch p q` statements, and simply return the result
+of `p`, another might only allow a certain number of nested errors before
+failing, and so on.
+
+<!--
+```haskell
+catchCount :: ASHandler '[Catch, Throw] '[] '[((,) Int), Maybe]
+catchCount = pipe (catchCount' <&> except) (state (0 :: Int))
+  where
+    catchCount' ::  ASHandler '[Catch] '[Catch, Get Int, Put Int]'[]
+    catchCount' = interpret' exceptCountAlg
+
+    exceptCountAlg :: forall oeff m . (Monad m , Members [Catch, Get Int, Put Int] oeff)
+      => (forall x. Effs oeff m x -> m x)
+      -> (forall x. Effs '[Catch] m x -> m x)
+    exceptCountAlg oalg (Eff (Scoped (Catch p q)))
+      = catch' oalg p (do x <- q
+                          eval oalg (do c <- get @Int
+                                        put (c + 1)
+                                        return x))
+
+
+exceptNothing :: ASHandler [Throw, Catch] '[] '[Maybe]
+exceptNothing = ashandler (const runMaybeT) exceptNothingAlg exceptFwd
+
+exceptNothingAlg :: Monad m
+  => (forall x. oeff m x -> m x)
+  -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
+exceptNothingAlg _ eff
+  | Just (Algebraic Throw) <- prj eff
+      = MaybeT (return Nothing)
+  | Just (Scoped (Catch p q)) <- prj eff
+      = p
+```
+-->
+
+
+Fusing Handlers
+---------------
+
+So far the programs have been handled by using a handler that recognizes
+all of the operations provided by the program. Handlers can be fused
+together to deal with multiple effects.
+
+The `decr` program attempts to decrement the state, but throws an exception if a
+decrement of `0` is attempted:
+```haskell
+decr :: Prog' '[Get Int, Put Int, Throw] ()
+decr = do
+  x <- get
+  if x > 0
+    then put @Int (x - 1)
+    else throw
+```
+This program cannot be handled by the `except` or the `state` handlers alone:
+a type error is emitted when this is attempted:
+```haskell ignore
+ghci> handle (except) (decr)
+
+<interactive>:41:18: error: [GHC-39999]
+    • No instance for ‘Member'
+                         (Algebraic (Put' Int)) '[] (ElemIndex (Algebraic (Put' Int)) '[])’
+        arising from a use of ‘decr’
+    • In the second argument of ‘handle’, namely ‘(decr)’
+      In the expression: handle (except) (decr)
+      In an equation for ‘it’: it = handle (except) (decr)
+ghci> handle (state (42 :: Int) <&> except) (decr)
+Just (41,())
+```
+In order for this program to be evaluated, `except` and `state` must
+be combined, and one way to do this is to _fuse_ them using `<&>`,
+where `h1 <&> h2` first executes the `h1` handler and then feeds the
+result into `h2`.
+The results returned by fusing `state` and `except` differ because these
+effects are _not_ commutative. It is useful to compare the types
+that arise when they are combined in different ways:
+```haskell
+localState :: s -> ASHandler '[Put s, Get s, Throw, Catch]   -- input effects
+                             '[]                             -- output effects
+                             '[Maybe, ((,) s)]               -- output wrapper
+localState s = state s <&> except
+
+globalState :: s -> ASHandler '[Throw, Catch, Put s, Get s]  -- input effects
+                              '[]                            -- output effects
+                              '[(,) s, Maybe]                -- output wrapper
+globalState s = except <&> state s
+```
+The type of the output wrapper reveals a key difference between the two: for
+`localState`, evaluating a program with values of type `a` results in a
+computation of type `Maybe (s, a)`, whereas for `globalState` the computation
+has type `(s, Maybe a)`.
+```haskell ignore
+ghci> handle (globalState (0 :: Int)) decr
+(0,Nothing)
+ghci> handle (localState (0 :: Int)) decr
+Nothing
+```
+One way to interpret this is that `globalState`
+will return the final state regardless of whether the computation fails,
+whereas `localState` will only return the state in the case of success.
 
 
 Working with IO
@@ -41,84 +390,12 @@ program using `evalIO`:
 exampleIO :: IO ()
 exampleIO = evalIO echo
 ```
-This will execute the `echo` program where input provided on the
-terminal user is immediately echoed back out to the terminal.
+This will execute the `echo` program where input provided in the
+terminal by the user is immediately echoed back out to the terminal.
 
-
-Working with Handlers
----------------------
-
-A pure state effect is provided in `Effect.Control.State`, which supports
-`get` and `put` as operations that are indicated by `Get s` and `Put s`
-in a signature.
-
-For example, here is a program that increments the number in a state
-and returns it:
-```haskell
-incr :: Prog' [Put Int, Get Int] ()
-incr = do x <- get
-          put @Int (x + 1)
-```
-In order to keep the program modular, the effects in `effs` are given by a
-constraint on the input type, saying that `Put Int` and `Get Int` are its
-members.
-
-This program can be executed by using a handler. For state, the usual
-handler is given by:
-```haskell ignore
-state :: s -> ASHandler '[Put s, Get s]  -- input effects
-                        '[]              -- output effects
-                        '[((,) s)]       -- output wrapper
-```
-The signature of the handler tells us how it behaves:
-* The input effects are `Put s` and `Get s`.
-* The output effects are empty
-* The output of this handler wraps the result with the functor `((,) s)`
-When `state s` is used to handle a program of type `Prog effs a`,
-the output will be the functor `((,) s)` applied to the value of the program
-`a`, which is simply `(s, a)`.
-
-Executing the `incr` program with this handler can be achieved as follows:
-```haskell ignore
-ghci> handle (state 41) incr :: (Int, ())
-(42,())
-```
-Since the program has type `Prog effs ()`, with a pure value of `()`,
-the result of applying the handler is `((,) Int)` applied to `()`,
-thus giving back `(Int, ())`.
-
-The type of the `state` handler promises to handle both `Put s` and `Get s`
-operations, and so it is able to work with programs that use both, or
-either one of these. Here is a program that only uses `Get String`:
-```haskell
-getStringLength :: Prog' '[Get String] Int
-getStringLength = do xs <- get @String
-                     return (length xs)
-```
-It can be handled using `state`:
-```haskell ignore
-ghci> handle (state "Hello!") getStringLength
-("Hello!",6)
-```
-Notice that the `state` handler returns the final state as well as the final
-return value of the program. A variation of the `state` handler is `state_`,
-which does not return the final state:
-```haskell ignore
-state_ :: s -> ASHandler [Put s, Get s] '[] '[]
-```
-Here the final output wrapper is `'[]`, and so applying this to a program
-of type `Prog sig a` will simply return a value of type `a`.
-```haskell ignore
-ghci> handle (state_ "Hello!") (do xs <- get @String; return (length xs))
-6
-```
-
-The effect of `handle h p` is to use the handler `h` to remove _all_ the
-effects in interpreting the program `p`. This relates to both the effects
-of the program and effects output by a handler.
-Trying to apply a handler that does not fully evaluate the effects in `p` will
-result in a type error.
-For example, the `echo` program cannot be handled with a state handler:
+As before, trying to apply a handler that does not fully evaluate the effects in
+`p` will result in a type error. For example, the `echo` program cannot be
+handled with a state handler:
 ```haskell ignore
 ghci> handle (state "Hello") echo
 
@@ -251,7 +528,7 @@ operations `get` and `put` from a state containing a list of strings:
 getLineState
   :: Handler '[GetLine] '[Get [String], Put [String]] '[] fam
 getLineState = interpret $
-  \(Eff (Algebraic (GetLine k))) -> 
+  \(Eff (Algebraic (GetLine k))) ->
     do xss <- get
        case xss of
          []        -> return (k "")
@@ -738,6 +1015,7 @@ this is used to keep track of effect signatures.
 The following pragma is only needed for the testing framework.
 ```haskell top
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 ```
 -->
 
@@ -755,18 +1033,21 @@ import Control.Effect.State
 import Control.Effect.Writer hiding (uncensors)
 import qualified Control.Effect.Writer as W
 import Control.Effect.IO
+import Control.Effect.Maybe
 
 import Data.Char (toUpper)
 
 import Prelude hiding (putStrLn, getLine)
 import Data.Char (toUpper)
+
+import Control.Monad.Trans.Maybe
 ```
 
 <!--
 We will hide the following from the README, because it is
 only for testing the documentaton itself.
 ```haskell top
-import Hedgehog hiding (test, evalIO)
+import Hedgehog hiding (test, evalIO, eval)
 import Hedgehog.Main
 import Hedgehog.Gen hiding (map)
 import Hedgehog.Range

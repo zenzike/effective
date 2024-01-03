@@ -18,7 +18,12 @@ data Catch' k where
 type Catch = Scoped Catch'
 
 catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
-catch p q = injCall (Scoped (Catch (fmap return p) (fmap return q)))
+catch p q = catch' progAlg p q
+
+catch' :: (Monad m, Member Catch sig)
+       => (forall a . Effs sig m  a -> m a)
+       -> m a -> m a -> m a
+catch' alg p q = (alg . inj) (Scoped (Catch p q))
 
 data Throw' k where
   Throw :: Throw' k
