@@ -24,6 +24,9 @@ data Catch' e k where
 
 type Catch e = Scoped (Catch' e)
 
+catch :: Member (Catch e) sig => Prog sig a -> (e -> Prog sig a) -> Prog sig a
+catch p q = injCall (Scoped (Catch (fmap return p) (fmap return q)))
+
 exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Throw e, Catch e] (ExceptT e m) x -> ExceptT e m x)
