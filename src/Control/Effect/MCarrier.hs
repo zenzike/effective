@@ -10,7 +10,7 @@ module Control.Effect.MCarrier where
 
 import Control.Handler
 import Control.Effect
-import Control.Family.Base
+import Control.Family
 import Control.Family.Algebraic
 import Control.Monad.Trans.Cont
 import Data.Functor.Composes

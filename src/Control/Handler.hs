@@ -10,7 +10,7 @@
 module Control.Handler where
 
 import Control.Effect
-import Control.Family.Base
+import Control.Family
 import Control.Family.AlgScp
 import Data.List.Kind
 import Data.Functor.Identity

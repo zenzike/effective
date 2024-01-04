@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
-module Control.Family.Base 
-  (module Control.Family.Base
+module Control.Family
+  ( module Control.Family
   , Effect
   , Type
   , Constraint

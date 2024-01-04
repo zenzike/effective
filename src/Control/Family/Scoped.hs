@@ -3,7 +3,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 module Control.Family.Scoped where
 
-import Control.Family.Base
+import Control.Family
 import Data.EitherF
 import Control.Effect
 import Data.HFunctor

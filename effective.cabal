@@ -26,13 +26,12 @@ library
   default-language: GHC2021
   ghc-options:   -Wunused-foralls -Wunused-imports
   exposed-modules:
-    Control.Effect
-    Control.Family.Base
+    Control.Family
     Control.Family.Algebraic
     Control.Family.Scoped
     Control.Family.AlgScp
     Control.Family.FusedSig
-    Control.Handler
+    Control.Effect
     Control.Effect.MCarrier
     Control.Effect.Cut
     Control.Effect.Except
@@ -42,6 +41,7 @@ library
     Control.Effect.Reader
     Control.Effect.State
     Control.Effect.Writer
+    Control.Handler
     Control.Monad.Graded
     Control.Monad.Trans.List
     Data.Functor.Composes

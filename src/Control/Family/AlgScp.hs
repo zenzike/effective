@@ -1,13 +1,13 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Control.Family.AlgScp 
+module Control.Family.AlgScp
   ( ASFam (..)
   , module Control.Family.Algebraic
   , module Control.Family.Scoped
   ) where
 
-import Control.Family.Base
+import Control.Family
 import Control.Family.Algebraic
 import Control.Family.Scoped
 import Data.EitherF

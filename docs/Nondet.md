@@ -6,7 +6,7 @@ Encapsulated search is first described in
 ``Controlling Search in Declarative Programs''
 by Hanus and Steiner, 1998, and the technique is implemented using effect
 handlers in ``Heuristics Entwined with Handlers Combined'' by
-Schrijvers, Wu, Desouter and Demoen , 2014.
+Schrijvers, Wu, Desouter and Demoen, 2014.
 
 
 ```haskell
@@ -18,6 +18,7 @@ module Nondet where
 import Prelude hiding (or)
 
 import Control.Effect
+import Control.Family.Scoped
 import Control.Handler
 import Control.Effect.Cut
 import Control.Effect.Nondet
@@ -86,26 +87,6 @@ example_Once''' = property $ handle onceNondet p === [1, 2] where
 
 examples :: Group
 examples = $$(discoverPrefix "example_")
-
-
-
-sub :: Int -> Int -> Prog' '[Stop, Or, Once] Int
-sub x y = once $ do
-  z <- select [0 ..]
-  guard (x == z + y)
-  return z
-
-leq :: Int -> Prog' '[Stop, Or, Once] Int
-leq y = do
-  x <- select [0 ..]
-  guard (x <= y)
-  return x
-
-example_sub = property $
-  handle onceNondet (sub 5 2) === [3]
-
--- example_leq = property $
---   handle onceNondet (leq 2) === [0, 1, 2]
 
 -- queens n = [c_1, c_2, ... , c_n] where
 --   (i, c_i) is the (row, column) of a queen

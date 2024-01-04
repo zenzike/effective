@@ -2,15 +2,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 
-module Control.Family.Algebraic where
+module Control.Family.Algebraic (Algebraic(..), type AlgSig, AlgFam(..), absurdVoidAlg ) where
 
-import Control.Family.Base
+import Control.Family
 import Data.EitherF
 import Control.Effect ( Effs(..), absurdEffs, ShowFunctor )
 import Data.HFunctor
 
 newtype Algebraic (lsig :: Type -> Type)
-                  (f :: Type -> Type) 
+                  (f :: Type -> Type)
                   x
                   = Algebraic (lsig x)
 
@@ -26,7 +26,7 @@ instance Functor lsig => HFunctor (Algebraic lsig) where
 -- the class `ASFam` so it is defined globally here.
 type family AlgSig (sig :: Effect) :: (Type -> Type)
 
--- An effect is in the family of algebraic operations if it 
+-- An effect is in the family of algebraic operations if it
 -- is isomorphic to `Algebraic lsig` for some functor `lsig`
 type AlgFam :: Effect -> Constraint
 class (HFunctor sig, Functor (AlgSig sig)) => AlgFam sig where
