@@ -31,6 +31,7 @@ library
     Control.Family.Scoped
     Control.Family.AlgScp
     Control.Family.FusedSig
+    Control.Family.Latent
     Control.Effect
     Control.Effect.MCarrier
     Control.Effect.Cut
