@@ -292,6 +292,95 @@ effects in interpreting the program `p`. This relates to both the effects
 of the program and the effects output by a handler.
 
 
+Defining Handlers
+-----------------
+
+Defining handlers is a task that requires an understanding not only of _monads_
+but also of _monad transformers_ since they provide the backbone behind semantic
+modularity. The `effective` library can thus be understood as a (compatible)
+alternative to the `mtl` library in that they both offer an interface for
+working with monad transformers in the `transformers` library.
+
+A handler for the `Stop` and `Or` effects is the `nondet` handler, which
+interpets these operations in terms of lists of possible values.
+Here is the type of `nondet`, alongside an implementation in terms
+of a number of components:
+```haskell
+nondet :: ASHandler '[Stop, Or] '[] '[[]]
+nondet = ashandler nondetRun nondetAlg nondetFwd
+```
+The type of the handler says that `Stop` and `Or` will be handled, no output
+effects will be created, and the result wrapper is simply `[]`, which indicates
+that final values should have the form `[a]` for any `a`.
+
+The type of `ashandler` is somewhat complex consisting of three
+parts, `run`, `alg`, and `fwd`:
+```haskell ignore
+ashandler
+  :: forall t fs effs oeffs. (MonadTrans t, Recompose fs)
+  => (forall m . Monad m                          -- run
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . t m x -> m (Composes fs x)))
+  -> (forall m . Monad m                          -- alg
+    => (forall x . Effs oeffs m x -> m x)
+    -> (forall x . Effs effs (t m) x -> t m x))
+  -> (forall m lsig . (Functor lsig, Monad m)     -- fwd
+    => (forall x . lsig (m x) -> m x)
+    -> (forall x . lsig (t m x) -> t m x))
+  -> ASHandler effs oeffs fs
+```
+In the case of `nondet` the following type assignments are made:
+```haskell ignore
+effs  ~ '[Stop, Or]    -- input effects
+oeffs ~ '[]            -- output effects
+fs    ~ '[[]]          -- output wrapper
+t     ~ ListT          -- semantic transformer
+```
+
+Custom handlers are defined by giving a so-called _algebra_ that describes
+how the signature can be interpreted into a _carrier_.
+Generally, an algebra has the form `f a -> a`, where `f` is a syntactic
+functor and `a` is the domain where values are computed.
+The `effective` framework requires the algebras to be _modular_, in that they
+must be able to handle other, external effects. For this reason, the carriers in
+the framework must always be _monad transformers_.
+Here is how `stop` and `or` can be interpreted in terms of the `ListT`
+transformer:
+```haskell
+nondetAlg :: Monad m => (forall x. Effs '[] m x -> m x)
+                     -> (forall x. Effs [Stop , Or] (ListT m) x -> ListT m x)
+nondetAlg _ eff
+  | Just (Algebraic Stop)     <- prj eff = empty
+  | Just (Algebraic (Or x y)) <- prj eff = return x <|> return y
+```
+The `ListT` transformer provides enough structure to interpret nondeterminism
+correctly. The first parameter is not used since it is impossible to
+provide any function from the empty signature, as indicated by the type `Effs '[]`.
+
+Notice, however, that the underlying transformer is not revealed to the end
+programmer. This is managed by providing a _runner_, which turns the
+transformer into the output wrapper type.
+In the case of nondeterminism, the output wrapper is simply `[]`.
+```haskell
+nondetRun :: Monad m => (forall x . Effs '[] m x -> m x)
+                     -> (forall x . ListT m x -> m [x])
+nondetRun _ = runListT'
+```
+The implementation is somewhat opaque since it uses
+`runListT' :: Monad m => ListT m a -> m [a]`, which is provided externally by the
+implementation of `ListT`.
+
+Finally, a method is needed to forward any other effects through
+the `ListT` transformer:
+```haskell
+nondetFwd
+  :: (Monad m, Functor lsig)
+  => (forall x. lsig (m x) -> m x)
+  -> forall x. lsig (ListT m x) -> ListT m x
+nondetFwd alg x = ListT (alg (fmap runListT x))
+```
+
+
 Exceptions and Scoped Effects
 -----------------------------
 
@@ -1161,6 +1250,9 @@ import Control.Effect.Writer hiding (uncensors)
 import qualified Control.Effect.Writer as W
 import Control.Effect.IO
 import Control.Effect.Maybe
+import Control.Monad.Trans.List ( runListT', ListT(..) )
+import Control.Applicative ( Alternative(empty, (<|>)) )
+import Data.Functor.Composes
 
 import Data.Char (toUpper)
 
