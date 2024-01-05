@@ -32,6 +32,8 @@ return :: a -> Prog' '[] a
 ```
 The type `'[]` is a type-level list, prefixed by a quote mark to distinguish
 it from the type of an ordinary list.
+The type `Prog' sig` is a monad, which means that operations with this
+type can be put together sequentially using `do` notation.
 
 More interesting programs are constructed using operations that are allowed by
 the signature.
@@ -45,6 +47,15 @@ The operation `put x` will put the value `x` into the cell, and the operation
 `get` will retrieve it. These operations are provided in `Effect.Control.State`.
 To help the type checker, we will often annotate the type `s` by writing
 `put @s x` and `get @s`.
+
+These operations are expected to satisfy a number of laws, including:
+```haskell ignore
+do { put s ; put s' }   ==  do { put s' }
+do { put s ; get }      ==  do { put s ; return s }
+do { s <- get; put s }  ==  do { return () }
+```
+These are the `put-put`, `put-get`, and `get-put` laws. Sometimes
+a fourth law, the `get-put` law is added, but it follows from these.
 
 The `do` notation provides a way to put programs together that use such
 operations. Here is a program that will return `True` if the value
@@ -99,6 +110,116 @@ is important: the type `Prog '[Put s, Get s] ()` does not unify with
 flexible as possible by using a constrained signature. Thus, using
 `Prog' '[Put s, Get s] ()` or `Prog' '[Get s, Put s] ()` is equivalent
 since they desugar to the definition that uses the `Members` constraint.
+
+Defining Operations
+-------------------
+
+New operations can be defined by using functorial signatures.
+For example, `stop` and `or` are two operations that can be
+used to define nondeterministic choice.
+
+The `stop` operation is nullary and so the associated syntax
+is a simple constructor with no arguments:
+```haskell
+data Stop' a where
+  Stop :: Stop' a
+  deriving (Functor, Show)
+```
+All syntax must derive `Functor`, and is also convenient for it to have
+a `Show` instance. Notice that by convention the name of the functor follows
+that of its operation, but a quote is added because `Stop'` is an internal
+interface for the effect.
+
+The external facing type is `Stop`, which further annotates `Stop'` to be an
+`Algebraic` effect. The `stop` function is a _smart constructor_ that
+uses `injCall` to inject the `Algebraic Stop` data into the `Prog` type
+that is suitable for assembling syntax.
+```haskell
+type Stop = Algebraic Stop'
+
+stop :: Members '[Stop] sig => Prog sig a
+stop  = injCall (Algebraic Stop)
+```
+Later, more sophisticated families of effects will be introduced, but for
+now it is enough to know that any algebraic operation `op` with
+`n` arguments, where `p1` .. `pn` are programs, the following property holds
+for any continuation `k`:
+```haskell ignore
+op p1  ..  pn >>= k  ==  op (p1 >>= k)  ..  (pn >>= k)
+```
+In other words, continuations are right distributive over the arguments
+of the operation. Later this will turn out to be a property that
+ensures that operations are automatically modular.
+
+In the case of `stop`, it is algebraic since it is nullary so
+```haskell ignore
+stop >>= k  ==  stop
+```
+This says that after `stop` is performed any continuations are ignored.
+
+The other operation needed for nondeterminism is `or`, which is a
+binary algebraic operation:
+```haskell
+data Or' a where
+  Or :: a -> a -> Or' a
+  deriving (Functor, Show)
+
+type Or = Algebraic Or'
+
+or :: Members '[Or] sig => Prog sig a -> Prog sig a -> Prog sig a
+or x y = injCall (Algebraic (Or x y))
+```
+In this case the following law holds of any `or` operation:
+```haskell ignore
+or p1 p2 >>= k  ==  or (p1 >>= k) (p2 >>= k)
+```
+The choice between programs `p1` and `p2` followed by `k` is the
+same as choosing between `p1 >>= k` and `p2 >>= k`.
+
+Get and Put are Algebraic
+-------------------------
+
+Earlier, the `put` and `get` operations that were provided were also algebraic
+operations, but the smart constructors involved did a little more work
+to make the programming interface more appealing.
+
+Here is the type of the functors:
+```haskell ignore
+type Put s = Algebraic (Put' s)
+data Put' s k where
+  Put :: s -> k -> Put' s k
+
+type Get s = Algebraic (Get' s)
+data Get' s k where
+  Get :: (s -> k) -> Get' s k
+```
+Notice that these signatures do not exactly fit `put` and `get` as stated
+before, but rather, the following variations:
+```haskell
+put' :: Member (Put s) sig => s -> Prog sig () -> Prog sig ()
+put' s k = injCall (Algebraic (Put s k))
+
+get' :: Member (Get s) sig => (s -> Prog sig s) -> Prog sig s
+get' k = injCall (Algebraic (Get k))
+```
+These are the algebraic operations, where the corresponding laws are:
+```haskell ignore
+put' s p >>= k  ==  put' s (p >>= k)
+get' p >>= k    ==  get' (p >>= k)
+```
+The parameter `p` corresponds to the program that is to be executed after
+the respective `put s` or `get` operation.
+
+The definitions of `put` and `get` are in terms of these:
+```haskell ignore
+put :: Member (Put s) sig => s -> Prog sig ()
+put s = put' s (return ())
+
+get :: Member (Get s) sig => Prog sig s
+get = get' (return)
+```
+Inserting `return` in the position of the program make `put` and `get`
+examples of so-called _generic_ operations.
 
 
 Deconstructing Programs with Handlers
@@ -222,8 +343,8 @@ ghci> handle except (catch (throw) (catch (throw) (return 22)))
 Just 22
 ```
 
-Semanatic Flexibility
----------------------
+Semantic Flexibility
+--------------------
 
 A program can be given multiple semantics by choosing different handlers to
 take care of the effects. This semantic flexibility allows the program
@@ -260,10 +381,9 @@ Although the original program is unchanged, different handlers offer different
 insights into the same program. Changing the handler back to `except` would
 avoid counting the number of exceptions caught.
 
-An alternative handler might ignore all
-the handling clauses in `catch p q` statements, and simply return the result
-of `p`, another might only allow a certain number of nested errors before
-failing, and so on.
+An alternative handler might ignore all the handling clauses in `catch p q`
+statements, and simply return the result of `p`, another might only allow a
+certain number of nested errors before failing, and so on.
 
 <!--
 ```haskell
@@ -366,6 +486,10 @@ whereas `localState` will only return the state in the case of success.
 Working with IO
 ---------------
 
+Perhaps the most pervasive effects are those that interact with IO. The
+design of this library is to allow a user to write IO operations in their
+programs and for these to be interpreted directly in the IO monad.
+
 The `Teletype` example is a rite of passage for monadic IO [^Gordon1992] where
 the challenge is to show how IO of reading from and writing to the terminal can
 be achieved. A program that interacts with the terminal is `echo`. This is a
@@ -410,10 +534,13 @@ This is essentially saying that `GetLine` is not supported by the state
 handler.
 
 
-Forwarding Effects
-------------------
+Effects and IO
+--------------
 
-Now suppose that the task is to count the number of times `getLine` is called
+Pure effects can interact with IO effects by using a handler for the
+pure parts of the program and running any IO effects in IO.
+
+Suppose that the task is to count the number of times `getLine` is called
 when the `echo` program is executed. One approach is to change the `echo`
 program, and write something like `echoTick`, where an `incr` has been added
 after each `getLine`:
@@ -446,23 +573,23 @@ This demonstrates how unhandled effects that are recognized by I/O can be
 forwarded and dealt with after the execution of the handler.
 
 
-Intercepting Operations
------------------------
+Interpreting and Piping Operations
+----------------------------------
 
 Forwarding effects to I/O works in many situations, but sometimes it is rather
 crude: the power of effects is in their ability to intercept and interpret
 operations.
 
 Suppose the task is now to count all instances of `getLine` in the
-entire program. Adding `incr` after every `getLine` may require a large
+_entire_ program, rather than just instances of `echo`.
+Adding `incr` after every `getLine` may require a large
 refactor, and remembering to add `incr` in all future calls of `getLine` is a
 burden. An alternative would be to define a variation of `getLine` that
 incorporates `incr`, but that is not necessarily better.
 
 Better would be to allow a different interpretation of `getLine` that
-automatically increments a variable: then the `echo` program could
-remain exactly the same. To do this, the `getLine` operation must
-be intercepted.
+automatically increments a variable: then the `echo` program could remain
+exactly the same. One way to do thi is to intercept the `getLine` operation.
 
 Here is how to write a handler that intercepts a `getLine` operation, only to
 emit it again while also incrementing a counter in the state:
@@ -559,7 +686,7 @@ and extracting the resulting string:
 handle (getLinePure ["hello", "world!"]) :: Prog '[GetLine] a -> ([String], a)
 ```
 Executing this will get the first line in the list of strings and return its length,
-and the same program can be executed either processed with IO.
+and the same program can be processed with IO or entirely purely:
 ```haskell ignore
 ghci> handle (getLinePure ["Hello", "world!"]) getLineLength
 (["world!"],5)
@@ -698,7 +825,7 @@ to modify output:
 ```haskell
 retell :: forall w w' fam . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] '[] fam
 retell f = interpret $
-  \(Eff (Algebraic (Tell w k ))) -> 
+  \(Eff (Algebraic (Tell w k ))) ->
     do tell (f w)
        return k
 ```
