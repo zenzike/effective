@@ -12,14 +12,24 @@ import Control.Monad.Trans.List ( runListT', ListT(..) )
 import Control.Monad.Trans.State ( StateT(..), withStateT, get, put  )
 import Control.Handler
 import Control.Family.AlgScp
+import Control.Family
+import Control.Family.Algebraic
 import Control.Applicative ( Alternative(empty, (<|>)) )
 
+
+data Nat a = Nat Int a
 
 data Stop' a where
   Stop :: Stop' a
   deriving (Functor, Show)
 
+-- data Stop f a where
+--   Stop :: Stop f a 
+--   deriving (AlgebraicOps, ...)
+
 type Stop = Algebraic Stop'
+
+data instance FAM Stop' = Algebraic
 
 stop :: Members '[Stop] sig => Prog sig a
 stop  = injCall (Algebraic Stop)
@@ -188,3 +198,7 @@ backtrack = ashandler (\_ -> runListT') backtrackAlg' nondetFwd
 
 -- searchWith :: Handler '[Stop, Or, Once, Search] '[] '[[]]
 -- searchWith = handler runListT' backtrackAlg' backtrackFwd
+
+instance Fam Stop' where
+  type FLower Stop' = Algebraic Stop'
+

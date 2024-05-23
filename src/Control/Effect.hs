@@ -5,17 +5,24 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE IncoherentInstances #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE KindSignatures #-}
 
 module Control.Effect where
+
+import GHC.Exts (Symbol)
+
+import Control.Monad.Trans.Maybe
 
 import Data.Kind ( Type, Constraint )
 import Data.List.Kind
 import Data.HFunctor
 import qualified Control.Monad.Graded as Graded
 import Control.Monad ( join, ap, liftM )
+import Data.Nat
+import Data.Nat.Kind
 
-
+type Signature = Type -> Type
 type Effect = (Type -> Type) -> (Type -> Type)
 
 -- type Eff :: Signature -> Effect
@@ -23,15 +30,78 @@ type Effect = (Type -> Type) -> (Type -> Type)
 --   = Alg (sig x)
 --   | Scp (sig (f x))
 --   deriving Functor
--- 
+--
 -- instance Functor sig => HFunctor (Eff sig) where
 --   hmap h (Alg x) = Alg x
 --   hmap h (Scp x) = Scp (fmap h x)
 
+data AlgFam
+
+type family FamKind a
+type family FamSig a :: FamKind a -> (Type -> Type) -> (Type -> Type)
+type family FamConstraint a (k :: FamKind a) :: Constraint
+
+newtype Algebraic (lsig :: Type -> Type)
+                  (f :: Type -> Type)
+                  x
+                  = Algebraic (lsig x)
+type instance FamKind AlgFam = Type -> Type
+type instance FamSig AlgFam = Algebraic
+type instance FamConstraint AlgFam lsig = (Functor lsig)
+
+newtype VarBinding (n :: Nat) (f :: Type -> Type) (x :: Type)
+  = VarBinding (f (Iterate n Maybe x))
+
+type family FamAOfOp (o :: k) :: Type
+type family FamSigOfOp (o :: k) :: FamKind (FamAOfOp o)
+type family SigOfOp (o :: k) = (r :: Effect) | r -> o
+
+data VarFam
+type instance FamKind VarFam = Nat
+type instance FamSig VarFam  = VarBinding
+type instance FamConstraint VarFam _ = ()
+
+data Lam
+type instance FamAOfOp Lam   = VarFam
+type instance SigOfOp Lam    = VarBinding (S Z)
+type instance FamSigOfOp Lam = S Z
+
+data Stop  x where
+  Stop :: Stop x
+
+type instance FamAOfOp "stop" = AlgFam
+type instance SigOfOp "stop" = Algebraic Stop
+type instance FamSigOfOp "stop" = Stop
+
+class Op (o :: Symbol) where
+  project :: forall f x. SigOfOp o f x -> FamSig (FamAOfOp o) (FamSigOfOp o) f x
+  inject :: forall f x.  FamSig (FamAOfOp o) (FamSigOfOp o) f x -> SigOfOp o f x
+
+instance (SigOfOp o ~ FamSig (FamAOfOp o) (FamSigOfOp o)) => Op o where
+  project = id
+  inject = id
+
+instance Op "stop" where
+  project :: forall f x. Algebraic Stop f x -> Algebraic Stop f x
+  project x = x
+
+  inject :: forall f x. Algebraic Stop f x -> Algebraic Stop f x
+  inject x = x
+
+data FProg (sig :: Symbol) (a :: Type) :: Type where
+  FReturn :: a -> FProg sig a
+  FOp :: SigOfOp sig (FProg sig) (FProg sig a) -> FProg sig a
+
+forwardAlg :: (Op o, FamAOfOp o ~ AlgFam, FamConstraint (FamAOfOp o) (FamSigOfOp o), Monad m)
+           => (SigOfOp o m x -> m x)
+           -> SigOfOp o (MaybeT m) x -> MaybeT m x
+forwardAlg alg op = let (Algebraic x) = project op
+                    in MaybeT (fmap return $ alg ( inject (Algebraic x) ))
+
 -- TODO: rename this?
-type Effs :: [Effect] -> Effect
+type Effs :: [Signature] -> Effect
 data Effs sigs f a where
-  Eff  :: HFunctor sig => sig f a -> Effs (sig ': sigs) f a
+  Eff  :: HFunctor (Functor sig) => Functor sig f a -> Effs (sig ': sigs) f a
   Effs :: Effs sigs f a -> Effs (sig ': sigs) f a
 
 instance Functor f => Functor (Effs sigs f) where
@@ -44,8 +114,6 @@ instance HFunctor (Effs sigs) where
 
 absurdEffs :: Effs '[] f x -> a
 absurdEffs x = case x of {}
-
-data Nat = Z | S Nat
 
 type SNat :: Nat -> Type
 data SNat n = SNat
@@ -171,7 +239,7 @@ joinAlg falg galg oalg =
   heither @sig1 @sig2 (falg oalg) (galg oalg)
 
 type Prog' sig a = forall sig' . Members sig sig' => Prog sig' a
-data Prog (sigs :: [Effect]) a where
+data Prog (sigs :: [Signature]) a where
   Return :: a -> Prog sigs a
   Call   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
 

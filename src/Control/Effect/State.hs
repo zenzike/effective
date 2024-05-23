@@ -21,6 +21,8 @@ data Get' s k where
   Get :: (s -> k) -> Get' s k
   deriving Functor
 
+type instance FamF Put' = Algebraic
+
 type Put s = Algebraic (Put' s)
 type Get s = Algebraic (Get' s)
 type State s = '[Put s, Get s]
@@ -34,7 +36,7 @@ get = injCall (Algebraic (Get return))
 stateAlg
   :: Monad m
   => (forall x. oeff m x -> m x)
-  -> (forall x.  Effs [Put s, Get s] (S.StateT s m) x -> S.StateT s m x)
+  -- -> (forall x.  Effs [Put s, Get s] (S.StateT s m) x -> S.StateT s m x)
 stateAlg _ eff
   | Just (Algebraic (Put s p)) <- prj eff =
       do S.put s

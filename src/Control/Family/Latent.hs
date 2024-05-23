@@ -7,6 +7,7 @@ import Control.Family
 import Control.Effect
 import Data.HFunctor
 
+type Latent' sig = Latent (LaZeta sig) (LaL sig)
 data Latent (z :: Type -> (Type -> Type) -> Type) 
             (l :: Type -> Type) 
             (f :: Type -> Type) 
@@ -26,8 +27,10 @@ type LaFam :: Effect -> Constraint
 
 class (HFunctor sig) => LaFam sig where
   laproject :: sig f a -> Latent (LaZeta sig) (LaL sig) f a
+--   laproject' :: sig f a -> Latent sig f a
 
   lainject :: Latent (LaZeta sig) (LaL sig) f a -> sig f a
+--   laproject' :: sig f a -> Latent (LaZeta sig) (LaL sig) f a
 
 type instance LaZeta (Latent z l) = z
 type instance LaL (Latent z l) = l

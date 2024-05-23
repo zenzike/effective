@@ -5,7 +5,6 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE IncoherentInstances #-}
 
 module Control.Handler where
 
@@ -24,20 +23,18 @@ type Handler
   :: [Effect]                             -- effs  : input effects
   -> [Effect]                             -- oeffs : output effects
   -> [Type -> Type]                       -- f     : carrier type
-  -> Family                               -- fam   : forwarding family
   -> Type
-data Handler effs oeffs fs fam
+data Handler effs oeffs fs
   =  forall t . MonadTrans t
-  => Handler (Handler' effs oeffs t fs fam)
+  => Handler (Handler' effs oeffs t fs)
 
 type Handler'
   :: [Effect]                             -- effs  : input effects
   -> [Effect]                             -- oeffs : output effects
   -> ((Type -> Type) -> (Type -> Type))   -- t     : monad transformer
   -> [Type -> Type]                       -- f     : carrier type
-  -> Family                               -- fam   : forwarding family
   -> Type
-data Handler' effs oeffs t fs fam =
+data Handler' effs oeffs t fs =
   Handler'
   { hrun :: forall m . Monad m
          => (forall x . Effs oeffs m x -> m x)
@@ -48,8 +45,8 @@ data Handler' effs oeffs t fs fam =
          -> (forall x . Effs effs (t m) x -> t m x)
 
 -- TODO: hfwd should also take in an oalg :: (forall x . Effs oeffs m x -> m x).
-  , hfwd :: forall m (sig :: Effect)
-         . (Monad m, fam sig , HFunctor sig)
+  , hfwd :: forall m (sig :: Signature)
+         . (Monad m, Fam sig, HFunctor sig)
          => (forall x . sig m x -> m x)
          -> (forall x . sig (t m) x -> t m x)
   }
@@ -62,7 +59,7 @@ handler
   -> (forall m . Monad m
     => (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs (t m) x -> t m x))
-  -> (forall m sigs . (Monad m, fam sigs, HFunctor sigs)
+  -> (forall m sigs . (Monad m, All Fam sigs, HFunctor sigs)
     => (forall x . sigs m x -> m x)
     -> (forall x . sigs (t m) x -> t m x))
   -> Handler effs oeffs fs fam
@@ -77,6 +74,10 @@ handler mrun malg mfwd = Handler (Handler' mrun' malg mfwd) where
 -- algebraic-or-scoped operations. Only the forwarder for scoped operations
 -- needs to be passed in, since algebraic operations have a canonical forwarding.
 type ASHandler effs oeffs fs = Handler effs oeffs fs ASFam
+
+
+-- Handler effs oeffs fs ["alg", "scp"]
+-- Handler effs oeffs fs [AlgFam, ScpFam]
 
 ashandler
   :: forall t fs effs oeffs. (MonadTrans t, Recompose fs)
@@ -319,9 +320,9 @@ forward = Handler $ Handler'
   (\alg  -> IdentityT . alg . hmap runIdentityT)
 
 
-handle :: forall ieffs fs fam a .
-  ( Recompose fs , All fam ieffs )
-  => Handler ieffs '[] fs fam
+handle :: forall ieffs fs a .
+  ( Recompose fs , All Fam ieffs )
+  => Handler ieffs '[] fs
   -> Prog ieffs a -> (Composes fs a)
 handle (Handler h) p = handle' h p
 

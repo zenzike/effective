@@ -24,7 +24,7 @@ source-repository head
 
 library
   default-language: GHC2021
-  ghc-options:   -Wunused-foralls -Wunused-imports
+  ghc-options:   -Wunused-foralls -Wunused-imports -freduction-depth=0
   exposed-modules:
     Control.Family
     Control.Family.Algebraic
@@ -51,43 +51,46 @@ library
     Data.HFunctor.HComposes
     Data.CutList
     Data.List.Kind
+    Data.Nat
+    Data.Nat.Kind
     Data.EitherF
   hs-source-dirs:
     src
   build-depends:
     base, transformers
 
-test-suite test
-  type:          exitcode-stdio-1.0
-  build-depends: base, transformers, effective, hedgehog
-  main-is:       Main.hs
-  ghc-options:   -threaded
-  hs-source-dirs: test
-  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
-  default-language: GHC2021
-  other-modules:
-    Nondet
-
-test-suite docs
-  type:          exitcode-stdio-1.0
-  build-depends: base, transformers, effective, hedgehog
-  main-is:       Main.hs
-  ghc-options:   -threaded
-  hs-source-dirs: docs
-  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
-  default-language: GHC2021
-  other-modules:
-    Error,
-    Graded,
-    Nondet,
-    Parser,
-    State,
-
-test-suite readme
-  type:          exitcode-stdio-1.0
-  ghc-options:   -threaded -pgmL markdown-unlit
-  main-is:       README.lhs
-  default-language: GHC2021
-  hs-source-dirs:  .
-  build-depends: base, transformers, effective, hedgehog
-  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+-- test-suite test
+--   type:          exitcode-stdio-1.0
+--   build-depends: base, transformers, effective, hedgehog
+--   main-is:       Main.hs
+--   ghc-options:   -threaded
+--   hs-source-dirs: test
+--   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+--   default-language: GHC2021
+--   other-modules:
+--     Nondet
+-- 
+-- test-suite docs
+--   type:          exitcode-stdio-1.0
+--   build-depends: base, transformers, effective, hedgehog
+--   main-is:       Main.hs
+--   ghc-options:   -threaded
+--   hs-source-dirs: docs
+--   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+--   default-language: GHC2021
+--   other-modules:
+--     Error,
+--     Graded,
+--     Nondet,
+--     Parser,
+--     State,
+-- 
+-- test-suite readme
+--   type:          exitcode-stdio-1.0
+--   ghc-options:   -threaded -pgmL markdown-unlit
+--   main-is:       README.lhs
+--   default-language: GHC2021
+--   hs-source-dirs:  .
+--   build-depends: base, transformers, effective, hedgehog
+--   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+-- 

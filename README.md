@@ -11,12 +11,49 @@ Scope](https://dl.acm.org/doi/10.1145/2633357.2633358) by Wu, Schrijvers, and
 Hinze.
 
 This README is a literate Haskell file and therefore can be executed. You can
-interact with its contents with `cabal repl readme` and follow the examples. The
-language extensions and imports required are at the bottom of this file.
+interact with its contents with `cabal repl readme` and follow the examples,
+and test the code by evaluating `main` in the repl or by
+executing `cabal test`.
 
+The language extensions and imports required are at the bottom of this file.
 
 Constructing Programs with Operations
 -------------------------------------
+
+Imperative programs can be composed out of operations. Here is an imperative
+implementation of `gcd`:
+```haskell
+gcd :: Int -> Int -> Int
+gcd x y = handle (state_ (x, y)) loop
+  where
+    loop :: Prog' '[Put (Int, Int), Get (Int, Int)] Int
+    loop = do
+      (a, b) <- get
+      if b == 0
+        then return a
+        else do
+          put (b, a `mod` b)
+          loop
+
+
+-- Example program to calculate divmod
+divMod :: Int -> Int -> Prog' '[Get (Int, Int), Put (Int, Int), Throw] (Int, Int)
+divMod x y =
+  do put (x, y)
+     if y == 0
+       then throw
+       else forever (do (r, q) <- get
+                        if r < q
+                        then do put @(Int, Int) (q, r)
+                                throw
+                        else do put (q + 1, r - q))
+```
+The `gcd` program can be executed with a starting state that
+is the two values of interest:
+```haskell ignore
+ghci> handle (state ((144, 2584) :: (Int, Int))) gcd
+((8,0),8)
+```
 
 A key idea in this framework is to use the type of a program to keep track
 of the different operations that are used. Programs are constructed
@@ -118,6 +155,9 @@ New operations can be defined by using functorial signatures.
 For example, `stop` and `or` are two operations that can be
 used to define nondeterministic choice.
 
+TODO: These are expected to satisfy some laws
+(lattice, or just monoid)
+
 The `stop` operation is nullary and so the associated syntax
 is a simple constructor with no arguments:
 ```haskell
@@ -176,6 +216,29 @@ or p1 p2 >>= k  ==  or (p1 >>= k) (p2 >>= k)
 The choice between programs `p1` and `p2` followed by `k` is the
 same as choosing between `p1 >>= k` and `p2 >>= k`.
 
+Each effect belongs to a family
+```haskell
+-- instance Family' Stop' where
+--   type FamilyType Stop' = "alg"
+-- 
+-- instance Family' Or' where
+--   type FamilyType Or' = "alg"
+-- 
+-- instance Foo ["alg"] where
+--   FooFam = AlgFam
+-- 
+-- instance Foo ["alg", "scp"] where 
+--    ...ScpAlg
+
+
+
+
+-- type family FamClass :: [Constraint] -> Constraint
+-- FamClass '[AlgFam] = AlgFam
+-- FamClass '[AlgFam, ScpFam] = ASFam
+
+```
+
 Get and Put are Algebraic
 -------------------------
 
@@ -185,6 +248,9 @@ to make the programming interface more appealing.
 
 Here is the type of the functors:
 ```haskell ignore
+
+-- type family Family sig = fam | sig -> fam
+
 type Put s = Algebraic (Put' s)
 data Put' s k where
   Put :: s -> k -> Put' s k
@@ -253,6 +319,8 @@ Since the program has type `Prog effs ()`, with a pure value of `()`,
 the result of applying the handler is `((,) Int)` applied to `()`,
 thus giving back `(Int, ())`.
 
+
+
 More sophisticated programs can be constructed by combining simpler ones, of
 course:
 ```haskell ignore
@@ -261,6 +329,7 @@ ghci> handle (state 41) (do incr; isZero :: Prog' '[Put Int, Get Int] Bool) :: (
 ```
 Note that a type signature for the program is often required: Haskell cannot
 always infer the types that are intended.
+
 
 The type of the `state` handler promises to handle both `Put s` and `Get s`
 operations, and so it can work with programs that use both, or
@@ -276,8 +345,9 @@ ghci> handle (state "Hello!") getStringLength
 ("Hello!",6)
 ```
 Notice that the `state` handler returns the final state as well as the final
-return value of the program. A variation of the `state` handler is `state_`,
-which does not return the final state:
+return value of the program. In this case, The final state itself is not all
+that interesting. A variation of the `state` handler is `state_`, which does not
+return the final state:
 ```haskell ignore
 state_ :: s -> ASHandler [Put s, Get s] '[] '[]
 ```
@@ -348,10 +418,13 @@ Here is how `stop` and `or` can be interpreted in terms of the `ListT`
 transformer:
 ```haskell
 nondetAlg :: Monad m => (forall x. Effs '[] m x -> m x)
-                     -> (forall x. Effs [Stop , Or] (ListT m) x -> ListT m x)
+                     -> (forall x. Effs [Stop , Or] (ListT m) x -> (ListT m) x)
 nondetAlg _ eff
   | Just (Algebraic Stop)     <- prj eff = empty
   | Just (Algebraic (Or x y)) <- prj eff = return x <|> return y
+
+nondetAlg _       (Eff (Algebraic Stop))      = empty
+nondetAlg _ (Effs (Eff (Algebraic (Or x y)))) = return x <|> return y
 ```
 The `ListT` transformer provides enough structure to interpret nondeterminism
 correctly. The first parameter is not used since it is impossible to
@@ -936,7 +1009,7 @@ A scoped operation takes a program as one of its parameters, and interacts with
 operations in that program. For example, the `Censor` effect is
 introduced by the accompanying `censor` operation, and is handled
 using the `censors` handler:
-```
+```haskell ignore
 censor  :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig
 censors :: Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[]
 ```
@@ -957,6 +1030,7 @@ hoppy = do tell ["Hello Alfie!"]
                 censor @[String] shout $
                   do tell ["get bigger!"]
            tell ["Goodbye!"]
+           return ()
 
 backwards, shout :: [String] -> [String]
 backwards = map reverse
@@ -1232,6 +1306,7 @@ The following pragma is only needed for the testing framework.
 ```haskell top
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE TypeFamilies #-}
 ```
 -->
 
@@ -1241,9 +1316,10 @@ Imports
 This file has a number of imports:
 
 ```haskell top
-import Control.Monad (unless)
+import Control.Monad (unless, forever)
 import Control.Effect
 import Control.Handler
+import Control.Family
 import Control.Family.AlgScp
 import Control.Effect.State
 import Control.Effect.Writer hiding (uncensors)
@@ -1254,9 +1330,10 @@ import Control.Monad.Trans.List ( runListT', ListT(..) )
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Data.Functor.Composes
 
+
 import Data.Char (toUpper)
 
-import Prelude hiding (putStrLn, getLine)
+import Prelude hiding (putStrLn, getLine, gcd)
 import Data.Char (toUpper)
 
 import Control.Monad.Trans.Maybe
