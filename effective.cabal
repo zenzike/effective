@@ -16,7 +16,7 @@ extra-source-files:
 custom-setup
   setup-depends:
     base,
-    Cabal
+    Cabal>=3.8.10
 
 source-repository head
   type: git
