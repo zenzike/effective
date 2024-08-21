@@ -37,3 +37,11 @@ newtype Get_ s k where
 {-# INLINE get #-}
 get :: Member (Get s) sig => Prog sig s
 get = call (Alg (Get id) return)
+
+{-# INLINE put' #-}
+put' :: Syntax t (Put s) effs => s -> t Identity ()
+put' s = mcall (Alg (Put s ()) id)
+
+{-# INLINE get' #-}
+get' :: forall s effs t . Syntax t (Get s) effs => t Identity s
+get' = mcall (Alg (Get id) id)

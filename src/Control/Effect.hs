@@ -28,6 +28,11 @@ module Control.Effect
   -- * Algebras
   , Algebra
   , (#)
+
+  , MAlgebra (..)
+  , Syntax
+  , mcall
+
   , Forward (..)
   , Forwards (..)
   , absurdEffs
@@ -73,3 +78,4 @@ import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Handler
 import Control.Effect.Internal.Forward
+import Control.Effect.Internal.MAlgebra

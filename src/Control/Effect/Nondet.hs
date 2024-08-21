@@ -23,6 +23,10 @@ stop  = call (Alg Empty return)
 or :: Members '[Choose] sig => Prog sig a -> Prog sig a -> Prog sig a
 or x y = call (Scp (Choose x y) return)
 
+{-# INLINE stop #-}
+stop' :: Syntax t Empty effs => t Identity s
+stop' = mcall (Alg Empty id)
+
 select :: Members [Choose, Empty] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
 
@@ -92,3 +96,10 @@ backtrackAlg' oalg = alternativeAlg oalg # backtrackOnceAlg oalg
 
 backtrack :: Handler [Empty, Choose, Once] '[] (ListT) []
 backtrack = handler runListT' backtrackAlg'
+
+instance MAlgebra (ListT) where
+  type IEffs (ListT) = '[Empty, Choose]
+  type OEffs (ListT) = '[]
+
+  {-# INLINE malg #-}
+  malg = halg nondet

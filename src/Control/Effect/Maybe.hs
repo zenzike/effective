@@ -50,6 +50,11 @@ data Throw_ k where
 throw :: Member Throw sig => Prog sig a
 throw = call (Alg Throw return)
 
+{-# INLINE throw' #-}
+throw' :: Syntax t Throw effs => t Identity a
+throw' = mcall (Alg Throw id)
+
+
 -- | Internal signature for catching exceptions of type @e@.
 type Catch = Scp Catch_
 -- | Underlying signature for catching exceptions of type @e@.
@@ -104,3 +109,11 @@ retryAlg _ eff
                                Nothing -> return Nothing
                                Just y  -> loop p q
                Just x  -> return (Just x)
+
+
+instance MAlgebra MaybeT where
+  type IEffs MaybeT = '[Throw, Catch]
+  type OEffs MaybeT = '[]
+
+  {-# INLINE malg #-}
+  malg = exceptAlg

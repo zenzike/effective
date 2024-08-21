@@ -55,31 +55,61 @@ library
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Handler
     Control.Effect.Internal.Prog
+    Control.Effect.Internal.MAlgebra
   hs-source-dirs:
     src
   build-depends:
     base, transformers, ghc, array
 
 test-suite docs
-  type:          exitcode-stdio-1.0
-  build-depends: base, transformers, effective, hedgehog
-  main-is:       Main.hs
-  ghc-options:   -threaded -Wunused-foralls -Wunused-imports -fprint-potential-instances
-  hs-source-dirs: docs
+  default-language:   GHC2021
+  type:               exitcode-stdio-1.0
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
-  default-language: GHC2021
+  main-is:            Main.hs
+  hs-source-dirs:     docs
   other-modules:
     Error,
 --  Graded,
     Nondet,
 --  Parser,
     State,
+  ghc-options:
+    -threaded
+    -Wunused-foralls
+    -Wunused-imports
+    -fprint-potential-instances
+  build-depends:
+    , base
+    , effective
+    , transformers
+    , hedgehog
+
 
 test-suite readme
-  type:          exitcode-stdio-1.0
-  ghc-options:   -threaded -pgmL markdown-unlit
-  main-is:       README.lhs
-  default-language: GHC2021
-  hs-source-dirs:  .
-  build-depends: base, transformers, effective, hedgehog
+  default-language:   GHC2021
+  type:               exitcode-stdio-1.0
+  main-is:            README.lhs
+  hs-source-dirs:     .
+  ghc-options:
+    -threaded
+    -pgmL markdown-unlit
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+  build-depends:
+    , base
+    , effective
+    , transformers
+    , hedgehog
+
+
+test-suite test
+  default-language:   GHC2021
+  type:               exitcode-stdio-1.0
+  main-is:            Main.hs
+  hs-source-dirs:     test
+  other-modules:
+  build-depends:
+    , base
+    , effective
+    , transformers
+    , hedgehog
+

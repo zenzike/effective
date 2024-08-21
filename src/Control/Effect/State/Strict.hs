@@ -7,6 +7,7 @@ Stability   : experimental
 -}
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Control.Effect.State.Strict
   ( -- * Syntax
@@ -43,6 +44,9 @@ state s = handler (fmap swap . flip Strict.runStateT s) stateAlg
 state_ :: s -> Handler [Put s, Get s] '[] (Strict.StateT s) Identity
 state_ s = handler (fmap Identity . flip Strict.evalStateT s) stateAlg
 
+-- runState_ :: Monad m => s -> Algebra '[] m -> (forall x.  Strict.StateT s m x -> m (Identity x))
+-- runState_ s = fmap Identity . flip Strict.evalStateT s
+
 -- | An algebra that interprets t'Get' and t'Put' using the strict t'Strict.StateT'.
 stateAlg
   :: Monad m
@@ -55,3 +59,10 @@ stateAlg _ op
   | Just (Alg (Get p) k) <- prj op =
       do s <- Strict.get
          return (k (p s))
+
+instance MAlgebra (Strict.StateT s) where
+  type IEffs (Strict.StateT s) = '[Put s, Get s]
+  type OEffs (Strict.StateT s) = '[]
+
+  {-# INLINE malg #-}
+  malg = stateAlg

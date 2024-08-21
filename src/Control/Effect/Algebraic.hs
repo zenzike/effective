@@ -38,10 +38,13 @@ data Alg (sig :: Type -> Type)
          = forall x . Alg !(sig x) !(x -> k)
 
 instance Functor (Alg sig f) where
+  {-# INLINE fmap #-}
   fmap f (Alg op k) = Alg op (f . k)
 
 instance HFunctor (Alg sig) where
+  {-# INLINE hmap #-}
   hmap f (Alg op k) = Alg op k
 
 instance (MonadTrans t) => Forward (Alg f) t where
+  {-# INLINE fwd #-}
   fwd alg (Alg op k) = lift (alg (Alg op k))
