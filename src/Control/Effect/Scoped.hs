@@ -41,39 +41,39 @@ import Control.Monad.Trans.Reader
 
 -- | The family of scoped operations. Forwarding scoped operations through a
 -- transformer must be given explicitly using the `Forward` class.
-data Scp (sig :: Type -> Type)
+newtype Scp (sig :: Type -> Type)
          (f :: Type -> Type)
          k
-         = forall x . Scp !(sig (f x)) !(x -> k)
+         = Scp (sig (f k))
 
-instance Functor (Scp sig f) where
+instance (Functor sig, Functor f) => Functor (Scp sig f) where
   {-# INLINE fmap #-}
-  fmap f (Scp x k) = Scp x (f . k)
+  fmap f (Scp op) = Scp (fmap (fmap f) op)
 
 instance Functor sig => HFunctor (Scp sig) where
   {-# INLINE hmap #-}
-  hmap h (Scp x k) = Scp (fmap h x) k
+  hmap h (Scp op) = Scp (fmap h op)
 
 instance Functor sig => Forward (Scp sig) IdentityT where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = IdentityT (alg (Scp (fmap runIdentityT op) k))
+  fwd alg (Scp op) = IdentityT (alg (Scp (fmap runIdentityT op)))
 
 instance Functor sig => Forward (Scp sig) (ExceptT e) where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = ExceptT (alg (Scp (fmap runExceptT op) (fmap k)))
+  fwd alg (Scp op) = ExceptT (alg (Scp (fmap runExceptT op)))
 
 instance Functor sig => Forward (Scp sig) MaybeT where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = MaybeT (alg (Scp (fmap runMaybeT op) (fmap k)))
+  fwd alg (Scp op) = MaybeT (alg (Scp (fmap runMaybeT op)))
 
 instance Functor sig => Forward (Scp sig) (StateT s) where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = StateT (\s -> (alg (Scp (fmap (flip runStateT s) $ op) (\(z, s) -> (k z, s)))))
+  fwd alg (Scp op) = StateT (\s -> (alg (Scp (fmap (flip runStateT s) op))))
 
 instance Functor sig => Forward (Scp sig) (WriterT s) where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = WriterT (alg (Scp (fmap runWriterT op) (\(z, s) -> (k z, s))))
+  fwd alg (Scp op) = WriterT (alg (Scp (fmap runWriterT op)))
 
 instance Functor sig => Forward (Scp sig) (ReaderT w) where
   {-# INLINE fwd #-}
-  fwd alg (Scp op k) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op) k))
+  fwd alg (Scp op) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op)))

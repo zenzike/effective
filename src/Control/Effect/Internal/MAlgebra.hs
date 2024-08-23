@@ -5,6 +5,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MagicHash #-}
 
 module Control.Effect.Internal.MAlgebra where
 
@@ -21,12 +22,13 @@ import Data.Functor.Compose
 import Control.Monad.Trans.Class
 import Control.Applicative
 
+import GHC.Exts
+import GHC.Base
 import GHC.TypeLits
 import Unsafe.Coerce
 import Data.Coerce
 import Data.List.Kind
 import Data.Kind (Type)
-
 
 
 class MAlgebra t where
@@ -167,6 +169,7 @@ reflect :: MAlgebra (ProgT eff) => Algebra '[] Identity
                                 -> (forall x . ProgT eff Identity x -> Identity (ProgT eff Identity x))
 reflect _ = Identity
 
+{-# INLINE (!>) #-}
 (!>) ::  forall effs1 effs2 oeffs1 oeffs2 t1 t2 f1 f2 effs oeffs f t m
      . ( oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2
        , Monad m

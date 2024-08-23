@@ -48,9 +48,9 @@ stateAlg
   => (forall x. oeff m x -> m x)
   -> (forall x.  Effs [Put s, Get s] (Lazy.StateT s m) x -> Lazy.StateT s m x)
 stateAlg _ op
-  | Just (Alg (Put s p) k) <- prj op =
+  | Just (Alg (Put s p)) <- prj op =
       do Lazy.put s
-         return (k p)
-  | Just (Alg (Get p) k) <- prj op =
+         return p
+  | Just (Alg (Get p)) <- prj op =
       do s <- Lazy.get
-         return (k (p s))
+         return (p s)

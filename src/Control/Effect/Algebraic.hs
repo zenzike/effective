@@ -32,19 +32,19 @@ import Control.Monad.Trans.Class
 --             k
 --             = Alg (sig k)
 --
-data Alg (sig :: Type -> Type)
+newtype Alg (sig :: Type -> Type)
          (f :: Type -> Type)
          k
-         = forall x . Alg !(sig x) !(x -> k)
+         = Alg (sig k)
 
-instance Functor (Alg sig f) where
+instance Functor sig => Functor (Alg sig f) where
   {-# INLINE fmap #-}
-  fmap f (Alg op k) = Alg op (f . k)
+  fmap f (Alg op) = Alg (fmap f op)
 
-instance HFunctor (Alg sig) where
+instance Functor sig => HFunctor (Alg sig) where
   {-# INLINE hmap #-}
-  hmap f (Alg op k) = Alg op k
+  hmap f (Alg op) = Alg op
 
 instance (MonadTrans t) => Forward (Alg f) t where
   {-# INLINE fwd #-}
-  fwd alg (Alg op k) = lift (alg (Alg op k))
+  fwd alg (Alg op) = lift (alg (Alg op))

@@ -12,6 +12,7 @@ module Control.Effect.State.Type where
 
 import Control.Effect
 import Control.Effect.Algebraic
+import GHC.TypeLits
 
 -- | Signature for putting a value into the state.
 type Put s = Alg (Put_ s)
@@ -23,7 +24,7 @@ data Put_ s k where
 -- | Syntax for putting a value into the state.
 {-# INLINE put #-}
 put :: Member (Put s) sig => s -> Prog sig ()
-put s = call (Alg (Put s ()) return)
+put s = call (Alg (Put s (return ())))
 
 -- | Signature for getting a value from the state.
 type Get s = Alg (Get_ s)
@@ -36,12 +37,15 @@ newtype Get_ s k where
 -- | Syntax for getting a value from the state.
 {-# INLINE get #-}
 get :: Member (Get s) sig => Prog sig s
-get = call (Alg (Get id) return)
+get = call (Alg (Get return))
 
 {-# INLINE put' #-}
 put' :: Syntax t (Put s) effs => s -> t Identity ()
-put' s = mcall (Alg (Put s ()) id)
+put' s = mcall (Alg (Put s ()))
 
 {-# INLINE get' #-}
 get' :: forall s effs t . Syntax t (Get s) effs => t Identity s
-get' = mcall (Alg (Get id) id)
+get' = mcall (Alg (Get id))
+
+-- putT :: (Member (Get s) effs, EffectTrans s effs t) => s -> t Identity ()
+-- putT s = algT (Alg (Get id))

@@ -24,6 +24,7 @@ class KnownNat (Length xeffs) => Injects xeffs xyeffs where
   injs :: forall f a . Effs xeffs f a -> Effs xyeffs f a
 
 instance Injects '[] xyseffs where
+  {-# INLINABLE injs #-}
   injs = absurdEffs
 
 instance ( KnownNat (Length (xeff ': xeffs))
@@ -31,6 +32,7 @@ instance ( KnownNat (Length (xeff ': xeffs))
          , KnownNat (EffIndex xeff xyeffs)
          )
   => Injects (xeff ': xeffs) xyeffs where
+  {-# INLINABLE injs #-}
   injs :: forall f a . Effs (xeff ': xeffs) f a -> Effs xyeffs f a
   injs (Effn n op)
     | n == n'   = Effn i' op

@@ -48,7 +48,7 @@ data Tell_ w k where
 
 -- | @`tell` w@ produces the output @w@.
 tell :: (Member (Tell w) sig, Monoid w) => w -> Prog sig ()
-tell w = call (Alg (Tell w ()) return)
+tell w = call (Alg (Tell w (return ())))
 
 -- | The algebra for the `writer` handler.
 writerAlg
@@ -56,9 +56,9 @@ writerAlg
   => (forall x. oeff m x -> m x)
   -> (forall x.  Effs '[Tell w] (W.WriterT w m) x -> W.WriterT w m x)
 writerAlg _ eff
-  | Just (Alg (Tell w x) k) <- prj eff =
+  | Just (Alg (Tell w x)) <- prj eff =
       do W.tell w
-         return (k x)
+         return x
 
 -- | The `writer` handler consumes `tell` operations, and
 -- returns the final state @w@.
@@ -80,7 +80,7 @@ data Censor_ w k where
 -- | The @`censor` f p@ operation executes program @p@ with output censored
 -- by @f@.
 censor :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig a
-censor cipher p = call (Scp (Censor cipher p) return)
+censor cipher p = call (Scp (Censor cipher (fmap return p)))
 
 -- | The @`censors` f@ handler applies an initial function @f@ to the
 -- any output produced by `tell`. If a @`censor` f' p@ operation is encountered,
@@ -95,12 +95,12 @@ censors cipher = handler run alg where
       => (forall x. Effs '[Tell w] m x -> m x)
       -> (forall x. Effs '[Tell w, Censor w] (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
   alg oalg eff
-    | Just (Alg (Tell w x) k) <- prj eff =
+    | Just (Alg (Tell w k)) <- prj eff =
         do cipher <- ask
-           lift (oalg (Eff (Alg (Tell (cipher w) x) k)))
-    | Just (Scp (Censor (cipher' :: w -> w) x) k) <- prj eff =
+           lift (oalg (Eff (Alg (Tell (cipher w) k))))
+    | Just (Scp (Censor (cipher' :: w -> w) k)) <- prj eff =
         do cipher <- ask
-           lift (runReaderT (fmap k x) (cipher . cipher'))
+           lift (runReaderT k (cipher . cipher'))
 
 -- | The `uncensors` handler removes any occurrences of `censor`.
 uncensors :: forall w . Monoid w => Handler '[Censor w] '[] IdentityT Identity
@@ -111,4 +111,4 @@ uncensors = handler run alg where
   alg :: Monad m
       => (forall x. Effs '[] m x -> m x)
       -> (forall x. Effs '[Censor w] (IdentityT m) x -> IdentityT m x)
-  alg oalg (Eff (Scp (Censor (_ :: w -> w) k) k')) = fmap k' k
+  alg oalg (Eff (Scp (Censor (_ :: w -> w) k))) = k

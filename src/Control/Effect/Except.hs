@@ -47,7 +47,7 @@ newtype Throw_ e k where
 --
 -- > throw e >>= k = throw e
 throw :: forall e sig a . (Member (Throw e) sig) => e -> Prog sig a
-throw e = call @(Throw e) (Alg (Throw e) return)
+throw e = call @(Throw e) (Alg (Throw e))
 
 -- | Internal signature for catching exceptions of type @e@.
 type Catch e = Scp (Catch_ e)
@@ -58,7 +58,7 @@ data Catch_ e k where
 
 -- | Syntax for catching exceptions of type @e@. This operation is scoped.
 catch :: forall e sig a . Member (Catch e) sig => Prog sig a -> (e -> Prog sig a) -> Prog sig a
-catch p q = call @(Catch e) (Scp (Catch p q) return)
+catch p q = call @(Catch e) (Scp (Catch (fmap return p) (fmap return . q)))
 
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
 -- If it fails, then @q@ is executed.
@@ -70,13 +70,13 @@ exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Throw e, Catch e] (ExceptT e m) x -> ExceptT e m x)
 exceptAlg _ eff
-  | Just (Alg (Throw e) k) <- prj eff
+  | Just (Alg (Throw e)) <- prj eff
       = ExceptT (return (Left e))
-  | Just (Scp (Catch p q) k) <- prj eff
+  | Just (Scp (Catch p q)) <- prj eff
       = ExceptT $
-                  do mx <- runExceptT (fmap k p)
+                  do mx <- runExceptT p
                      case mx of
-                       Left e  -> runExceptT (fmap k (q e))
+                       Left e  -> runExceptT (q e)
                        Right x -> return (Right x)
 
 -- | The 'retry' handler will interpet @catch p q@  by first trying @p@.
@@ -91,9 +91,9 @@ retryAlg :: Monad m
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Throw e, Catch e] (ExceptT e m) x -> ExceptT e m x)
 retryAlg _ eff
-  | Just (Alg (Throw e) k) <- prj eff
+  | Just (Alg (Throw e)) <- prj eff
       = ExceptT (return (Left e))
-  | Just (Scp (Catch p q) k) <- prj eff = ExceptT $ loop (fmap k p) q
+  | Just (Scp (Catch p q)) <- prj eff = ExceptT $ loop p q
       where
         loop p q =
           do mx <- runExceptT p

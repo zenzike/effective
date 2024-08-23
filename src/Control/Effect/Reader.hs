@@ -44,7 +44,7 @@ data Ask_ r k where
 
 -- | Fetch the value of the environment.
 ask :: Member (Ask r) sig => Prog sig r
-ask = call (Alg (Ask id) return)
+ask = call (Alg (Ask return))
 
 -- | Retrieve a function of the current environment.
 asks :: Member (Ask r) sig
@@ -65,7 +65,7 @@ local :: Member (Local r) sig
   => (r -> r)    -- ^ Function to transform the environment
   -> Prog sig a  -- ^ Computation to run in the transformed environment
   -> Prog sig a
-local f p = call (Scp (Local f p) return)
+local f p = call (Scp (Local f (fmap return p)))
 
 -- | The `reader` handler supplies a static environment @r@ to the program
 -- that can be accessed with `ask`, and locally transformed with `local`.
@@ -78,8 +78,8 @@ readerAlg
   => (forall x. oeff m x -> m x)
   -> (forall x.  Effs [Ask r, Local r] (R.ReaderT r m) x -> R.ReaderT r m x)
 readerAlg oalg eff
-  | Just (Alg (Ask p) k) <- prj eff =
+  | Just (Alg (Ask p)) <- prj eff =
       do r <- R.ask
-         return (k (p r))
-  | Just (Scp (Local (f :: r -> r) p) k) <- prj eff =
-      R.local f (fmap k p)
+         return (p r)
+  | Just (Scp (Local (f :: r -> r) p)) <- prj eff =
+      R.local f p

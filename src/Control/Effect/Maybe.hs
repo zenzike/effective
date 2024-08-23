@@ -48,11 +48,11 @@ data Throw_ k where
 --
 -- > throw >>= k = throw
 throw :: Member Throw sig => Prog sig a
-throw = call (Alg Throw return)
+throw = call (Alg Throw)
 
 {-# INLINE throw' #-}
 throw' :: Syntax t Throw effs => t Identity a
-throw' = mcall (Alg Throw id)
+throw' = mcall (Alg Throw)
 
 
 -- | Internal signature for catching exceptions of type @e@.
@@ -64,7 +64,7 @@ data Catch_ k where
 
 -- | Syntax for catching exceptions. This operation is scoped.
 catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
-catch p q = call (Scp (Catch p q) return)
+catch p q = call (Scp (Catch (fmap return p) (fmap return q)))
 
 
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
@@ -77,12 +77,12 @@ exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
 exceptAlg _ eff
-  | Just (Alg Throw k) <- prj eff
+  | Just (Alg Throw) <- prj eff
       = MaybeT (return Nothing)
-  | Just (Scp (Catch p q) k) <- prj eff
-      = MaybeT $ do mx <- runMaybeT (fmap k p)
+  | Just (Scp (Catch p q)) <- prj eff
+      = MaybeT $ do mx <- runMaybeT p
                     case mx of
-                      Nothing -> runMaybeT (fmap k q)
+                      Nothing -> runMaybeT q
                       Just x  -> return (Just x)
 
 -- | The 'retry' handler will interpet @catch p q@  by first trying @p@.
@@ -97,9 +97,9 @@ retryAlg :: Monad m
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
 retryAlg _ eff
-  | Just (Alg Throw k) <- prj eff
+  | Just (Alg Throw) <- prj eff
       = MaybeT (return Nothing)
-  | Just (Scp (Catch p q) k) <- prj eff = MaybeT $ loop (fmap k p) (fmap k q)
+  | Just (Scp (Catch p q)) <- prj eff = MaybeT $ loop p q
       where
         loop p q =
           do mx <- runMaybeT p

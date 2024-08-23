@@ -42,7 +42,7 @@ data CutFail_ a where
   deriving Functor
 
 cutFail :: Member CutFail sig => Prog sig a
-cutFail = call (Alg CutFail return)
+cutFail = call (Alg CutFail)
 
 type CutCall = Scp CutCall_
 data CutCall_ a where
@@ -53,11 +53,11 @@ cut :: (Members [Choose, CutFail] sig) => Prog sig ()
 cut = or skip cutFail
 
 cutCall :: Member CutCall sig => Prog sig a -> Prog sig a
-cutCall p = call (Scp (CutCall p) return)
+cutCall p = call (Scp (CutCall (fmap return p)))
 
 cutCallM :: (Monad m, Member CutCall sig)
   => (forall a . Effs sig m a -> m a) -> m a -> m a
-cutCallM alg p = (alg . inj) (Scp (CutCall p) id)
+cutCallM alg p = (alg . inj) (Scp (CutCall p))
 
 skip :: Monad m => m ()
 skip = return ()
@@ -67,10 +67,10 @@ cutListAlg
   :: Monad m => (forall x. oeff m x -> m x)
   -> forall x. Effs [Empty, Choose, CutFail, CutCall] (CutListT m) x -> CutListT m x
 cutListAlg oalg op
-  | Just (Alg Empty k)           <- prj op = empty
-  | Just (Scp (Choose xs ys) k)  <- prj op = fmap k (xs <|> ys)
-  | Just (Alg CutFail k)         <- prj op = CutListT (\cons nil zero -> zero)
-  | Just (Scp (CutCall xs) k)    <- prj op = CutListT (\cons nil zero -> runCutListT xs (cons . k) nil nil)
+  | Just (Alg Empty)           <- prj op = empty
+  | Just (Scp (Choose xs ys))  <- prj op = xs <|> ys
+  | Just (Alg CutFail)         <- prj op = CutListT (\cons nil zero -> zero)
+  | Just (Scp (CutCall xs))    <- prj op = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
 
 cutList :: Handler [Empty, Choose, CutFail, CutCall] '[] CutListT []
 cutList = handler fromCutListT cutListAlg
@@ -88,13 +88,10 @@ onceCutAlg :: forall oeff m . (Monad m , Members [CutCall, CutFail, Choose] oeff
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs '[Once] m x -> m x)
 onceCutAlg oalg op
-  | Just (Scp (Once p) k) <- prj op
-  = cutCallM oalg (do x <- fmap k p
+  | Just (Scp (Once p)) <- prj op
+  = cutCallM oalg (do x <- p
                       eval oalg (do cut
                                     return x))
 
 onceNondet :: Handler '[Once, Empty, Choose, CutFail, CutCall] '[] CutListT []
 onceNondet = onceCut |> cutList
-
-instance Functor f => Forward (Scp f) CutListT where
-  fwd alg (Scp op k) = undefined -- (CutListT . alg . Scp . fmap runCutListT) op

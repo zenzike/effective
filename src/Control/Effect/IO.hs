@@ -56,7 +56,7 @@ data GetLine_ k  = GetLine (String -> k) deriving Functor
 
 -- | Read a line from from standard input device.
 getLine :: Members '[GetLine] sig => Prog sig String
-getLine = call (Alg (GetLine id) return)
+getLine = call (Alg (GetLine return))
 
 -- | Signature for `Control.Effect.IO.putStrLn`.
 type PutStrLn = Alg PutStrLn_
@@ -65,7 +65,7 @@ data PutStrLn_ k = PutStrLn String k     deriving Functor
 
 -- | Write a string to the standard output device, and add a newline character.
 putStrLn :: Members '[PutStrLn] sig => String -> Prog sig ()
-putStrLn str = call (Alg (PutStrLn str ()) return)
+putStrLn str = call (Alg (PutStrLn str (return ())))
 
 -- | Signature for `Control.Effect.IO.getCPUTime`.
 type GetCPUTime = Alg (GetCPUTime_)
@@ -75,7 +75,7 @@ data GetCPUTime_ k = GetCPUTime (Integer -> k) deriving Functor
 -- | Returns the number of picoseconds CPU time used by the current
 -- program.
 getCPUTime :: Members '[GetCPUTime] sig => Prog sig Integer
-getCPUTime = call (Alg (GetCPUTime id) return)
+getCPUTime = call (Alg (GetCPUTime return))
 
 -- | Interprets IO operations using their standard semantics in `IO`.
 ioAlg :: Algebra [GetLine, PutStrLn, GetCPUTime] IO
@@ -84,23 +84,23 @@ ioAlg = getLineAlg # putStrLnAlg # getCPUTimeAlg
 -- | Interprets `Control.Effects.IO.getLine` using `Prelude.getLine` from "Prelude".
 getLineAlg :: Algebra '[GetLine] IO
 getLineAlg eff
-  | Just (Alg (GetLine x) k) <- prj eff =
+  | Just (Alg (GetLine x)) <- prj eff =
       do str <- Prelude.getLine
-         return (k (x str))
+         return (x str)
 
 -- | Interprets `Control.Effect.IO.putStrLn` using `Prelude.putStrLn` from "Prelude".
 putStrLnAlg :: Algebra '[PutStrLn] IO
 putStrLnAlg eff
-  | Just (Alg (PutStrLn str x) k) <- prj eff =
+  | Just (Alg (PutStrLn str x)) <- prj eff =
       do Prelude.putStrLn str
-         return (k x)
+         return x
 
 -- | Interprets `Control.Effect.IO.getCPUTime` using `System.CPUTime.getCPUTime` from "System.CPUTime".
 getCPUTimeAlg :: Algebra '[GetCPUTime] IO
 getCPUTimeAlg eff
-  | Just (Alg (GetCPUTime x) k) <- prj eff =
+  | Just (Alg (GetCPUTime x)) <- prj eff =
       do time <- System.CPUTime.getCPUTime
-         return (k (x time))
+         return (x time)
 
 -- | @`evalIO` p@ evaluates all IO operations in @p@ in the `IO` monad
 -- using their standard semantics.
