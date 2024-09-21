@@ -254,6 +254,8 @@ This makes sense, since the operations in `effs2` must operate
 only after `h1` has done its work on the syntax tree.
 To make use of `malg` operate with the `t1` carrier,
 -}
+{-# INLINE fuse #-}
+{-# INLINE (|>) #-}
 fuse, (|>)
   :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 effs oeffs ts fs
   . ( effs  ~ effs1 `Union` effs2
@@ -296,6 +298,7 @@ fuse, (|>)
 -- using 'HRAssoc' and 'RAssoc' respectively, which removes any identities
 -- and reassociates all compositions to the right.
 fuse (Handler run1 malg1) (Handler run2 malg2) = Handler run halg where
+  {-# INLINE run #-}
   run :: forall m . Monad m => Algebra oeffs m -> forall x. ts m x -> m (fs x)
   run oalg
     = unsafeCoerce @(m (fs2 (fs1 _x))) @(m (fs _x))
@@ -307,6 +310,7 @@ fuse (Handler run1 malg1) (Handler run2 malg2) = Handler run halg where
           (malg2 (weakenAlg @oeffs2 @oeffs oalg)))
     . unsafeCoerce @(ts m _) @(ts1 (ts2 m) _)
 
+  {-# INLINE halg #-}
   halg :: forall m . Monad m => Algebra oeffs m -> Algebra effs (ts m)
   halg oalg
     = unsafeCoerce @(ts1 (ts2 m) _) @(ts m _)

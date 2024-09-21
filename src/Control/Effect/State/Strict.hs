@@ -36,11 +36,13 @@ import Control.Effect.State.Type
 import qualified Control.Monad.Trans.State.Strict as Strict
 import Data.Tuple (swap)
 
+{-# INLINE state #-}
 -- | The `state` handler deals with stateful operations and
 -- returns the final state @s@.
 state :: s -> Handler [Put s, Get s] '[] (Strict.StateT s) ((,) s)
 state s = handler (fmap swap . flip Strict.runStateT s) stateAlg
 
+{-# INLINE state_ #-}
 -- | The `state_` handler deals with stateful operations and silenty
 -- discards the final state.
 state_ :: s -> Handler [Put s, Get s] '[] (Strict.StateT s) Identity
@@ -50,6 +52,7 @@ state_ s = handler (fmap Identity . flip Strict.evalStateT s) stateAlg
 -- runState_ s = fmap Identity . flip Strict.evalStateT s
 
 -- | An algebra that interprets t'Get' and t'Put' using the strict t'Strict.StateT'.
+{-# INLINE stateAlg #-}
 stateAlg
   :: Monad m
   => (forall x. oeff m x -> m x)

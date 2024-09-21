@@ -61,6 +61,7 @@ data Choose_ a where
 -- | The 'alternative' handler makes use of an 'Alternative' functor @f@
 -- as well as a transformer @t@ that produces an 'Alternative' functor @t m@.
 -- for any monad @m@ to provide semantics.
+{-# INLINE alternative #-}
 alternative
   :: forall t f
   . (Monad f, Alternative f
@@ -71,13 +72,14 @@ alternative run = Handler (\_ -> run) alternativeAlg
 
 -- | The algebra that corresponds to the 'alternative' handler. This uses an
 -- underlying 'Alternative' isntance for @t m@ given by a transformer @t@.
+{-# INLINE alternativeAlg #-}
 alternativeAlg
   :: forall oeffs t m . (Alternative (t m), Functor m)
   => (Algebra oeffs m)
   -> (Algebra [Empty , Choose] (t m))
 alternativeAlg oalg eff
   | (Just (Alg Empty))          <- prj eff = empty
-  | (Just (Scp (Choose xs ys))) <- prj eff = xs <|> ys
+  | (Just (Scp (Choose xs ys))) <- prj @Choose @'[Empty, Choose] eff = xs <|> ys
 
 -- | Instance for 'Alternative' that uses 'Choose_ and 'Empty_.
 instance (Member Choose sigs, Member Empty sigs)
