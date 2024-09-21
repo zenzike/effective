@@ -24,6 +24,7 @@ module Control.Effect
   , prj
   , inj
   , Injects( injs )
+  , Append (..)
 
   -- * Algebras
   , Algebra

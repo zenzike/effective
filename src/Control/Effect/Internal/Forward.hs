@@ -10,6 +10,7 @@ Stability   : experimental
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE GADTs #-}
 
 module Control.Effect.Internal.Forward where
 import Control.Effect.Internal.Effs
@@ -74,18 +75,23 @@ instance ForwardEffs effs t => Forwards effs t where
   fwds :: forall m . Monad m => Algebra effs m -> Algebra effs (t m)
   fwds alg = fwdEffs alg
 
-instance {-# OVERLAPS #-} Forwards effs IdentityT where
+instance {-# OVERLAPS #-} HFunctor (Effs effs) => Forwards effs IdentityT where
   {-# INLINE fwds #-}
   fwds :: forall m . Monad m => Algebra effs m -> Algebra effs (IdentityT m)
   fwds alg = IdentityT . alg . hmap runIdentityT
 
 
 #if MIN_VERSION_base(4,18,0)
-instance {-# OVERLAPS #-} (MonadTrans t1, MonadTrans t2, ForwardEffs effs t1, Forwards effs t2)
+instance {-# OVERLAPS #-} 
+  ( MonadTrans t1, MonadTrans t2
+  , ForwardEffs effs t1, Forwards effs t2
+  , HFunctor (Effs effs)
+  )
 #else
 instance {-# OVERLAPS #-} (MonadTrans t1, MonadTrans t2, ForwardEffs effs t1, Forwards effs t2
   , forall m . Monad m => Monad (t2 m)
   , forall m . Monad m => Monad (t1 (t2 m))
+  , HFunctor (Effs effs)
   )
 #endif
   => Forwards effs (ComposeT t1 t2) where

@@ -49,9 +49,12 @@ library
     Data.List.Kind
 
     Control.Effect.Internal.Effs
-    Control.Effect.Internal.Effs.Array
-    Control.Effect.Internal.Effs.Class
-    Control.Effect.Internal.Effs.Type
+    Control.Effect.Internal.Effs.Indexed
+    Control.Effect.Internal.Effs.Indexed.Array
+    Control.Effect.Internal.Effs.Indexed.Class
+    Control.Effect.Internal.Effs.Indexed.Type
+    Control.Effect.Internal.Effs.Sum
+    Control.Effect.Internal.Effs.Sum.Type
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Handler
     Control.Effect.Internal.Prog

@@ -14,8 +14,8 @@ Stability   : experimental
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Control.Effect.Internal.Effs.Array where
-import Control.Effect.Internal.Effs.Type
+module Control.Effect.Internal.Effs.Indexed.Array where
+import Control.Effect.Internal.Effs.Indexed.Type
 
 import Data.List.Kind
 

@@ -12,8 +12,8 @@ Stability   : experimental
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MagicHash #-}
 
-module Control.Effect.Internal.Effs.Class where
-import Control.Effect.Internal.Effs.Type
+module Control.Effect.Internal.Effs.Indexed.Class where
+import Control.Effect.Internal.Effs.Indexed.Type
 
 import Data.List.Kind
 
@@ -24,7 +24,7 @@ class KnownNat (Length xeffs) => Injects xeffs xyeffs where
   injs :: forall f a . Effs xeffs f a -> Effs xyeffs f a
 
 instance Injects '[] xyseffs where
-  {-# INLINABLE injs #-}
+  {-# INLINE injs #-}
   injs = absurdEffs
 
 instance ( KnownNat (Length (xeff ': xeffs))
@@ -32,7 +32,7 @@ instance ( KnownNat (Length (xeff ': xeffs))
          , KnownNat (EffIndex xeff xyeffs)
          )
   => Injects (xeff ': xeffs) xyeffs where
-  {-# INLINABLE injs #-}
+  {-# INLINE injs #-}
   injs :: forall f a . Effs (xeff ': xeffs) f a -> Effs xyeffs f a
   injs (Effn n op)
     | n == n'   = Effn i' op

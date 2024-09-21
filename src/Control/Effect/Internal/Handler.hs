@@ -20,6 +20,7 @@ import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Forward
 
 import GHC.TypeLits
+import GHC.Base
 import Unsafe.Coerce
 
 
@@ -193,7 +194,8 @@ hide h = weaken h
 -- parameter to translate @effs@ into a program that uses @oeffs@.
 interpret
   :: forall effs oeffs
-  .  (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
+  .  ( HFunctor (Effs effs), HFunctor (Effs oeffs) )
+  => (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
   -> Handler effs oeffs IdentityT Identity
 interpret rephrase = interpretM talg
   where
@@ -209,6 +211,8 @@ interpret rephrase = interpretM talg
 -- parameter that makes it possible to create a value in @m@.
 interpretM
   :: forall effs oeffs .
+  HFunctor (Effs effs)
+  =>
     (forall m . Monad m =>
       (forall x . Effs oeffs m x -> m x)
     -> (forall x . Effs effs m x -> m x))   -- ^ @mrephrase@
@@ -272,8 +276,10 @@ fuse, (|>)
     , Injects (effs2 :\\ effs1) effs2
     , Injects oeffs2 oeffs
     , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-    , KnownNat (Length effs1)
-    , KnownNat (Length effs2)
+--    , KnownNat (Length effs1)
+--    , KnownNat (Length effs2)
+    , Append (oeffs1 :\\ effs2) effs2
+    , Append effs1 (effs2 :\\ effs1)
     )
   => Handler effs1 oeffs1 ts1 fs1   -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 fs2   -- ^ @h2@
@@ -339,7 +345,8 @@ pipe, (||>)
     , Injects (effs2 :\\ effs1) effs2
     , Injects oeffs2 oeffs
     , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-    , KnownNat (Length effs2)
+    -- , KnownNat (Length effs2)
+    , Append (oeffs1 :\\ effs2) effs2
     )
   => Handler effs1 oeffs1 ts1 fs1    -- ^ Handler @h1@
   -> Handler effs2 oeffs2 ts2 fs2    -- ^ Handler @h2@
@@ -403,14 +410,26 @@ pipe (Handler run1 malg1)  (Handler run2 malg2) = Handler run halg where
 -- effects @effs@ in the program must be recognised by the handler,
 -- and the handler must produce no effects.
 -- The result is normalised with 'Apply' so that any t`Identity` functors are removed.
+{-# INLINE handle #-}
 handle :: forall effs ts f a .
-  ( Monad (ts Identity) , Functor f )
+  ( Monad (ts Identity) , Functor f, HFunctor (Effs effs) )
   => Handler effs '[] ts f        -- ^ Handler @h@ with no output effects
   -> Prog effs a                  -- ^ Program @p@ with effects @effs@
   -> Apply f a
 handle (Handler run halg)
   = unsafeCoerce @(f a) @(Apply f a)
   . runIdentity
+  . inline (run @Identity) absurdEffs
+  . eval (inline (halg absurdEffs))
+
+{-# INLINE handleN #-}
+handleN :: forall effs ts f a .
+  ( Monad (ts Identity) , Functor f, HFunctor (Effs effs) )
+  => Handler effs '[] ts f        -- ^ Handler @h@ with no output effects
+  -> Prog effs a                  -- ^ Program @p@ with effects @effs@
+  -> f a
+handleN (Handler run halg)
+  = runIdentity
   . run @Identity absurdEffs
   . eval (halg absurdEffs)
 
@@ -446,6 +465,8 @@ handleM :: forall effs oeffs xeffs m t f a .
   , Forwards xeffs t
   , Injects oeffs xeffs
   , Injects (xeffs :\\ effs) xeffs
+  , Append effs (xeffs :\\ effs)
+  , HFunctor (Effs (effs :++ (xeffs :\\ effs)))
   )
   => Algebra xeffs m               -- ^ Algebra @xalg@ for external effects @xeffs@
   -> Handler effs oeffs t f        -- ^ Handler @h@

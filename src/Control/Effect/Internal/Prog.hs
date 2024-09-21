@@ -74,7 +74,7 @@ instance Applicative (Prog effs) where
 
   {-# INLINE (<*>) #-}
   (<*>) :: Prog effs (a -> b) -> Prog effs a -> Prog effs b
-  Return f        <*> p = fmap f p
+  Return f    <*> p = fmap f p
   Call opf kf <*> q = Call opf ((<*> q) . kf)
 
   {-# INLINE (*>) #-}
@@ -87,7 +87,7 @@ instance Applicative (Prog effs) where
 
   {-# INLINE liftA2 #-}
   liftA2 :: (a -> b -> c) -> Prog effs a -> Prog effs b -> Prog effs c
-  liftA2 f (Return x) q        = fmap (f x) q
+  liftA2 f (Return x) q    = fmap (f x) q
   liftA2 f (Call opx kx) q = Call opx ((flip (liftA2 f) q) . kx)
 
 instance Monad (Prog effs) where
@@ -101,9 +101,11 @@ instance Monad (Prog effs) where
 -- | Weaken a program of type @Prog effs a@ so that it can be used in
 -- place of a program of type @Prog effs a@, when every @effs@ is a member of @effs'@.
 weakenProg :: forall effs effs' a
-  .  Injects effs effs'
+  . ( Injects effs effs'
+    , HFunctor (Effs effs)
+    )
   => Prog effs a -> Prog effs' a
-weakenProg (Return x)     = Return x
+weakenProg (Return x)  = Return x
 weakenProg (Call op k) = Call (injs @effs @effs' (hmap weakenProg op)) (weakenProg . k)
 
 -- | Evaluate a program using the supplied algebra. This is the
@@ -152,7 +154,7 @@ eval halg op =
 
 -- | Fold a program using the supplied generator and algebra. This is the
 -- universal property from the underlying GADT.
-fold :: forall f effs a . Functor f
+fold :: forall f effs a . (Functor f, Functor (Effs effs f), HFunctor (Effs effs))
   => (forall x . x -> f x)
   -> (forall x . (Effs effs f) (f x) -> f x)
   -> Prog effs a -> f a

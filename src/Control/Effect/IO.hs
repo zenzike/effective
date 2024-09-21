@@ -45,6 +45,7 @@ import GHC.TypeLits
 
 import qualified System.CPUTime
 import Data.List.Kind
+import Data.HFunctor
 
 import Prelude hiding (getLine, putStrLn)
 import qualified Prelude as Prelude
@@ -117,7 +118,11 @@ handleIO
     , Forwards xeffs t
     , forall m . Monad m => Monad (t m)
     , xeffs ~ '[GetLine, PutStrLn, GetCPUTime]
-    , KnownNat (Length effs))
+    -- , KnownNat (Length effs)
+    , Append effs (xeffs :\\ effs)
+    , HFunctor (Effs (effs :++ ([GetLine, PutStrLn, GetCPUTime] :\\ effs)))
+    )
+
   => Handler effs oeffs t f
   -> Prog (effs `Union` xeffs) a -> IO (Apply f a)
 handleIO = handleM ioAlg

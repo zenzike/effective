@@ -17,6 +17,7 @@ import Control.Effect.Alternative
 
 import Control.Monad.Trans.List
 
+{-# INLINE stop #-}
 stop :: Members '[Empty] sig => Prog sig a
 stop  = call (Alg Empty)
 
@@ -35,6 +36,7 @@ selects []      =  empty
 selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
                                             return (y, x:ys)
 
+{-# INLINE nondet #-}
 nondet :: Handler [Empty, Choose] '[] (ListT) []
 nondet = handler runListT' alternativeAlg
 
