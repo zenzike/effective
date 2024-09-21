@@ -111,18 +111,13 @@ weakenProg (Call op k) = Call (injs @effs @effs' (hmap weakenProg op)) (weakenPr
 -- | Evaluate a program using the supplied algebra. This is the
 -- universal property from initial monad @Prog sig a@ equipped with
 -- the algebra @Eff effs m -> m@.
-{-# INLINABLE eval #-}
-eval :: forall effs m a . Monad m
+{-# INLINE eval #-}
+eval
+  :: forall effs m a . (Monad m, HFunctor (Effs effs))
   => Algebra effs m
   -> Prog effs a -> m a
--- eval halg = --  fold (join . halg) return
 eval halg (Return x)   = return x
-eval halg (Call op k)  =
-    join . halg . fmap (eval halg . k) . hmap (eval halg) $ op
-   -- join . halg . hmap (eval halg) . fmap (eval halg . k) $ op
-
-    -- This version is marginally slower:
-    -- join . halg . hmap (eval halg . hk) . fmap (eval halg . k) $ op
+eval halg (Call op k)  = halg (hmap (eval halg) op) >>= eval halg . k
 
 {-
 -- Static argument transform:
