@@ -10,10 +10,6 @@ import Control.Arrow ( Arrow(second) )
 newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
   deriving Functor
 
--- newtype ListT' m a = forall y . ListT' (m y) (y -> Maybe (a, ListT m a))
---   deriving Functor
-
-
 {-# INLINE runListT' #-}
 runListT' :: Monad m => ListT m a -> m [a]
 runListT' (ListT mmxs) =
@@ -29,7 +25,14 @@ instance HFunctor ListT where
 
 {-# INLINE foldListT #-}
 foldListT :: Monad m => (a -> m b -> m b) -> m b -> ListT m a -> m b
+foldListT f k tmxs = go tmxs where
+  go (ListT mxs) = mxs >>= maybe k (\(x,xs) -> f x (go xs))
+
+{-
+-- The above is a static argument transformed version of this:
+foldListT :: Monad m => (a -> m b -> m b) -> m b -> ListT m a -> m b
 foldListT k ys (ListT mxs) = mxs >>= maybe ys (\(x,xs) -> k x (foldListT k ys xs))
+-}
 
 instance Monad m => Applicative (ListT m) where
   {-# INLINE pure #-}
@@ -49,8 +52,9 @@ instance Monad m => Alternative (ListT m) where
 
   {-# INLINE (<|>) #-}
   (<|>) :: Monad m => ListT m a -> ListT m a -> ListT m a
-  ListT mxs <|> ListT mys = ListT $
-    mxs >>= maybe mys (return . Just . second (<|> ListT mys))
+  mxs <|> ListT mys = ListT (foldListT f mys mxs) where
+    f :: a -> (m (Maybe (a, ListT m a))) -> (m (Maybe (a, ListT m a)))
+    f x xs = return (Just (x, ListT xs))
 
 instance MonadTrans ListT where
   {-# INLINE lift #-}
