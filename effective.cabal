@@ -24,7 +24,8 @@ source-repository head
 
 library
   default-language: GHC2021
-  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file
+  ghc-options:
+  --  -Wno-noncanonical-monad-instances -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file
   exposed-modules:
     Control.Effect
     Control.Effect.Alternative

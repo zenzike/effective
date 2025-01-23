@@ -16,6 +16,12 @@ module Control.Effect.State.Strict
   , get
   , put'
   , get'
+  , putX
+  , getX
+  , getZ
+  , putZ
+  , getA
+  , putA
 
     -- ** Signatures
   , Put, Put_ (..)

@@ -24,13 +24,14 @@ import Control.Applicative
 #endif
 import Control.Monad
 
+import GHC.Base
+
 -- | A family of programs that may contain at least the effects in @effs@ in any
 -- order.
 type Progs effs -- ^ A list of effects the program may use
            a    -- ^ The return value of the program
   = forall effs' . Members effs effs' => Prog effs' a
 
--- TODO: Remove the `Functor` constraint
 -- | A program that contains at most the effects in @effs@,
 -- to be processed by a handler in the exact order given in @effs@.
 data Prog (effs :: [Effect]) a where
@@ -40,10 +41,48 @@ data Prog (effs :: [Effect]) a where
         -> (x -> Prog effs a)
         -> Prog effs a
 
+newtype ProgAlg effs m a = ProgAlg (Algebra effs m -> m a)
+
+instance Functor m => Functor (ProgAlg effs m) where
+  {-# INLINE fmap #-}
+  fmap f (ProgAlg x) = ProgAlg (\g -> (fmap f (x g)))
+
+instance Applicative m => Applicative (ProgAlg effs m) where
+  {-# INLINE pure #-}
+  pure x = ProgAlg (\alg -> pure x)
+
+  {-# INLINE (<*>) #-}
+  ProgAlg f <*> ProgAlg x = ProgAlg (\alg -> f alg <*> x alg)
+
+  {-# INLINE (*>) #-}
+  ProgAlg x *> ProgAlg y = ProgAlg (\alg -> x alg *> y alg)
+
+  {-# INLINE (<*) #-}
+  ProgAlg x <* ProgAlg y = ProgAlg (\alg -> x alg <* y alg)
+
+instance Monad m => Monad (ProgAlg effs m) where
+  {-# INLINE (>>=) #-}
+  ProgAlg f >>= k = ProgAlg (\alg -> f alg >>= (\x -> let ProgAlg f' = k x in f' alg))
+
+{-# INLINE acall #-}
+acall :: Member sig effs => sig m a -> ProgAlg effs m a
+acall op = ProgAlg (\alg -> alg (inj op))
+
+
+--   Call' :: forall effs a h x
+--         . (Effs effs) h x
+--         -> (h ~> Prog effs)
+--         -> (x -> Prog effs a)
+--         -> Prog effs a
+
 -- The `Call` constructor is an encoding of `Call'` where:
 -- Call'   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
 -- Call' x ~= Call x id return
 
+-- TODO:
+-- Can we implement `Prog` using a higher-order ContT where
+-- m is instead of `Prog effs`
+-- Reminds me of seeing higher-order ContT as a monad transformer
 
 -- | Construct a program of type @Prog effs a@ using an operation of type @eff (Prog effs) (Prog effs a)@, when @eff@ is a member of @effs@.
 {-# INLINE call #-}
@@ -108,6 +147,11 @@ weakenProg :: forall effs effs' a
 weakenProg (Return x)  = Return x
 weakenProg (Call op k) = Call (injs @effs @effs' (hmap weakenProg op)) (weakenProg . k)
 
+-- TODO:
+-- * Maybe we could provide RULES to eliminate hmaps using build/fold?
+-- * if that works, and core still has hfunctor, then we can use meval'
+--   and change all the algebras
+
 -- | Evaluate a program using the supplied algebra. This is the
 -- universal property from initial monad @Prog sig a@ equipped with
 -- the algebra @Eff effs m -> m@.
@@ -117,7 +161,13 @@ eval
   => Algebra effs m
   -> Prog effs a -> m a
 eval halg (Return x)   = return x
-eval halg (Call op k)  = halg (hmap (eval halg) op) >>= eval halg . k
+-- eval halg (Call op k)  = halg (hmap (eval halg) op) >>= eval halg . k
+
+eval halg (Call op k) = halg (hmap go op) >>= go . k
+  where
+    go :: forall a . Prog effs a -> m a
+    go = eval halg
+
 
 {-
 -- Static argument transform:
@@ -125,12 +175,12 @@ eval halg (Call op k)  = halg (hmap (eval halg) op) >>= eval halg . k
 eval halg p =
   let eval' :: forall x . Prog effs x -> m x
       eval' p' = case p' of
-                   Return x     -> return x
-                   Call op hk k ->
-                     join . halg . fmap (eval' . k)
-                                 . hmap (eval' . hk) $ op
+                   Return x  -> return x
+                   Call op k -> halg (hmap (eval halg) op) >>= eval halg . k
   in eval' p
+-}
 
+{-
 -- This version does slightly better, but still worse than with no SAT
 eval halg op =
   let eval' :: Prog effs a -> m a
@@ -146,6 +196,19 @@ eval halg op =
                        join . halg $ fmap (eval'' . k) $ hmap (eval'' . hk) $ Effn n op
   in eval' op
 -}
+
+type m ~> n = forall x . m x -> n x
+
+-- Using HMendler will mean that we do not need to have `hmap`
+-- constraints.
+type HMendler effs n = forall m . (m ~> n) -> (Effs effs m ~> n)
+
+meval' :: Monad m => HMendler effs m -> Prog effs a -> m a
+meval' halg (Return x) = return x
+meval' halg (Call op k) =
+  halg (meval' halg) op >>= meval' halg . k
+
+
 
 -- | Fold a program using the supplied generator and algebra. This is the
 -- universal property from the underlying GADT.

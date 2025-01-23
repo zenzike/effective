@@ -13,10 +13,15 @@ module Control.Effect
   ( -- * Programs
     Progs
   , Prog
+  , ProgAlg(..)
+  , ProgX
+  , ProgZ
+  , acall
   , Effs (Eff, Effs)
   , call
   , weakenProg
   , Effect
+  , Reifies
 
   -- * Operations
   , Member(..)
@@ -31,8 +36,11 @@ module Control.Effect
   , (#)
 
   , MAlgebra (..)
+  , MAlgebraZ (..)
   , Syntax
   , mcall
+  , xcall
+  , zcall
 
   , Forward (..)
   , Forwards (..)
@@ -41,6 +49,10 @@ module Control.Effect
   -- * Handlers
   , Handler (..)
   , handler
+  , handles
+  , handleX
+  , handleZ
+  , handleA
   , interpret
   , interpretM
   , identity
@@ -52,6 +64,7 @@ module Control.Effect
   , eval
   , fold
   , handle
+  , handleN
   , handleM
 
   -- * Type families

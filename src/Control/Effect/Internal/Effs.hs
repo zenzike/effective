@@ -31,5 +31,5 @@ module Control.Effect.Internal.Effs
   )
   where
 
--- import Control.Effect.Internal.Effs.Sum
-import Control.Effect.Internal.Effs.Indexed
+import Control.Effect.Internal.Effs.Sum
+-- import Control.Effect.Internal.Effs.Indexed

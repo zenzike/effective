@@ -66,7 +66,6 @@ data Catch_ k where
 catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
 catch p q = call (Scp (Catch (fmap return p) (fmap return q)))
 
-
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
 -- If it fails, then @q@ is executed.
 except :: Handler [Throw, Catch] '[] MaybeT Maybe

@@ -21,12 +21,23 @@ import Control.Monad.Trans.List
 stop :: Members '[Empty] sig => Prog sig a
 stop  = call (Alg Empty)
 
+stop' :: Syntax t Empty effs => t Identity s
+stop' = mcall (Alg Empty)
+
+{-# INLINE stopX #-}
+stopX :: forall s effs t x . (Syntax t Empty  effs, Reifies x t ) => ProgX x t s
+stopX = xcall (Alg Empty)
+
+stopZ :: forall a effs t . (MAlgebraZ t effs '[], Functor (t Identity), Member Empty effs) => ProgZ t effs a
+stopZ = zcall (Alg Empty)
+
+{-# INLINE stopA #-}
+stopA :: forall m effs a . (Monad m, Member Empty effs) => ProgAlg effs m a
+stopA = acall (Alg Empty)
+
 or :: Members '[Choose] sig => Prog sig a -> Prog sig a -> Prog sig a
 or x y = call (Scp (Choose (fmap return x) (fmap return y)))
 
-{-# INLINE stop #-}
-stop' :: Syntax t Empty effs => t Identity s
-stop' = mcall (Alg Empty)
 
 select :: Members [Choose, Empty] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
@@ -38,7 +49,20 @@ selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
 
 {-# INLINE nondet #-}
 nondet :: Handler [Empty, Choose] '[] (ListT) []
+-- nondet = handler runListT' choiceAlg
 nondet = handler runListT' alternativeAlg
+
+choiceAlg
+  :: forall oeffs m . Monad m
+  => (Algebra oeffs m)
+  -> (Algebra [Empty , Choose] (ListT m))
+choiceAlg oalg eff
+  | (Just (Alg Empty))        <- prj eff = empty
+  | (Just (Scp (Choose _ _))) <- prj eff = foo eff True <|> foo eff False
+  where
+    {-# NOINLINE foo #-}
+    foo eff True  = case prj eff of Just (Scp (Choose xs _)) -> xs
+    foo eff False = case prj eff of Just (Scp (Choose _ ys)) -> ys
 
 -- This does not work becuase `Choose` is algebraic, for a greedy approach
 -- it must favour the lhs, but `return x <|> return y` prevents this

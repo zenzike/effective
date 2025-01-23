@@ -155,7 +155,8 @@ handler
   :: (forall m a . Monad m => t m a -> m (f a))
   -> (forall m . Monad m => Algebra oeffs m -> Algebra effs (t m))
   -> Handler effs oeffs t f
-handler run alg = Handler (\oalg -> run) (\oalg -> alg oalg)
+-- handler run alg = Handler (\oalg -> run) (\oalg -> alg oalg)
+handler run alg = Handler (const run) alg
 
 -- | The identity handler.
 identity :: Handler '[] '[] IdentityT Identity
@@ -264,12 +265,14 @@ fuse, (|>)
   :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 effs oeffs ts fs
   . ( effs  ~ effs1 `Union` effs2
     , oeffs ~ (oeffs1 :\\ effs2) `Union` oeffs2
-    , ts    ~ HRAssoc (ts1 `ComposeT` ts2)
-    , fs    ~ RAssoc (fs2 `Compose` fs1)
+    , ts    ~ (ts1 `ComposeT` ts2)
+    , fs    ~ (fs2 `Compose` fs1)
     , forall m . Monad m => Monad (ts2 m)
 #if __GLASGOW_HASKELL__ <= 904
     , forall m . Monad m => Monad (ts1 (ts2 m))
 #endif
+    , forall f . HFunctor (Effs effs)
+    , forall m . Functor m => Functor (ts1 (ts2 m))
     , Forwards (oeffs1 :\\ effs2) ts2
     , Forwards effs2 ts1
     , Injects (oeffs1 :\\ effs2) oeffs
@@ -306,27 +309,29 @@ fuse, (|>)
 fuse (Handler run1 malg1) (Handler run2 malg2) = Handler run halg where
   {-# INLINE run #-}
   run :: forall m . Monad m => Algebra oeffs m -> forall x. ts m x -> m (fs x)
-  run oalg
-    = unsafeCoerce @(m (fs2 (fs1 _x))) @(m (fs _x))
-    . run2 (oalg . injs)
-    . run1 (weakenAlg @oeffs1 @((oeffs1 :\\ effs2) :++ effs2) $
+  run oalg x
+    = fmap Compose
+    $ run2 (oalg . injs)
+    $ run1 (weakenAlg @oeffs1 @((oeffs1 :\\ effs2) :++ effs2) $
         heither @(oeffs1 :\\ effs2) @effs2
           (fwds @(oeffs1 :\\ effs2) @(ts2)
             (weakenAlg @(oeffs1 :\\ effs2) @oeffs oalg))
           (malg2 (weakenAlg @oeffs2 @oeffs oalg)))
-    . unsafeCoerce @(ts m _) @(ts1 (ts2 m) _)
+    $ getComposeT
+    $ x
 
   {-# INLINE halg #-}
   halg :: forall m . Monad m => Algebra oeffs m -> Algebra effs (ts m)
-  halg oalg
-    = unsafeCoerce @(ts1 (ts2 m) _) @(ts m _)
-    . hunion @effs1 @effs2
+  halg oalg x
+    = ComposeT
+    $ hunion @effs1 @effs2
         (malg1 (weakenAlg $
           heither @(oeffs1 :\\ effs2) @effs2
             (fwds @(oeffs1 :\\ effs2) @ts2 (weakenAlg oalg))
             (malg2 (weakenAlg oalg))))
         (fwds @effs2 @ts1 (malg2 (oalg . injs)))
-    . unsafeCoerce @(Effs effs (ts m) _) @(Effs effs (ts1 (ts2 m)) _)
+    $ hmap getComposeT
+    $ x
 
 pipe, (||>)
   :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 effs oeffs ts fs
@@ -428,10 +433,24 @@ handleN :: forall effs ts f a .
   => Handler effs '[] ts f        -- ^ Handler @h@ with no output effects
   -> Prog effs a                  -- ^ Program @p@ with effects @effs@
   -> f a
-handleN (Handler run halg)
+handleN (Handler run halg) p
   = runIdentity
-  . run @Identity absurdEffs
-  . eval (halg absurdEffs)
+  $ run @Identity absurdEffs
+  $ eval (halg absurdEffs)
+  $ p
+
+
+{-# INLINE handleA #-}
+handleA ::
+     Handler effs '[] ts f        -- ^ Handler @h@ with no output effects
+  -> ProgAlg effs (ts Identity) a                  -- ^ Program @p@ with effects @effs@
+  -> f a
+handleA (Handler run halg) (ProgAlg p)
+  = runIdentity
+  $ run @Identity absurdEffs
+  $ inline p (inline (halg absurdEffs))
+
+
 
 -- handle'
 --   :: forall effs oeffs ts fs a . (Monad (HComps ts (Prog oeffs)), Functors fs)

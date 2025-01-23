@@ -93,5 +93,5 @@ onceCutAlg oalg op
                       eval oalg (do cut
                                     return x))
 
-onceNondet :: Handler '[Once, Empty, Choose, CutFail, CutCall] '[] CutListT []
+onceNondet :: Handler '[Once, Empty, Choose, CutFail, CutCall] '[] (ComposeT IdentityT CutListT) (Compose [] Identity)
 onceNondet = onceCut |> cutList
