@@ -1,12 +1,12 @@
 module Control.Effect.Concurrency where
 
+import Prelude hiding (log)
 import Control.Monad.Trans.Resump
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
-import Data.Bifunctor ( Bifunctor(bimap) )
-import GHC.CmmToAsm.AArch64.Instr (_d)
+import Data.List (nub)
 
-class Action a where
+class (Eq a) => Action a where
   merge :: a -> a -> Maybe a
 
 -- Step functor for choice and action
@@ -21,22 +21,41 @@ type CResT a = ResT (CStep a)
 
 -- Traverse all nondeterministic branches and accumulate the `m`-effects
 -- and actions.
+-- TODO: the manipulation of the lists can be more efficient.
 runAll :: Monad m => CResT a m x -> m [([a], x)]
-runAll = (fmap ($ [])) . runAll' where
-  runAll' :: Monad m => CResT a m x -> m ([([a], x)] -> [([a], x)])
-  runAll' (ResT m) = do x <- m
-                        case x of
-                          Left x -> return (([], x):)
+runAll = runAll' [] where
+  runAll' :: Monad m => [a] -> CResT a m x -> m [([a], x)]
+  runAll' as (ResT m) = do x <- m
+                           case x of
+                             Left x -> return [(reverse as, x)]
+                             Right (ActS a m') -> runAll' (a:as) m'
+                             Right FailS -> return []
+                             Right (ChoiceS ml mr) -> 
+                               do l <- runAll' as ml
+                                  r <- runAll' as mr
+                                  return (l ++ r)
 
-                          Right (ActS a m') ->
-                            fmap ((map (bimap (a:) id)) .) (runAll' m')
-
-                          Right FailS -> return id
-
-                          Right (ChoiceS ml mr) -> 
-                            do l <- runAll' ml
-                               r <- runAll' mr
-                               return (l . r)
+-- A specialised version of runAll' that prints more debug information
+runAllIO :: (Eq a, Eq x, Show x, Show a) => CResT a IO x -> IO [([a], x)]
+runAllIO = fmap nub . runAll' "" [] where
+  runAll' :: (Show x, Show a) => String -> [a] -> CResT a IO x -> IO [([a], x)]
+  runAll' indent as (ResT m) =
+     do x <- m
+        case x of
+          Left x ->
+             let ok = (reverse as, x) 
+             in do putStr indent; print ok; return [ok]
+          Right (ActS a m') -> runAll' indent (a:as) m'
+          Right FailS -> 
+            do putStrLn (indent ++ "Failed, backtracking")
+               return []
+          Right (ChoiceS ml mr) ->
+            do putStrLn (indent ++ "Trying left")
+               l <- runAll' (indent ++ "  ") as ml
+               putStrLn (indent ++ "Trying right")
+               r <- runAll' (indent ++ "  ") as mr
+               putStrLn (indent ++ "Backtracking")
+               return (l ++ r)
 
 instance Monad m => Alternative (CResT a m) where
   {-# INLINE empty #-}
@@ -54,6 +73,9 @@ instance Monad m => MonadPlus (CResT a m) where
   mplus :: Monad m => CResT a m x -> CResT a m x -> CResT a m x
   mplus = (<|>)
 
+(<|>:) :: Monad m => CResT a m x -> CResT a m x -> m (x :+: CStep a (CResT a m x))
+x <|>: y = unResT (x <|> y)
+
 prefix :: Monad m => a -> CResT a m x -> CResT a m x
 prefix a m = ResT $ prefix' a m
 
@@ -66,6 +88,8 @@ fail = ResT fail'
 fail' :: Monad m => m (Either x (CStep a (CResT a m x)))
 fail' = return (Right FailS)
 
+done' :: Monad m => a -> m (Either a b)
+done' x = return (Left x)
 
 -- parallel composition of processes (only the left argument's return
 -- value is kept in the combined process.)
@@ -80,7 +104,7 @@ parL (ResT mxs) y = ResT $
        Left x -> unResT $ fmap (const x) y
        Right (ActS a m)    -> prefix' a (par m y)
        Right FailS         -> fail'
-       Right (ChoiceS l r) -> unResT (parL l y <|> parL r y)
+       Right (ChoiceS l r) -> parL l y <|>: parL r y
 
 -- parallel composition, and the right argument acts first
 parR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
@@ -90,44 +114,79 @@ parR x (ResT mys) = ResT $
        Left y -> unResT $ x
        Right (ActS a m)    -> prefix' a (par x m)
        Right FailS         -> fail'
-       Right (ChoiceS l r) -> unResT (parR x l <|> parR x r)
+       Right (ChoiceS l r) -> parR x l <|>: parR x r
 
 -- parallel composition, and the two arguments interact first, and the 
 -- `m`-effect of left argument is run first
 parCL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parCL (ResT mxs) y@(ResT mys) = ResT $
-  do xs <- mxs
+parCL lhs rhs = ResT $
+  do xs <- unResT lhs
      case xs of 
        Left x -> fail'
        Right (ActS a m) -> 
-         do ys <- mys
+         do ys <- unResT rhs
             case ys of
               Right (ActS b n) -> 
                 case merge a b of
                   Nothing -> fail'
                   Just c -> prefix' c (par m n)
               Right (ChoiceS l' r') -> 
-                unResT (parCR (prefix a m) l' <|> parCR (prefix a m) r')
+                (parCR (prefix a m) l') <|>: (parCR (prefix a m) r')
               _ -> fail'
        Right FailS -> fail'
-       Right (ChoiceS l r) -> unResT (parCL l y <|> parCL r y)
+       Right (ChoiceS l r) -> parCL l rhs <|>: parCL r rhs
 
 -- parallel composition, and the two arguments interact first, and the 
 -- `m`-effect of right argument is run first
 parCR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parCR x@(ResT mxs) (ResT mys) = ResT $
-  do ys <- mys
+parCR lhs rhs = ResT $
+  do ys <- unResT rhs
      case ys of 
        Left y -> fail'
        Right (ActS a m) -> 
-         do xs <- mxs
+         do xs <- unResT lhs
             case xs of
               Right (ActS b n) -> 
                 case merge b a of
                   Nothing -> fail'
                   Just c -> prefix' c (par n m)
               Right (ChoiceS l' r') -> 
-                unResT (parCL l' (prefix a m) <|> parCL r' (prefix a m))
+                parCL l' (prefix a m) <|>: parCL r' (prefix a m)
               _ -> fail'
        Right FailS -> fail'
-       Right (ChoiceS l r) -> unResT (parCR x l <|> parCR x r)
+       Right (ChoiceS l r) -> parCR lhs l <|>: parCR lhs r
+
+res :: (Action a, Monad m) => a -> CResT a m x -> CResT a m x
+res a p = ResT $
+  do xs <- unResT p
+     case xs of
+       Left x -> done' x
+       Right (ActS b m) ->
+         if a == b then fail' else prefix' b (res a m)
+       Right (ChoiceS l r) -> res a l <|>: res a r
+       Right FailS -> fail'
+
+--
+-- Some toy examples (to be relocated to some other place)
+--
+
+data Act = H | Log String | Tau deriving (Show, Eq)
+
+instance Action Act where
+  merge H H = Just Tau
+  merge _ _ = Nothing
+
+type Con = CResT Act IO 
+
+act :: Act -> Con ()
+act a = prefix a (return ())
+
+handshake :: Con ()
+handshake = act H
+
+log :: String -> Con ()
+log s = act (Log s)
+
+prog :: Con ()
+prog = res H (par (do log "A"; handshake; log "A") 
+                  (do log "B"; handshake; log "B"))
