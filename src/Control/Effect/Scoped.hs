@@ -25,8 +25,6 @@ import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Resump
-import Control.Effect.Concurrency ( CResT )
-import Control.Concurrent (yield)
 
 -- A scoped operation has the following type:
 --
@@ -92,9 +90,9 @@ instance U.Unary sig => Forward (Scp sig) ListT where
     ualg :: forall y. m y -> m y
     ualg op' = alg (Scp (U.upd op op'))
 
-instance U.Unary sig => Forward (Scp sig) (CResT a) where
+instance (Functor s, U.Unary sig) => Forward (Scp sig) (ResT s) where
   fwd :: forall m. Monad m => (forall x. Scp sig m x -> m x) 
-      -> (forall x. Scp sig (CResT a m) x -> CResT a m x)
+      -> (forall x. Scp sig (ResT s m) x -> ResT s m x)
   fwd alg (Scp op) = hmap ualg (U.get op) where
     ualg :: forall y. m y -> m y
     ualg op' = alg (Scp (U.upd op op'))

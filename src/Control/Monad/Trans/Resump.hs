@@ -1,4 +1,6 @@
-module Control.Monad.Trans.Resump where
+module Control.Monad.Trans.Resump (
+  ResT(..)
+) where
 
 import Data.HFunctor ( HFunctor(..) )
 
@@ -6,9 +8,8 @@ import Control.Monad
 import Data.Bifunctor ( Bifunctor(bimap) )
 import Control.Monad.Trans.Class ( MonadTrans(..) )
 
-type f :+: g = Either f g
 
-newtype ResT s m a = ResT { unResT :: m (a :+: s (ResT s m a)) }
+newtype ResT s m a = ResT { unResT :: m (Either a (s (ResT s m a))) }
 
 instance (Functor s, Functor m) => Functor (ResT s m) where
   fmap f (ResT m) = ResT $ fmap (bimap f (fmap (fmap f))) m

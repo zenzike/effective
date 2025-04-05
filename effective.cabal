@@ -48,6 +48,7 @@ library
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
+    Control.Monad.Trans.CRes
     Control.Monad.Trans.Compose
     Data.CutList
     Data.HFunctor
@@ -78,11 +79,12 @@ test-suite docs
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
   default-language: GHC2021
   other-modules:
-    Error,
+    Concur
+--  Error,
 --  Graded,
-    Nondet,
+--  Nondet,
 --  Parser,
-    State,
+--  State,
 
 test-suite readme
   type:          exitcode-stdio-1.0
