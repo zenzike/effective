@@ -16,12 +16,17 @@ import Control.Effect
 
 import Data.Kind ( Type )
 import Data.HFunctor
+import qualified Data.Functor.Unary as U
 
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.List
+import Control.Monad.Trans.Resump
+import Control.Effect.Concurrency ( CResT )
+import Control.Concurrent (yield)
 
 -- A scoped operation has the following type:
 --
@@ -77,3 +82,19 @@ instance Functor sig => Forward (Scp sig) (WriterT s) where
 instance Functor sig => Forward (Scp sig) (ReaderT w) where
   {-# INLINE fwd #-}
   fwd alg (Scp op) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op)))
+
+-- | Unary scoped operations can be forwarded by `ListT` by applying the
+-- operation recursively to all `m`-actions inside the `ListT` value.
+instance U.Unary sig => Forward (Scp sig) ListT where
+  fwd :: forall m. Monad m => (forall x. Scp sig m x -> m x) 
+      -> (forall x. Scp sig (ListT m) x -> ListT m x)
+  fwd alg (Scp op) = hmap ualg (U.get op) where
+    ualg :: forall y. m y -> m y
+    ualg op' = alg (Scp (U.upd op op'))
+
+instance U.Unary sig => Forward (Scp sig) (CResT a) where
+  fwd :: forall m. Monad m => (forall x. Scp sig m x -> m x) 
+      -> (forall x. Scp sig (CResT a m) x -> CResT a m x)
+  fwd alg (Scp op) = hmap ualg (U.get op) where
+    ualg :: forall y. m y -> m y
+    ualg op' = alg (Scp (U.upd op op'))

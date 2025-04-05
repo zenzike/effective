@@ -34,6 +34,7 @@ import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
 
+import qualified Data.Functor.Unary as U
 import Data.Tuple (swap)
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader
@@ -76,6 +77,9 @@ type Censor w = Scp (Censor_ w)
 data Censor_ w k where
   Censor :: (w -> w) -> k -> Censor_ w k
   deriving Functor
+
+instance U.Unary (Censor_ w) where
+  get (Censor c x) = x
 
 -- | The @`censor` f p@ operation executes program @p@ with output censored
 -- by @f@.

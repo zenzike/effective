@@ -36,6 +36,7 @@ library
     Control.Effect.IO
     Control.Effect.Maybe
     Control.Effect.Nondet
+    Control.Effect.Concurrency
     Control.Effect.Reader
     Control.Effect.State
     Control.Effect.State.Type
@@ -46,10 +47,12 @@ library
     Control.Effect.Scoped
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
+    Control.Monad.Trans.Resump
     Control.Monad.Trans.Compose
     Data.CutList
     Data.HFunctor
     Data.List.Kind
+    Data.Functor.Unary
 
     Control.Effect.Internal.Effs
     Control.Effect.Internal.Effs.Indexed
