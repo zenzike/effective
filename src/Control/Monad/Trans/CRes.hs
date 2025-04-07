@@ -1,15 +1,13 @@
-module Control.Monad.Trans.CRes where
+module Control.Monad.Trans.CRes (
+  module Control.Monad.Trans.CRes,
+  module Control.Monad.Trans.Resump
+  ) where
 
 import Control.Monad.Trans.Resump
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
+import Control.Effect.Concurrency.Action
 import Data.List (nub)
-
--- | A typeclass for types that can serve as actions in the style
--- of _algebra of communicating processes_ (ACP). 
-class (Eq a) => Action a where
-  -- `merge a b = Nothing` means the two actions `a` and `b` doesn't interact
-  merge :: a -> a -> Maybe a
 
 -- Step functor for choice and action
 data CStep a x = FailS | ChoiceS x x | ActS a x deriving Functor
@@ -21,7 +19,7 @@ data CStep a x = FailS | ChoiceS x x | ActS a x deriving Functor
 -- for each action.
 type CResT a = ResT (CStep a)
 
-newtype ListActs a x = ListActs { unListActs :: [([a], x)] }
+newtype ListActs a x = ListActs { unListActs :: [([a], x)] } deriving (Show, Functor)
 
 -- Traverse all nondeterministic branches and accumulate the `m`-effects
 -- and actions.
@@ -61,6 +59,22 @@ runAllIO = fmap nub . runAll' "" [] where
                putStrLn (indent ++ "Backtracking")
                return (l ++ r)
 
+newtype ActsMb a x = ActsMb { unActsMb :: ([a], Maybe x) } deriving (Functor, Show)
+
+-- Resolving the nondeterministic choices with the given Booleans.
+runWith :: Monad m => [Bool] -> CResT a m x -> m (ActsMb a x)
+runWith = runWith' [] where
+  runWith' :: Monad m => [a] -> [Bool] -> CResT a m x -> m (ActsMb a x)
+  runWith' as bs (ResT m) = 
+    do xs <- m
+       case xs of 
+         Left x      -> return (ActsMb (reverse as, Just x))
+         Right FailS -> return (ActsMb (reverse as, Nothing))
+         Right (ChoiceS l r) ->
+            let (b:bs') = bs 
+            in runWith' as bs' (if b then l else r)
+         Right (ActS a m) -> runWith' (a:as) bs m
+
 instance Monad m => Alternative (CResT a m) where
   {-# INLINE empty #-}
   empty :: Monad m => CResT a m x
@@ -98,7 +112,7 @@ done' x = return (Left x)
 -- parallel composition of processes (only the left argument's return
 -- value is kept in the combined process.)
 par :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-par x y = parL x y <|> parR x y <|> parCL x y <|> parCR x y
+par x y = (parL x y <|> parR x y) <|> (parCL x y <|> parCR x y)
 
 -- parallel composition, and the left argument acts first
 parL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x

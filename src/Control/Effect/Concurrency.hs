@@ -1,5 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 module Control.Effect.Concurrency (
+  module Control.Effect.Concurrency.Action,
+  Control.Monad.Trans.CRes.ListActs (..),
+  Control.Monad.Trans.CRes.ActsMb (..),
+  Control.Monad.Trans.CRes.CResT (..),
   -- * Syntax
   -- ** Operations
   Control.Effect.Concurrency.par,
@@ -13,12 +17,14 @@ module Control.Effect.Concurrency (
 
   -- * Semantics
   -- ** Handlers
-  resump
+  resump,
+  resumpWith
   ) where
 
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Control.Effect.Concurrency.Action
 import qualified Control.Monad.Trans.CRes as C
 import Control.Monad.Trans.CRes 
 import Data.Functor.Unary
@@ -47,10 +53,19 @@ res a p = call (Scp (Res a (fmap return p)))
 instance Unary (Res_ a) where
   get (Res a x) = x
 
-resump :: forall a. C.Action a => Handler '[Act a, Par, Res a] '[] (C.CResT a) (C.ListActs a) 
+alg :: (Action a, Monad m) => Algebra '[] m -> Algebra '[Act a, Par, Res a] (C.CResT a m)
+alg _ eff
+  | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
+  | Just (Scp (Par l r)) <- prj eff = C.par l r
+  | Just (Scp (Res a p)) <- prj eff = C.res a p
+
+resump :: forall a. Action a => Handler '[Act a, Par, Res a] '[] (C.CResT a) (C.ListActs a) 
 resump = handler runAll alg where
   alg :: Monad m => Algebra '[] m -> Algebra '[Act a, Par, Res a] (C.CResT a m)
   alg _ eff
     | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
     | Just (Scp (Par l r)) <- prj eff = C.par l r
     | Just (Scp (Res a p)) <- prj eff = C.res a p
+
+resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] (C.CResT a) (ActsMb a)
+resumpWith choices = handler (runWith choices) alg

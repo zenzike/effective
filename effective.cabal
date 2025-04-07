@@ -37,6 +37,7 @@ library
     Control.Effect.Maybe
     Control.Effect.Nondet
     Control.Effect.Concurrency
+    Control.Effect.Concurrency.Action
     Control.Effect.Reader
     Control.Effect.State
     Control.Effect.State.Type
@@ -54,6 +55,8 @@ library
     Data.HFunctor
     Data.List.Kind
     Data.Functor.Unary
+ -- to de deleted:
+    Control.Effect.Tmp
 
     Control.Effect.Internal.Effs
     Control.Effect.Internal.Effs.Indexed
