@@ -55,8 +55,6 @@ library
     Data.HFunctor
     Data.List.Kind
     Data.Functor.Unary
- -- to de deleted:
-    Control.Effect.Tmp
 
     Control.Effect.Internal.Effs
     Control.Effect.Internal.Effs.Indexed
@@ -82,12 +80,11 @@ test-suite docs
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
   default-language: GHC2021
   other-modules:
-    Concur
---  Error,
---  Graded,
---  Nondet,
---  Parser,
---  State,
+    Error,
+--    Graded,
+    Nondet,
+    Parser,
+    State,
 
 test-suite readme
   type:          exitcode-stdio-1.0
@@ -97,3 +94,11 @@ test-suite readme
   hs-source-dirs:  .
   build-depends: base, transformers, effective, hedgehog
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+
+test-suite concur
+  type:          exitcode-stdio-1.0
+  ghc-options:   -threaded -pgmL 
+  main-is:       Concur.hs
+  default-language: GHC2021
+  hs-source-dirs:  test
+  build-depends: base, transformers, effective,

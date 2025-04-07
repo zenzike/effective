@@ -53,6 +53,8 @@ res a p = call (Scp (Res a (fmap return p)))
 instance Unary (Res_ a) where
   get (Res a x) = x
 
+
+
 alg :: (Action a, Monad m) => Algebra '[] m -> Algebra '[Act a, Par, Res a] (C.CResT a m)
 alg _ eff
   | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
@@ -69,3 +71,4 @@ resump = handler runAll alg where
 
 resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] (C.CResT a) (ActsMb a)
 resumpWith choices = handler (runWith choices) alg
+

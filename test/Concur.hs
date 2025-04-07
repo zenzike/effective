@@ -1,14 +1,13 @@
-```haskell
 {-# LANGUAGE DataKinds #-}
-module Concur where
+module Main where
 
-import Prelude hiding (log)
+import Prelude hiding (log, putStrLn, putStr)
 import Control.Effect
+import Control.Effect.IO
 import Control.Effect.Writer
 import Control.Effect.Concurrency
 import Control.Effect.Concurrency.Action
-import Control.Concurrent
-import Control.Concurrent.QSem
+import Control.Monad
 
 type HS = CCSAction ()
 
@@ -42,4 +41,19 @@ test33 = handle (fuse (resumpWith (False : False : True : False : [])) (writer @
 
 test34 :: (String, ActsMb HS ())
 test34 = handle (fuse (resumpWith (False : False : True : False : [])) (writer @String)) prog
-```
+
+prog2 :: Members '[NewQSem, SignalQSem, WaitQSem, Par, PutStr] sig => Prog sig ()
+prog2 = 
+  do p <- newQSem 0
+     q <- newQSem 0
+     par (do replicateM_ 5 (putStr "A")
+             waitQSem p
+             signalQSem q
+             replicateM_ 5 (putStr "C")) 
+         (do replicateM_ 5 (putStr "B")
+             signalQSem p
+             waitQSem q
+             replicateM_ 5 (putStr "D")) 
+
+main :: IO ()
+main = return ()
