@@ -23,6 +23,7 @@ module Control.Effect.Reader (
   -- * Semantics
   -- ** Handlers
   reader,
+  reader',
 
   -- ** Algebras
   readerAlg,
@@ -71,6 +72,18 @@ local f p = call (Scp (Local f (fmap return p)))
 -- that can be accessed with `ask`, and locally transformed with `local`.
 reader :: r -> Handler [Ask r, Local r] '[] (R.ReaderT r) Identity
 reader r = handler (fmap Identity . flip R.runReaderT r) readerAlg
+
+-- | The `reader'` handler supplies an environment @r@ computed using the 
+-- output effects to the program that can be accessed with `ask`, and 
+-- locally transformed with `local`.
+reader' :: forall oeffs r. (forall m . Monad m => Algebra oeffs m -> m r)
+        -> Handler [Ask r, Local r] oeffs (R.ReaderT r) Identity
+reader' mr = Handler run readerAlg where
+  run :: forall m . Monad m => Algebra oeffs m 
+      -> (forall x. R.ReaderT r m x -> m (Identity x))
+  run oalg rmx = do r <- mr oalg
+                    x <- R.runReaderT rmx r
+                    return (Identity x)
 
 -- | The algebra for the 'reader' handler.
 readerAlg
