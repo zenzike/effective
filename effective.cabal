@@ -46,6 +46,7 @@ library
     Control.Effect.Writer
     Control.Effect.Algebraic
     Control.Effect.Scoped
+    Control.Effect.Clone
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump

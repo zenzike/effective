@@ -6,19 +6,24 @@ import Control.Effect
 import Control.Effect.IO
 import Control.Effect.Writer
 import Control.Effect.Concurrency
+import Control.Effect.Algebraic
 import Control.Effect.Concurrency.Action
 import Control.Monad
+import Control.Effect.IO
 
-type HS = CCSAction ()
+import Control.Effect.Clone
+
+data ActNames = Handshake deriving (Show, Eq)
+type HS = CCSAction ActNames
 
 handshake :: Member (Act HS) sig => Prog sig ()
-handshake = act (Action ())
+handshake = act (Action Handshake)
 
 shakehand :: Member (Act HS) sig => Prog sig ()
-shakehand = act (CoAction ())
+shakehand = act (CoAction Handshake)
 
 resHS :: Member (Res HS) sig => Prog sig x -> Prog sig x
-resHS x = res (Action ()) (res (CoAction ()) x)
+resHS x = res (Action Handshake) (res (CoAction Handshake) x)
 
 prog :: Members '[Par, Act HS, Res HS, Tell String] sig => Prog sig ()
 prog = resHS (par (do tell "A"; handshake; tell "C")
@@ -54,6 +59,19 @@ prog2 =
              signalQSem p
              waitQSem q
              replicateM_ 5 (putStr "D")) 
+
+test4 :: IO ()
+test4 = handleIO identity prog2
+
+tell' :: forall w sig. (Member (Clone (Tell w)) sig, Monoid w) => w -> Prog sig ()
+tell' w = cloneAlg (Tell w ())
+
+prog3 :: Members '[Par, Act HS, Res HS, Tell String, Clone (Tell String)] sig => Prog sig ()
+prog3 = resHS (par (do tell "A"; handshake; tell' "C")
+                   (do tell "B"; shakehand; tell' "D"))
+
+test5 :: (String, ListActs HS (String, ()))
+test5 = handle (cloneHdl writer |> resump |> writer) prog3
 
 main :: IO ()
 main = return ()

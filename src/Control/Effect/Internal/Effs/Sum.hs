@@ -195,7 +195,3 @@ type family PElemIndex (x :: a) (xs :: [a]) :: Peano where
 data Peano where
   Zero :: Peano
   Succ :: Peano -> Peano
-
-
-
-

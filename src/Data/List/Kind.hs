@@ -110,3 +110,8 @@ type family Foldr0 (f :: a -> a -> a) (k :: a) (xs :: [a]) :: a where
 type family Foldr1 (f :: a -> a -> a) (xs :: [a]) :: a where
   Foldr1 f '[x]      = x
   Foldr1 f (x ': xs) = f x (Foldr1 f xs)
+
+-- | @`Map f xs` peforms a type-level @map@ on the list of types @xs@.
+type family Map (f :: a -> b) (xs :: [a]) :: [b] where
+  Map f '[]       = '[]
+  Map f (x ': xs) = f x ': Map f xs
