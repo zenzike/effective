@@ -70,8 +70,17 @@ prog3 :: Members '[Par, Act HS, Res HS, Tell String, Clone (Tell String)] sig =>
 prog3 = resHS (par (do tell "A"; handshake; tell' "C")
                    (do tell "B"; shakehand; tell' "D"))
 
+-- The cloned `tell` operations are handled before `par` so they behave
+-- like thread-local writers while the original `tell`s are global.
 test5 :: (String, ListActs HS (String, ()))
 test5 = handle (cloneHdl writer |> resump |> writer) prog3
 
 main :: IO ()
 main = return ()
+
+
+prog4 :: Member (Alg IO) sig => Prog sig ()
+prog4 = liftIO (putChar 'x') 
+
+test6 :: IO ()
+test6 = handleIO identity prog4

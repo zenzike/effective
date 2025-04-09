@@ -18,7 +18,7 @@ Stability   : experimental
 module Control.Effect.IO (
   -- * Syntax
   -- ** Operations
-  getLine, putStrLn, putStr, getCPUTime, newQSem, signalQSem, waitQSem,
+  liftIO, getLine, putStrLn, putStr, getCPUTime, newQSem, signalQSem, waitQSem,
 
   -- ** Signatures
   GetLine, GetLine_(..),
@@ -36,6 +36,7 @@ module Control.Effect.IO (
 
   -- * Algebras
   ioAlg,
+  nativeAlg,
   putStrLnAlg,
   putStrAlg,
   getLineAlg,
@@ -62,7 +63,8 @@ import Prelude hiding (getLine, putStrLn, putStr)
 import qualified Prelude as Prelude
 
 -- | The effects operations that the IO monad supports natively
-type IOEffects = '[ GetLine
+type IOEffects = '[ Alg IO
+                  , GetLine
                   , PutStrLn
                   , PutStr
                   , GetCPUTime
@@ -74,7 +76,16 @@ type IOEffects = '[ GetLine
 
 -- | Interprets IO operations using their standard semantics in `IO`.
 ioAlg :: Algebra IOEffects IO
-ioAlg = getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
+ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
+
+-- | Treating an IO computation as an operation of signature `Alg IO`. 
+liftIO :: Members '[Alg IO] sig => IO a -> Prog sig a
+liftIO o = call (Alg (fmap return o))
+
+-- | Algebra for the generic algebraic IO effect
+nativeAlg :: Algebra '[Alg IO] IO
+nativeAlg op
+  | Just (Alg (op')) <- prj op = op'
 
 -- | Signature for `Control.Effects.IO.getLine`.
 type GetLine = Alg GetLine_
