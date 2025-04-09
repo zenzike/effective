@@ -37,7 +37,7 @@ library
     Control.Effect.Maybe
     Control.Effect.Nondet
     Control.Effect.Concurrency
-    Control.Effect.Concurrency.Action
+    Control.Effect.Concurrency.Types
     Control.Effect.Reader
     Control.Effect.State
     Control.Effect.State.Type
@@ -70,7 +70,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    base, transformers, ghc, array
+    base, transformers, ghc, array, containers
 
 test-suite docs
   type:          exitcode-stdio-1.0
@@ -102,4 +102,4 @@ test-suite concur
   main-is:       Concur.hs
   default-language: GHC2021
   hs-source-dirs:  test
-  build-depends: base, transformers, effective,
+  build-depends: base, transformers, effective, containers

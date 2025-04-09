@@ -28,6 +28,9 @@ module Control.Effect.Except (
   -- ** Algebras
   exceptAlg,
   retryAlg,
+
+  -- ** Underlying monad transformers
+  ExceptT(..)
 ) where
 
 import Control.Effect

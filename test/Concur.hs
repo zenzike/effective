@@ -7,13 +7,10 @@ import Control.Effect.IO
 import Control.Effect.Writer
 import Control.Effect.Concurrency
 import Control.Effect.Algebraic
-import Control.Effect.Concurrency.Action
 import Control.Monad
-import Control.Effect.IO
-
 import Control.Effect.Clone
 
-data ActNames = Handshake deriving (Show, Eq)
+data ActNames = Handshake deriving (Show, Eq, Ord)
 type HS = CCSAction ActNames
 
 handshake :: Member (Act HS) sig => Prog sig ()
@@ -78,9 +75,11 @@ test5 = handle (cloneHdl writer |> resump |> writer) prog3
 main :: IO ()
 main = return ()
 
-
 prog4 :: Member (Alg IO) sig => Prog sig ()
 prog4 = liftIO (putChar 'x') 
 
 test6 :: IO ()
 test6 = handleIO identity prog4
+
+test7 :: IO (Either String ())
+test7 = handleIO (ccsByQSem @ActNames |> writerIO) (prog >> putStrLn "")

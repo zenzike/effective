@@ -28,23 +28,23 @@ cloneHdl h = unsafeCoerce h  -- There is safer way to do this but this is quicke
 
 -- | @clone x k@ invokes the clone version of the operation @x@ (together with its
 -- continuation @k@).
-clone :: forall eff effs a x . Member (Clone eff) effs 
-      => eff (Prog effs) x 
-      -> (x -> Prog effs a)
-      -> Prog effs a
-clone x k = Call (inj (Clone x)) k
+cloneK :: forall eff effs a x . Member (Clone eff) effs 
+       => eff (Prog effs) x 
+       -> (x -> Prog effs a)
+       -> Prog effs a
+cloneK x k = Call (inj (Clone x)) k
 
--- | @clone' x k@ invokes the clone version of the operation @x@.
-clone' :: forall eff effs a . Member (Clone eff) effs => eff (Prog effs) (Prog effs a) -> Prog effs a
-clone' x = Call (inj (Clone x)) id
+-- | @clone x k@ invokes the clone version of the operation @x@.
+clone :: forall eff effs a . Member (Clone eff) effs => eff (Prog effs) (Prog effs a) -> Prog effs a
+clone x = Call (inj (Clone x)) id
 
--- | A special case of `clone` for algebraic operations.
+-- | A special case of `cloneK` for algebraic operations.
 cloneAlg :: (Member (Clone (Alg f)) effs, Functor f) => f a -> Prog effs a
-cloneAlg f = clone (Alg f) return
+cloneAlg f = cloneK (Alg f) return
 
--- | A special case of `clone` for scoped operations.
+-- | A special case of `cloneK` for scoped operations.
 cloneScp :: (Member (Clone (Scp f)) effs, Functor f) => f (Prog effs a) -> Prog effs a
-cloneScp f = clone (Scp f) return
+cloneScp f = cloneK (Scp f) return
 
 -- | Turn the outermost operation call from `eff` to `Clone eff`.
 -- There are two limitations to this function:
@@ -59,5 +59,5 @@ clone1 :: forall eff effs a .
            => Prog effs a -> Prog effs a
 clone1 (Return x) = Return x
 clone1 p@(Call op k) = case prj @eff op of 
-  Just op' -> clone op' k
+  Just op' -> cloneK op' k
   Nothing  -> p

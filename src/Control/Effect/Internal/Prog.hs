@@ -27,7 +27,6 @@ type Progs effs -- ^ A list of effects the program may use
            a    -- ^ The return value of the program
   = forall effs' . Members effs effs' => Prog effs' a
 
--- TODO: Remove the `Functor` constraint
 -- | A program that contains at most the effects in @effs@,
 -- to be processed by a handler in the exact order given in @effs@.
 data Prog (effs :: [Effect]) a where
@@ -41,10 +40,28 @@ data Prog (effs :: [Effect]) a where
 -- Call'   :: (Effs sigs) (Prog sigs) (Prog sigs a) -> Prog sigs a
 -- Call' x ~= Call x id return
 
--- | Construct a program of type @Prog effs a@ using an operation of type @eff (Prog effs) (Prog effs a)@, when @eff@ is a member of @effs@.
+-- | Construct a program of type @Prog effs a@ using an operation of type @eff (Prog effs) (Prog effs a)@, 
+-- when @eff@ is a member of @effs@.
 {-# INLINE call #-}
 call :: forall eff effs a . (Member eff effs, HFunctor eff) => eff (Prog effs) (Prog effs a) -> Prog effs a
 call x = Call (inj x) id
+
+-- | A variant of `call` without the explicit continuation argument.
+{-# INLINE call' #-}
+call' :: forall eff effs a . (Member eff effs, HFunctor eff) => eff (Prog effs) a -> Prog effs a
+call' x = Call (inj x) Return
+
+-- | A variant of `call` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callM #-}
+callM :: forall eff effs a m . (Monad m, Member eff effs, HFunctor eff) 
+      => Algebra effs m -> eff m (m a) -> m a
+callM oalg x = join (oalg (inj x))
+
+-- | A variant of `call'` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callM' #-}
+callM' :: forall eff effs a m . (Monad m, Member eff effs, HFunctor eff) 
+      => Algebra effs m -> eff m a -> m a
+callM' oalg x = oalg (inj x)
 
 instance Functor (Prog sigs) where
   {-# INLINE fmap #-}

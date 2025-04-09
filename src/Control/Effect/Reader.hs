@@ -28,6 +28,8 @@ module Control.Effect.Reader (
   -- ** Algebras
   readerAlg,
 
+  -- ** Underlying monad transformers
+  R.ReaderT(..),
 ) where
 
 import Control.Effect

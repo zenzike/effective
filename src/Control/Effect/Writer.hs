@@ -23,16 +23,21 @@ module Control.Effect.Writer (
   -- ** Handlers
   writer,
   writer_,
+  writerIO,
   censors,
   uncensors,
 
   -- ** Algebras
   writerAlg,
+
+  -- ** Underlying monad transformers
+  W.WriterT(..)
 ) where
 
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Control.Effect.IO (liftIO)
 
 import qualified Data.Functor.Unary as U
 import Data.Tuple (swap)
@@ -70,6 +75,13 @@ writer = handler (fmap swap . W.runWriterT) writerAlg
 -- silently discards the final state.
 writer_ :: Monoid w => Handler '[Tell w] '[] (W.WriterT w) Identity
 writer_ = handler (fmap (Identity . fst) . W.runWriterT) writerAlg
+
+-- | The `writerIO` handler translates `tell` operations to 
+-- physical IO printing.
+writerIO :: Handler '[Tell String] '[Alg IO] IdentityT Identity
+writerIO = interpret $
+  \(Eff (Alg (Tell w k))) -> do liftIO (putStr w)
+                                return k
 
 -- | Signature for 'censor'.
 type Censor w = Scp (Censor_ w)

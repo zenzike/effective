@@ -6,7 +6,7 @@ module Control.Monad.Trans.CRes (
 import Control.Monad.Trans.Resump
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
-import Control.Effect.Concurrency.Action
+import Control.Effect.Concurrency.Types (Action (..))
 import Data.List (nub)
 
 -- Step functor for choice and action

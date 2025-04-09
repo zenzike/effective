@@ -51,7 +51,7 @@ module Control.Effect.IO (
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
-import Control.Effect.Concurrency (Par, Par_(..))
+import Control.Effect.Concurrency.Types (Par, Par_(..))
 
 import qualified System.CPUTime
 import qualified Control.Concurrent

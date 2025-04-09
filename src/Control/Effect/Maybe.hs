@@ -29,6 +29,8 @@ module Control.Effect.Maybe (
   exceptAlg,
   retryAlg,
 
+  -- ** Underlying monad transformers
+  MaybeT(..)
 ) where
 
 import Control.Effect
