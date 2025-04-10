@@ -4,8 +4,8 @@ module Main where
 import Prelude hiding (or)
 import Control.Effect
 import Control.Effect.HState.Unsafe
-    ( Get, Put, New, new, put, get, hstate )
 import qualified Control.Effect.HState.Safe as Safe
+import qualified Control.Effect.State as St
 import Control.Effect.Nondet
 import Data.List.Kind
 import Data.HFunctor
@@ -37,6 +37,23 @@ goWrong :: forall sig. Members '[New, Get, Put] sig => Prog sig Int
 goWrong = do iRef <- new @Int 0
              return (handle hstate (get iRef))
 test3 = handle hstate goWrong      -- crash
+
+
+goWrong2 :: forall sig. 
+            Members '[ New, Get, Put, 
+                       Choose, 
+                       St.Put (Maybe (Ref Int)), St.Get (Maybe (Ref Int))
+                     ] sig
+         => Prog sig Int
+goWrong2 = do iRef <- new @Int 0
+              or (do iRef' <- new @Int 0; St.put (Just iRef'); return 0)
+                 (do r <- St.get;
+                     case r of 
+                       Just iRefFromOtherWorld -> get iRefFromOtherWorld
+                       Nothing -> return 0)
+
+test3' :: [Int]
+test3' = handle (hstate |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
 
 progS :: forall w sig. (Members '[Safe.Put w, Safe.Get w, Safe.New w] sig) 
       => Prog sig Int

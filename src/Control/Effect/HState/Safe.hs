@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds, QuantifiedConstraints #-}
-
 module Control.Effect.HState.Safe (
   Ref,
   Put, Get, New,
