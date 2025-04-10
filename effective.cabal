@@ -24,6 +24,7 @@ source-repository head
 
 library
   default-language: GHC2021
+  default-extensions: DataKinds
   ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file
 -- cpp-options: -DINDEXED
 
@@ -47,6 +48,8 @@ library
     Control.Effect.Algebraic
     Control.Effect.Scoped
     Control.Effect.Clone
+    Control.Effect.HState.Unsafe
+    Control.Effect.HState.Safe
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
@@ -70,7 +73,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    base, transformers, ghc, array, containers
+    base, transformers, ghc, array, containers, ghc-prim
 
 test-suite docs
   type:          exitcode-stdio-1.0
@@ -80,6 +83,7 @@ test-suite docs
   hs-source-dirs: docs
   build-tool-depends: markdown-unlit:markdown-unlit>=0.6
   default-language: GHC2021
+  default-extensions: DataKinds
   other-modules:
     Error,
 --    Graded,
@@ -91,6 +95,7 @@ test-suite readme
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded -pgmL markdown-unlit
   main-is:       README.lhs
+  default-extensions: DataKinds
   default-language: GHC2021
   hs-source-dirs:  .
   build-depends: base, transformers, effective, hedgehog
@@ -98,8 +103,18 @@ test-suite readme
 
 test-suite concur
   type:          exitcode-stdio-1.0
-  ghc-options:   -threaded -pgmL 
+  ghc-options:   -threaded   -fsimpl-tick-factor=1000
   main-is:       Concur.hs
   default-language: GHC2021
+  default-extensions: DataKinds
+  hs-source-dirs:  test
+  build-depends: base, transformers, effective, containers
+
+test-suite hstate
+  type:          exitcode-stdio-1.0
+  ghc-options:   -threaded
+  main-is:       HState.hs
+  default-language: GHC2021
+  default-extensions: DataKinds
   hs-source-dirs:  test
   build-depends: base, transformers, effective, containers

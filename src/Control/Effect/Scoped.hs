@@ -21,6 +21,7 @@ import qualified Data.Functor.Unary as U
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.State.Strict
+import qualified Control.Monad.Trans.State.Lazy as L
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.List
@@ -72,6 +73,10 @@ instance Functor sig => Forward (Scp sig) MaybeT where
 instance Functor sig => Forward (Scp sig) (StateT s) where
   {-# INLINE fwd #-}
   fwd alg (Scp op) = StateT (\s -> (alg (Scp (fmap (flip runStateT s) op))))
+
+instance Functor sig => Forward (Scp sig) (L.StateT s) where
+  {-# INLINE fwd #-}
+  fwd alg (Scp op) = L.StateT (\s -> (alg (Scp (fmap (flip L.runStateT s) op))))
 
 instance Functor sig => Forward (Scp sig) (WriterT s) where
   {-# INLINE fwd #-}

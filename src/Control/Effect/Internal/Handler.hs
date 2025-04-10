@@ -460,7 +460,7 @@ handleN (Handler run halg)
 
 -- | @handleM xalg h p@ uses the handler @h@ to evaluate the program @p@. Any
 -- residual effects in @xeffs@ not recognised by @h@ must be consumed by the
--- algebra @xalg@.
+-- algebra @xalg@. If an effect is both in @effs@ and @xeffs@, it is handled by @h@.
 handleM :: forall effs oeffs xeffs m t f a .
   ( Monad m
   , forall m . Monad m => Monad (t m)
@@ -479,6 +479,59 @@ handleM xalg (Handler run halg)
   . run @m (xalg . injs)
   . eval (hunion @effs @xeffs (halg (xalg . injs)) (fwds xalg))
 
+-- | @handleMP h p@ uses the handler @h@ to evaluate the program @p@, resulting
+-- in a program with effects @xeffs@ that are not recognised by @h@.
+-- If an effect is both in @effs@ and @xeffs@, it is handled by @h@.
+handleMP :: forall effs oeffs xeffs t f a .
+  ( forall m . Monad m => Monad (t m)
+  , Forwards xeffs t
+  , Injects oeffs xeffs
+  , Injects (xeffs :\\ effs) xeffs
+  , Append effs (xeffs :\\ effs)
+  , HFunctor (Effs (effs :++ (xeffs :\\ effs)))
+  )
+  => Handler effs oeffs t f        -- ^ Handler @h@
+  -> Prog (effs `Union` xeffs) a   -- ^ Program @p@ that contains @xeffs@
+  -> Prog xeffs (Apply f a)
+handleMP = handleM progAlg
+
+-- | @handleM' xalg h p@ uses the handler @h@ to evaluate the program @p@. Any
+-- residual effects in @xeffs@ not recognised by @h@ must be consumed by the
+-- algebra @xalg@. 
+-- The difference from `handleM` is that the effect signature of @p@ is allowed
+-- to have duplication here and the type constraints are simpler.
+handleM' :: forall effs oeffs xeffs m t f a .
+  ( Monad m
+  , forall m . Monad m => Monad (t m)
+  , Forwards xeffs t
+  , Injects oeffs xeffs
+  , Append effs xeffs
+  , HFunctor (Effs (effs :++ xeffs))
+  )
+  => Algebra xeffs m               -- ^ Algebra @xalg@ for external effects @xeffs@
+  -> Handler effs oeffs t f        -- ^ Handler @h@
+  -> Prog (effs :++ xeffs) a       -- ^ Program @p@ that contains @xeffs@
+  -> m (Apply f a)
+handleM' xalg (Handler run halg)
+  = unsafeCoerce @(m (f a)) @(m (Apply f a))
+  . run @m (xalg . injs)
+  . eval (heither @effs @xeffs (halg (xalg . injs)) (fwds xalg))
+
+-- | @handleMP' h p@ uses the handler @h@ to evaluate the program @p@, resulting
+-- in a program with effects @xeffs@ that are not recognised by @h@.
+-- The difference from `handleMP` is that the effect signature of @p@ is allowed
+-- to have duplication here and the type constraints are simpler.
+handleMP' :: forall effs oeffs xeffs t f a .
+  ( forall m . Monad m => Monad (t m)
+  , Forwards xeffs t
+  , Injects oeffs xeffs
+  , Append effs xeffs
+  , HFunctor (Effs (effs :++ xeffs))
+  )
+  => Handler effs oeffs t f        -- ^ Handler @h@
+  -> Prog (effs :++ xeffs) a       -- ^ Program @p@ that contains @xeffs@
+  -> Prog xeffs (Apply f a)
+handleMP' = handleM' progAlg
 
 
 -- | @Apply f a@ normalises a functor @f@ so that when it is applied to

@@ -129,6 +129,7 @@ weakenAlg alg = alg . injs
 
 -- | Constructs an algebra for the union containing @xeffs `Union` yeffs@
 -- by using an algebra for the union @xeffs@ and aonther for the union @yeffs@.
+-- If an effect is in both @xeffs@ and @yeffs@, the algebra for @xeffs@ is used.
 {-# INLINE hunion #-}
 hunion :: forall xeffs yeffs f a b
   .  ( Append xeffs (yeffs :\\ xeffs), Injects (yeffs :\\ xeffs) yeffs )

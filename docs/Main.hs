@@ -6,7 +6,6 @@ import Hedgehog.Main
 -- import Error
 -- import Nondet
 -- import State
-import Concur
 -- import Parser
 -- import Graded ()
 

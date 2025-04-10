@@ -154,7 +154,7 @@ prjCall _           = Nothing
 
 -- | Construct a program from an operation in a union.
 {-# INLINE progAlg #-}
-progAlg :: Effs sig (Prog sig) a -> Prog sig a
+progAlg :: Algebra effs (Prog effs) 
 progAlg x = Call x return
 
 
