@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 module Main where
 
 import Prelude hiding (log, putStrLn, putStr)
@@ -9,6 +8,9 @@ import Control.Effect.Concurrency
 import Control.Effect.Algebraic
 import Control.Monad
 import Control.Effect.Clone
+
+main :: IO ()
+main = return ()
 
 data ActNames = Handshake deriving (Show, Eq, Ord)
 type HS = CCSAction ActNames
@@ -71,9 +73,6 @@ prog3 = resHS (par (do tell "A"; handshake; tell' "C")
 -- like thread-local writers while the original `tell`s are global.
 test5 :: (String, ListActs HS (String, ()))
 test5 = handle (cloneHdl writer |> resump |> writer) prog3
-
-main :: IO ()
-main = return ()
 
 prog4 :: Member (Alg IO) sig => Prog sig ()
 prog4 = liftIO (putChar 'x') 
