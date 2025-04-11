@@ -482,7 +482,7 @@ handleM xalg (Handler run halg)
 -- | @handleMP h p@ uses the handler @h@ to evaluate the program @p@, resulting
 -- in a program with effects @xeffs@ that are not recognised by @h@.
 -- If an effect is both in @effs@ and @xeffs@, it is handled by @h@.
-handleMP :: forall effs oeffs xeffs t f a .
+handleP :: forall effs oeffs xeffs t f a .
   ( forall m . Monad m => Monad (t m)
   , Forwards xeffs t
   , Injects oeffs xeffs
@@ -493,7 +493,7 @@ handleMP :: forall effs oeffs xeffs t f a .
   => Handler effs oeffs t f        -- ^ Handler @h@
   -> Prog (effs `Union` xeffs) a   -- ^ Program @p@ that contains @xeffs@
   -> Prog xeffs (Apply f a)
-handleMP = handleM progAlg
+handleP = handleM progAlg
 
 -- | @handleM' xalg h p@ uses the handler @h@ to evaluate the program @p@. Any
 -- residual effects in @xeffs@ not recognised by @h@ must be consumed by the
@@ -521,7 +521,7 @@ handleM' xalg (Handler run halg)
 -- in a program with effects @xeffs@ that are not recognised by @h@.
 -- The difference from `handleMP` is that the effect signature of @p@ is allowed
 -- to have duplication here and the type constraints are simpler.
-handleMP' :: forall effs oeffs xeffs t f a .
+handleP' :: forall effs oeffs xeffs t f a .
   ( forall m . Monad m => Monad (t m)
   , Forwards xeffs t
   , Injects oeffs xeffs
@@ -531,7 +531,7 @@ handleMP' :: forall effs oeffs xeffs t f a .
   => Handler effs oeffs t f        -- ^ Handler @h@
   -> Prog (effs :++ xeffs) a       -- ^ Program @p@ that contains @xeffs@
   -> Prog xeffs (Apply f a)
-handleMP' = handleM' progAlg
+handleP' = handleM' progAlg
 
 
 -- | @Apply f a@ normalises a functor @f@ so that when it is applied to

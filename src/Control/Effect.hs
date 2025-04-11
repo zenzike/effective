@@ -51,9 +51,9 @@ module Control.Effect
   , fold
   , handle
   , handleM
-  , handleMP
+  , handleP
   , handleM'
-  , handleMP'
+  , handleP'
 
   -- * Type families
   -- | The types of handlers are normalised when they are fused together, as are

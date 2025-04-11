@@ -3,8 +3,8 @@ module Main where
 
 import Prelude hiding (or)
 import Control.Effect
-import Control.Effect.HState.Unsafe
-import qualified Control.Effect.HState.Safe as Safe
+import Control.Effect.HOStore.Unsafe
+import qualified Control.Effect.HOStore.Safe as Safe
 import qualified Control.Effect.State as St
 import Control.Effect.Nondet
 import Data.List.Kind
@@ -19,7 +19,7 @@ prog1 = do iRef <- new @Int 1
            return (f i)
 
 test1 :: Int
-test1 = handle hstate prog1
+test1 = handle hstore prog1
 
 landinKnot :: forall sig. Members '[New, Get, Put] sig => Prog sig Int
 landinKnot =
@@ -31,12 +31,12 @@ landinKnot =
      factorial 5
 
 test2 :: Int
-test2 = handle hstate landinKnot   -- 120
+test2 = handle hstore landinKnot   -- 120
 
 goWrong :: forall sig. Members '[New, Get, Put] sig => Prog sig Int
 goWrong = do iRef <- new @Int 0
-             return (handle hstate (get iRef))
-test3 = handle hstate goWrong      -- crash
+             return (handle hstore (get iRef))
+test3 = handle hstore goWrong      -- crash
 
 
 goWrong2 :: forall sig. 
@@ -53,7 +53,7 @@ goWrong2 = do iRef <- new @Int 0
                        Nothing -> return 0)
 
 test3' :: [Int]
-test3' = handle (hstate |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
+test3' = handle (hstore |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
 
 progS :: forall w sig. (Members '[Safe.Put w, Safe.Get w, Safe.New w] sig) 
       => Prog sig Int

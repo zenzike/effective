@@ -48,8 +48,8 @@ library
     Control.Effect.Algebraic
     Control.Effect.Scoped
     Control.Effect.Clone
-    Control.Effect.HState.Unsafe
-    Control.Effect.HState.Safe
+    Control.Effect.HOStore.Unsafe
+    Control.Effect.HOStore.Safe
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
@@ -110,10 +110,10 @@ test-suite concur
   hs-source-dirs:  test
   build-depends: base, transformers, effective, containers
 
-test-suite hstate
+test-suite hostore
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded
-  main-is:       HState.hs
+  main-is:       HOStore.hs
   default-language: GHC2021
   default-extensions: DataKinds
   hs-source-dirs:  test

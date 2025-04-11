@@ -1,11 +1,11 @@
 {-|
-Module      : Control.Effect.HState.Unsafe
+Module      : Control.Effect.HOStore.Unsafe
 Description : Higher-order store (unsafe implementation)
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
 
-This modules provides an unsafe implementation of the effect of higher-order store,
+This module provides an unsafe implementation of the effect of higher-order store,
 that is, mutable state that supports dynamically creation of cells that store values
 of /any (lifted) type/.  This implementation is unsafe because references from 
 different executions may be wrongly mixed. For example,
@@ -13,15 +13,15 @@ different executions may be wrongly mixed. For example,
 @
 goWrong :: forall sig. Members '[New, Get, Put] sig => Prog sig Int
 goWrong = do iRef <- new @Int 0
-             return (handle hstate (get iRef))
+             return (handle hstore (get iRef))
 
 -- The following crashes
 test :: [Int]
-test = handle hstate goWrong
+test = handle hstore goWrong
 @
 
-Running @handle hstate goWrong@ will crash because the reference @iRef@ is from
-the outer @handle hstate@ but it is mistakenly used by the inner program. 
+Running @handle hstore goWrong@ will crash because the reference @iRef@ is from
+the outer @handle hstore@ but it is mistakenly used by the inner program. 
 
 Another way of how things can go wrong is when there is 'multiple-shot algebraic effects':
 
@@ -44,7 +44,7 @@ goWrong2 = do iRef <- new @Int 0
 
 -- The following crashes
 test :: [Int]
-test = handle (hstate |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
+test = handle (hstore |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
 @
 
 This goes wrong because higher-order store is handled before non-determinstic 
@@ -55,13 +55,13 @@ memory store.
 
 As a rule of thumb for safety, when using the effect handler from this module, 
 
-  1. __never have nested uses of /handle hstate/__,
+  1. __never have nested uses of /handle hstore/__,
   2. __never handle higher-order store before any higher-order operations or multiple-shot algebraic operations__. 
   
 A safer but more cumbersome interface in the style of ST monad is provided
-in the sister module "Control.Effect.HState.Safe".
+in the sister module "Control.Effect.HOStore.Safe".
 -}
-module Control.Effect.HState.Unsafe (
+module Control.Effect.HOStore.Unsafe (
   -- * Syntax
   -- ** Operations
   put, get, new,
@@ -72,15 +72,15 @@ module Control.Effect.HState.Unsafe (
 
   -- * Semantics
   -- ** Handlers
-  hstate,
-  Lazy.StateT,
+  hstore,
+  St.StateT,
 ) where
 
 import Control.Effect
 import GHC.Types (Any)
 import Unsafe.Coerce
 import qualified Data.Map as M
-import qualified Control.Monad.Trans.State.Lazy as Lazy
+import qualified Control.Monad.Trans.State as St
 import Data.HFunctor ( HFunctor(..) )
 
 -- | Internally locations in the store are just integers.
@@ -90,8 +90,8 @@ type Loc = Int
 -- not export the internal representation of t`Ref`.
 newtype Ref a = Ref { unRef :: Loc } 
 
--- | Signature for the operation of allocating a new memory cell. Note
--- that this is not an ordinary algebraic operation because of the
+-- | Signature for the operation of allocating a new memory cell of type `a`. 
+-- Note that this is not an ordinary algebraic operation because of the 
 -- polymorphic @a@.
 data New (f :: * -> *) (x :: *) where
   New :: a -> (Ref a -> x) -> New f x 
@@ -143,25 +143,25 @@ type Mem = M.Map Loc Any
 -- | The handler for the effect of higher-order store. This handler is not safe
 -- and may cause unexpected runtime crashes. Please read the documentation in 
 -- the beginning of this module when using it.
-hstate :: Handler [Put, Get, New] '[] (Lazy.StateT Mem) Identity
-hstate = handler (fmap Identity . flip Lazy.evalStateT M.empty) hstateAlg
+hstore :: Handler [Put, Get, New] '[] (St.StateT Mem) Identity
+hstore = handler (fmap Identity . flip St.evalStateT M.empty) hstoreAlg
 
-hstateAlg
+hstoreAlg
   :: Monad m
   => (forall x. oeff m x -> m x)
-  -> (forall x.  Effs [Put, Get, New] (Lazy.StateT Mem m) x -> Lazy.StateT Mem m x)
-hstateAlg _ op
+  -> (forall x.  Effs [Put, Get, New] (St.StateT Mem m) x -> St.StateT Mem m x)
+hstoreAlg _ op
   | Just (Put r a p) <- prj op =
-      do Lazy.modify (\mem -> M.insert (unRef r) (unsafeCoerce a) mem)
+      do St.modify (\mem -> M.insert (unRef r) (unsafeCoerce a) mem)
          return p
 
   | Just (Get r p) <- prj @Get op =
-      do mem <- Lazy.get
+      do mem <- St.get
          return (p (unsafeCoerce (mem M.! (unRef r))))
 
   | Just (New a p) <- prj op =
-      do mem <- Lazy.get
+      do mem <- St.get
          let n = M.size mem
          let mem' = M.insert n (unsafeCoerce a) mem
-         Lazy.put mem'
+         St.put mem'
          return (p (Ref n))
