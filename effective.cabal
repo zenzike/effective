@@ -47,6 +47,7 @@ library
     Control.Effect.Writer
     Control.Effect.Algebraic
     Control.Effect.Scoped
+    Control.Effect.Distributive
     Control.Effect.Clone
     Control.Effect.HOStore.Unsafe
     Control.Effect.HOStore.Safe
