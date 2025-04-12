@@ -79,7 +79,7 @@ The idea is to execute this program using a specialised handler
 that counts the number of ticks:
 ```haskell
 exampleEchoTick :: IO (Int, ())
-exampleEchoTick = handleIO ticker echoTick
+exampleEchoTick = handleIO @'[GetLine, PutStrLn] ticker echoTick
 ```
 When this is executed, it counts the number of lines received:
 ```console
@@ -98,7 +98,7 @@ We can also emulate the behaviour of `echo` by ignoring all the ticks by using
 the `unticker` handler:
 ```haskell
 exampleEchoNoTick :: IO ()
-exampleEchoNoTick = handleIO unticker echoTick
+exampleEchoNoTick = handleIO @'[GetLine, PutStrLn] unticker echoTick
 ```
 Note that this is different to discarding the tick count by applying `fst`
 to the result of a program that counts ticks: the count is not even generated

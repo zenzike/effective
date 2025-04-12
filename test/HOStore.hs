@@ -77,7 +77,7 @@ prog2 = do iRef <- Safe.new @Int @w 1
 -- State is local if state gets handled first
 -- test5 == [0, 1]
 test5 :: [Int]
-test5 = handle nondet (Safe.handleHS prog2') where
+test5 = handle nondet (Safe.handleHSP prog2') where
   prog2' :: forall w sig. (Members '[Empty, Choose] sig) 
          => Prog (Safe.HSEffs w :++ sig) Int
   prog2' = prog2 @w
@@ -85,7 +85,7 @@ test5 = handle nondet (Safe.handleHS prog2') where
 -- State is global if state gets handled later
 -- test6 == [0, 2]
 test6 :: [Int]
-test6 = Safe.runHS (handleMP nondet (prog2 @w) 
+test6 = Safe.runHS (handleP nondet (prog2 @w) 
                       :: forall w. Prog (Safe.HSEffs w) [Int])
 
 main :: IO ()

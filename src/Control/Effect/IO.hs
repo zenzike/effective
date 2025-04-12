@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-|
 Module      : Control.Effect.IO
 Description : Effects for input/output
@@ -21,6 +22,7 @@ module Control.Effect.IO (
   liftIO, getLine, putStrLn, putStr, getCPUTime, newQSem, signalQSem, waitQSem,
 
   -- ** Signatures
+  IOEffects,
   GetLine, GetLine_(..),
   PutStrLn, PutStrLn_(..),
   PutStr, PutStr_(..),
@@ -33,6 +35,7 @@ module Control.Effect.IO (
   -- * Evaluation
   evalIO,
   handleIO,
+  handleIO',
 
   -- * Algebras
   ioAlg,
@@ -64,6 +67,7 @@ import Data.HFunctor
 
 import Prelude hiding (getLine, putStrLn, putStr)
 import qualified Prelude as Prelude
+import Unsafe.Coerce ( unsafeCoerce )
 
 -- | The effects operations that the IO monad supports natively
 type IOEffects = '[ Alg IO
@@ -231,21 +235,41 @@ waitQSemAlg eff
 evalIO :: Prog IOEffects a -> IO a
 evalIO = eval ioAlg
 
--- | @`handleIO` h p@ evaluates @p@ using te handler @h@. Any residual
+-- | @`handleIO` h p@ evaluates @p@ using the handler @h@. Any residual
 -- effects are then interpreted in `IO` using their standard semantics.
+-- The type argument @xeffs@ usually can't be inferred and needs given
+-- explicitly. 
 handleIO
-  :: forall effs oeffs t f a xeffs
+  :: forall xeffs effs oeffs t f a
   . ( Injects oeffs xeffs
     , Injects (xeffs :\\ effs) xeffs
     , Functor f
     , Forwards xeffs t
     , forall m . Monad m => Monad (t m)
-    , xeffs ~ IOEffects
-    -- , KnownNat (Length effs)
+    , Injects xeffs IOEffects
     , Append effs (xeffs :\\ effs)
-    , HFunctor (Effs (effs :++ (IOEffects :\\ effs)))
+    , HFunctor (Effs (effs :++ (xeffs :\\ effs)))
     )
 
   => Handler effs oeffs t f
   -> Prog (effs `Union` xeffs) a -> IO (Apply f a)
-handleIO = handleM ioAlg
+handleIO = handleM @effs @oeffs @xeffs (ioAlg . injs)
+
+
+-- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. Any residual
+-- effects @xeffs@ are then interpreted in `IO` using their standard semantics.
+-- The type argument @xeffs@ usually can't be inferred and needs given
+-- explicitly. 
+handleIO' :: forall xeffs effs oeffs t f a .
+  ( forall m . Monad m => Monad (t m)
+  , Forwards xeffs t
+  , Injects oeffs xeffs
+  , Append effs xeffs
+  , HFunctor (Effs (effs :++ xeffs))
+  , Injects xeffs IOEffects
+  )
+  => Handler effs oeffs t f
+  -> Prog (effs :++ xeffs) a
+  -> IO (Apply f a)
+
+handleIO' = handleM' @effs @oeffs @xeffs (ioAlg . injs) 
