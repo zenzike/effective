@@ -9,19 +9,20 @@ import Control.Monad
 import Control.Effect.Concurrency.Types (Action (..))
 import Data.List (nub)
 
--- Step functor for choice and action
+-- | Step functor for choice and action
 data CStep a x = FailS | ChoiceS x x | ActS a x deriving Functor
 
--- The monad `CResT m` is the coproduct of the monad `m` and the 
+-- | The monad `CResT m` is the coproduct of the monad `m` and the 
 -- free monad over CStep. In other words, the algebraic theory
 -- corresponding to `CResT m` is the sum of the theory of `m`
 -- plus a nullary operation, a binary operation, and a unary operation
 -- for each action.
 type CResT a = ResT (CStep a)
 
+-- | The functor type for the results of running a nondeterministic process by backtracking.
 newtype ListActs a x = ListActs { unListActs :: [([a], x)] } deriving (Show, Functor)
 
--- Traverse all nondeterministic branches and accumulate the `m`-effects
+-- | Traverse all nondeterministic branches and accumulate the `m`-effects
 -- and actions.
 -- TODO: the manipulation of the lists can be more efficient.
 runAll :: Monad m => CResT a m x -> m (ListActs a x)
@@ -37,7 +38,7 @@ runAll = fmap ListActs . runAll' [] where
                                   r <- runAll' as mr
                                   return (l ++ r)
 
--- A specialised version of runAll' that prints more debug information
+-- | A specialised version of runAll' that prints some debug information
 runAllIO :: (Eq a, Eq x, Show x, Show a) => CResT a IO x -> IO [([a], x)]
 runAllIO = fmap nub . runAll' "" [] where
   runAll' :: (Show x, Show a) => String -> [a] -> CResT a IO x -> IO [([a], x)]
@@ -59,9 +60,11 @@ runAllIO = fmap nub . runAll' "" [] where
                putStrLn (indent ++ "Backtracking")
                return (l ++ r)
 
+-- | The functor type for the results of running a nondeterministic process by a given
+-- list of Booleans for resolving choices.
 newtype ActsMb a x = ActsMb { unActsMb :: ([a], Maybe x) } deriving (Functor, Show)
 
--- Resolving the nondeterministic choices with the given Booleans.
+-- | Run a nondeterministic process, using the given Booleans to resolve the choices.
 runWith :: Monad m => [Bool] -> CResT a m x -> m (ActsMb a x)
 runWith = runWith' [] where
   runWith' :: Monad m => [a] -> [Bool] -> CResT a m x -> m (ActsMb a x)
@@ -109,35 +112,29 @@ fail' = return (Right FailS)
 done' :: Monad m => a -> m (Either a b)
 done' x = return (Left x)
 
--- parallel composition of processes (only the left argument's return
--- value is kept in the combined process.)
-par :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-par x y = (parL x y <|> parR x y) <|> (parCL x y <|> parCR x y)
+-- | Joined parallel composition of processes. The process @jpar x y@ interleaves
+-- the actions of @x@ and @y@ in all possible ways nondeterministically.
+jpar :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
+jpar x y = (jparL x y <|> jparR x y) <|> (jparCL x y <|> jparCR x y)
 
--- parallel composition, and the left argument acts first
-parL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parL (ResT mxs) y = ResT $
+-- | Joined parallel composition with the left argument acts first.
+jparL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
+jparL (ResT mxs) y = ResT $
   do xs <- mxs
      case xs of
-       Left x -> unResT $ fmap (const x) y
-       Right (ActS a m)    -> prefix' a (par m y)
+       Left x -> unResT $ fmap ((x,)) y
+       Right (ActS a m)    -> prefix' a (jpar m y)
        Right FailS         -> fail'
-       Right (ChoiceS l r) -> parL l y <|>: parL r y
+       Right (ChoiceS l r) -> jparL l y <|>: jparL r y
 
--- parallel composition, and the right argument acts first
-parR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parR x (ResT mys) = ResT $
-  do ys <- mys
-     case ys of
-       Left y -> unResT $ x
-       Right (ActS a m)    -> prefix' a (par x m)
-       Right FailS         -> fail'
-       Right (ChoiceS l r) -> parR x l <|>: parR x r
+-- | Joined parallel composition with the right argument acts first.
+jparR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
+jparR x y = fmap (\(a,b) -> (b,a)) (jparL y x)
 
--- parallel composition, and the two arguments interact first, and the 
--- `m`-effect of left argument is run first
-parCL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parCL lhs rhs = ResT $
+-- | Joined parallel composition with the two arguments communicate first, but
+-- the monadic effect of the left argument is executed first.
+jparCL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
+jparCL lhs rhs = ResT $
   do xs <- unResT lhs
      case xs of 
        Left x -> fail'
@@ -147,33 +144,25 @@ parCL lhs rhs = ResT $
               Right (ActS b n) -> 
                 case merge a b of
                   Nothing -> fail'
-                  Just c -> prefix' c (par m n)
+                  Just c -> prefix' c (jpar m n)
               Right (ChoiceS l' r') -> 
-                (parCR (prefix a m) l') <|>: (parCR (prefix a m) r')
+                jparCR (prefix a m) l' <|>: (jparCR (prefix a m) r')
               _ -> fail'
        Right FailS -> fail'
-       Right (ChoiceS l r) -> parCL l rhs <|>: parCL r rhs
+       Right (ChoiceS l r) -> jparCL l rhs <|>: jparCL r rhs
 
--- parallel composition, and the two arguments interact first, and the 
--- `m`-effect of right argument is run first
-parCR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
-parCR lhs rhs = ResT $
-  do ys <- unResT rhs
-     case ys of 
-       Left y -> fail'
-       Right (ActS a m) -> 
-         do xs <- unResT lhs
-            case xs of
-              Right (ActS b n) -> 
-                case merge b a of
-                  Nothing -> fail'
-                  Just c -> prefix' c (par n m)
-              Right (ChoiceS l' r') -> 
-                parCL l' (prefix a m) <|>: parCL r' (prefix a m)
-              _ -> fail'
-       Right FailS -> fail'
-       Right (ChoiceS l r) -> parCR lhs l <|>: parCR lhs r
+-- | Joined parallel composition with the two arguments communicate first, but
+-- the monadic effect of the right argument is executed first.
+jparCR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
+jparCR lhs rhs = fmap (\(a,b) -> (b,a)) (jparCL rhs lhs)
 
+-- | Parallel composition of processes (only the left argument's return
+-- value is kept in the combined process.)
+par :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
+par x y = fmap fst (jpar x y)
+
+-- | The process @res a p@ acts like @p@ under a firewall that blocks all communication of
+-- @p@ with the external environment via action @a@.
 res :: (Action a, Monad m) => a -> CResT a m x -> CResT a m x
 res a p = ResT $
   do xs <- unResT p

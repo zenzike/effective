@@ -3,6 +3,7 @@ module Control.Effect.Concurrency.Types where
 import Data.Functor.Unary
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Control.Effect.Distributive
 import Control.Effect
 
 -- | A typeclass for types that can serve as actions in the style
@@ -16,6 +17,9 @@ data CCSAction a = Silent a | Action a | CoAction a deriving (Show, Eq, Ord)
 
 instance Eq a => Action (CCSAction a) where
   merge (Action a) (CoAction b)
+    | a == b    = Just (Silent a)
+    | otherwise = Nothing
+  merge (CoAction a) (Action b)
     | a == b    = Just (Silent a)
     | otherwise = Nothing
   merge _ _ = Nothing
@@ -42,7 +46,19 @@ data Par_ x = Par x x deriving Functor
 
 {-# INLINE par #-}
 par :: Member Par sig => Prog sig x -> Prog sig x -> Prog sig x
-par l r = call' (Scp (Par l  r))
+par l r = call' (Scp (Par l r))
+
+type JPar = Distr JPar_
+data JPar_ x = JPar x x deriving (Functor, Foldable, Traversable)
+
+-- | @jpar l r@ executes the two programs @l@ and @r@ in parallel and join them,
+-- returning the results from both of them.
+-- Note that `jpar` is not a scoped operation but a distributive operation, so it
+-- is harder to forward along monad transformers compared to `par`. It is recommended
+-- to use `par` if possible.
+{-# INLINE jpar #-}
+jpar :: Member JPar sig => Prog sig x -> Prog sig x -> Prog sig (x, x)
+jpar l r = call' (Distr (JPar l r) (\(JPar x y) -> (x , y)))
 
 type Res a = Scp (Res_ a)
 data Res_ a x = Res a x deriving Functor

@@ -42,6 +42,7 @@ module Control.Effect.IO (
   getLineAlg,
   getCPUTimeAlg,
   parAlg,
+  jparAlg,
   newQSemAlg,
   signalQSemAlg,
   waitQSemAlg,
@@ -51,11 +52,13 @@ module Control.Effect.IO (
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
-import Control.Effect.Concurrency.Types (Par, Par_(..))
+import Control.Effect.Distributive
+import Control.Effect.Concurrency.Types (Par, Par_(..), JPar, JPar_(..))
 
 import qualified System.CPUTime
 import qualified Control.Concurrent
 import qualified Control.Concurrent.QSem as QSem
+import qualified Control.Concurrent.MVar as MVar
 import Data.List.Kind
 import Data.HFunctor
 
@@ -69,6 +72,7 @@ type IOEffects = '[ Alg IO
                   , PutStr
                   , GetCPUTime
                   , Par
+                  , JPar
                   , NewQSem
                   , SignalQSem
                   , WaitQSem
@@ -76,7 +80,7 @@ type IOEffects = '[ Alg IO
 
 -- | Interprets IO operations using their standard semantics in `IO`.
 ioAlg :: Algebra IOEffects IO
-ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
+ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAlg # jparAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
 
 -- | Treating an IO computation as an operation of signature `Alg IO`. 
 liftIO :: Members '[Alg IO] sig => IO a -> Prog sig a
@@ -159,6 +163,19 @@ parAlg eff
   | Just (Scp (Par l r)) <- prj eff =
       do Control.Concurrent.forkIO (fmap (const ()) r)
          l
+
+-- | Interprets `Control.Effect.Concurrency.JPar` using the native concurrency API. 
+-- from "Control.Concurrent". The result from the child thread is passed back to the 
+-- main thread using `MVar`.
+jparAlg :: Algebra '[JPar] IO
+jparAlg eff
+  | Just (Distr (JPar l r) c) <- prj eff =
+      do m <- MVar.newEmptyMVar
+         Control.Concurrent.forkIO $
+           do y <- r; MVar.putMVar m y
+         x <- l
+         y' <- MVar.takeMVar m
+         return (c (JPar x y'))
 
 -- | Signature for `Control.Effect.IO.NewQSem`.
 type NewQSem = Alg (NewQSem_)

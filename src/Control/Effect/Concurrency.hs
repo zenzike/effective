@@ -8,12 +8,16 @@ module Control.Effect.Concurrency (
   resumpAlg,
   resump,
   resumpWith,
+  jresumpAlg,
+  jresump,
+  jresumpWith,
   ccsByQSem,
   ) where
 
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Control.Effect.Distributive
 import Control.Effect.Concurrency.Types
 import Control.Effect.IO (NewQSem, SignalQSem, WaitQSem, newQSem, signalQSem, waitQSem)
 import qualified Control.Effect.Reader as R
@@ -29,11 +33,23 @@ resumpAlg _ eff
   | Just (Scp (Par l r)) <- prj eff = C.par l r
   | Just (Scp (Res a p)) <- prj eff = C.res a p
 
+jresumpAlg :: (Action a, Monad m) => Algebra '[] m -> Algebra '[Act a, JPar, Res a] (C.CResT a m)
+jresumpAlg _ eff
+  | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
+  | Just (Distr (JPar l r) c) <- prj eff = fmap (\(x, y) -> c (JPar x y)) (C.jpar l r)
+  | Just (Scp (Res a p)) <- prj eff = C.res a p
+
 resump :: forall a. Action a => Handler '[Act a, Par, Res a] '[] (C.CResT a) (C.ListActs a) 
 resump = handler runAll resumpAlg
 
 resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] (C.CResT a) (ActsMb a)
 resumpWith choices = handler (runWith choices) resumpAlg
+
+jresump :: forall a. Action a => Handler '[Act a, JPar, Res a] '[] (C.CResT a) (C.ListActs a) 
+jresump = handler runAll jresumpAlg
+
+jresumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, JPar, Res a] '[] (C.CResT a) (ActsMb a)
+jresumpWith choices = handler (runWith choices) jresumpAlg
 
 type QSemMap a = M.Map a (QSem, QSem)
 

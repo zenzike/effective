@@ -29,20 +29,24 @@ prog = resHS (par (do tell "A"; handshake; tell "C")
                   (do tell "B"; shakehand; tell "D"))
 
 test1 :: (String, ListActs HS ())
-test1 = handle (fuse resump (writer @String)) prog
+test1 = handle (resump |> writer @String) prog
 
 test2 :: ListActs HS (String, ())
-test2 = handle (fuse (writer @String) resump ) prog
+test2 = handle (writer @String |> resump) prog
 
+-- ABCD
 test31 :: (String, ActsMb HS ())
 test31 = handle (fuse (resumpWith (False : True : True : True : [])) (writer @String)) prog
 
+-- ABDC
 test32 :: (String, ActsMb HS ())
 test32 = handle (fuse (resumpWith (False : True : True : False : [])) (writer @String)) prog
 
+-- BADC
 test33 :: (String, ActsMb HS ())
-test33 = handle (fuse (resumpWith (False : False : True : False : [])) (writer @String)) prog
+test33 = handle (fuse (resumpWith (False : False : True : True : [])) (writer @String)) prog
 
+-- BACD
 test34 :: (String, ActsMb HS ())
 test34 = handle (fuse (resumpWith (False : False : True : False : [])) (writer @String)) prog
 
@@ -82,3 +86,14 @@ test6 = handleIO identity prog4
 
 test7 :: IO (Either String ())
 test7 = handleIO (ccsByQSem @ActNames |> writerIO) (prog >> putStrLn "")
+
+
+prog5 :: Members '[JPar, Act HS, Res HS, Tell String] sig => Prog sig (Int, Int)
+prog5 = resHS (jpar (do tell "A"; handshake; tell "C"; return 0)
+                    (do tell "B"; shakehand; tell "D"; return 1))
+
+test8 :: (String, ListActs HS (Int, Int))
+test8 = handle (jresump |> writer @String) prog5
+
+test9 :: IO (Either String (Int, Int))
+test9 = handleIO (ccsByQSem @ActNames |> writerIO) prog5
