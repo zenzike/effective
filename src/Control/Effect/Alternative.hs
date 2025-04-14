@@ -1,6 +1,6 @@
 {-|
 Module      : Control.Effect.Alternative
-Description : Effects for alternatives with choose and empty.
+Description : Effects for alternatives with choose and empty
 License     : BSD-3-Clause
 Maintainer  : Nicolas Wu
 Stability   : experimental

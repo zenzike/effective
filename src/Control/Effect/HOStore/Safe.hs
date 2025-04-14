@@ -44,6 +44,7 @@ module Control.Effect.HOStore.Safe (
 ) where
 
 import Control.Effect
+import Control.Effect.Internal.Prog (progAlg)
 import Control.Monad.Trans.Class
 import GHC.Types (Any)
 import Unsafe.Coerce
@@ -56,11 +57,11 @@ import Control.Effect.Internal.Forward
 -- | Internally locations in the store are just integers.
 type Loc = Int
 
--- | The type for references storing values of type `a` in world `w`.
+-- | The type for references storing values of type @a@ in world @w@.
 newtype Ref w a = Ref { unRef :: Loc } 
 
--- | Signature for the operation of allocating a new memory cell of type `a` in
--- world `w`.
+-- | Signature for the operation of allocating a new memory cell of type @a@ in
+-- world @w@.
 data New w (f :: * -> *) (x :: *) where
   New :: a -> (Ref w a -> x) -> New w f x 
 
@@ -106,7 +107,7 @@ get r = call' (Get r id)
 -- | Internal representation of the store.
 type Mem = M.Map Loc Any
 
--- | The effects of higher-order in world `w`.
+-- | The effects of higher-order in world @w@.
 type HSEffs w = '[Put w, Get w, New w]
 
 -- | The handler of higher-order store. This is not exported because currently
@@ -142,7 +143,7 @@ runHS p = handle identity (handleHSP p)
 handleHS = runHS
 
 -- | Running a program with higher-order store and other effects @effs@ on @m@, 
--- resulting in an `m` program. 
+-- resulting in an @m@ program. 
 handleHSM :: forall effs a m. (forall s. ForwardEffs effs (St.StateT s), HFunctor (Effs effs), Monad m) 
           => Algebra effs m -> (forall w. Prog (HSEffs w :++ effs) a) -> m a
 handleHSM alg p = handleM' alg hstore p
@@ -151,7 +152,7 @@ handleHSM alg p = handleM' alg hstore p
 -- in a program with effects @effs@. 
 handleHSP :: forall effs a. (forall s. ForwardEffs effs (St.StateT s), HFunctor (Effs effs)) 
           => (forall w. Prog (HSEffs w :++ effs) a) -> Prog effs a
-handleHSP p = handleP' hstore p
+handleHSP p = handleM' progAlg hstore p
 
 instance (MonadTrans t) => Forward (New w) t where
   fwd oalg (New a k) = lift (oalg (New a k))

@@ -1,5 +1,28 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, DataKinds, AllowAmbiguousTypes #-}
-module Control.Effect.Clone where
+{-# LANGUAGE GeneralizedNewtypeDeriving, AllowAmbiguousTypes #-}
+{-|
+Module      : Control.Effect.Clone
+Description : Making copies of an existing effect
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+
+This module provides an \'imitater\' effect that clones an existing effect. 
+Currently the functionality of this module is very limited: you can only make
+one copy of an effect each time, and there is no way to copy an existing 
+smart constructor.
+-}
+module Control.Effect.Clone (
+  -- * Syntax
+  Clone (..),
+  cloneK,
+  clone, 
+  cloneAlg,
+  cloneScp,
+  clone1,
+
+  -- * Semantics
+  cloneHdl,
+) where
 
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs.Sum
@@ -20,7 +43,7 @@ newtype Clone (eff :: Effect)
 instance Forward eff t => Forward (Clone eff) t where
   fwd alg (Clone op) = fwd (alg . Clone) op
 
--- | Every handler of `effs` gives rise to a handler of its clone.
+-- | Every handler of @effs@ gives rise to a handler of its clone.
 cloneHdl :: forall effs oeffs t f.
                 Handler effs oeffs t f 
              -> Handler (Map Clone effs) oeffs t f
@@ -46,11 +69,11 @@ cloneAlg f = cloneK (Alg f) return
 cloneScp :: (Member (Clone (Scp f)) effs, Functor f) => f (Prog effs a) -> Prog effs a
 cloneScp f = cloneK (Scp f) return
 
--- | Turn the outermost operation call from `eff` to `Clone eff`.
+-- | Turn the outermost operation call from @eff@ to @Clone eff@.
 -- There are two limitations to this function:
---  (1) the argument `eff` always needs to be explicitly passed to this
+--  1. the argument @eff@ always needs to be explicitly passed to this
 --      function since it is not exposed by the type of the argument;
---  (2) the operation `eff` and `Clone eff` have to be both present in 
+--  2. the operation @eff@ and @Clone eff@ have to be both present in 
 --      the effect signature.
 clone1 :: forall eff effs a . 
            ( HFunctor eff

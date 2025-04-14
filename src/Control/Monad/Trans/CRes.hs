@@ -78,6 +78,22 @@ runWith = runWith' [] where
             in runWith' as bs' (if b then l else r)
          Right (ActS a m) -> runWith' (a:as) bs m
 
+
+-- | Run a nondeterministic process, using the given Boolean-producing
+-- monadic action to resolve the choices.
+runWithM :: forall a m x. Monad m => m Bool -> CResT a m x -> m (ActsMb a x)
+runWithM mb = runWithM' [] where
+  runWithM' :: [a] -> CResT a m x -> m (ActsMb a x)
+  runWithM' as (ResT m) = 
+    do xs <- m
+       case xs of 
+         Left x      -> return (ActsMb (reverse as, Just x))
+         Right FailS -> return (ActsMb (reverse as, Nothing))
+         Right (ChoiceS l r) ->
+            do b <- mb
+               runWithM' as (if b then l else r)
+         Right (ActS a m) -> runWithM' (a:as) m
+
 instance Monad m => Alternative (CResT a m) where
   {-# INLINE empty #-}
   empty :: Monad m => CResT a m x

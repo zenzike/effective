@@ -28,7 +28,6 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Identity
 import Control.Monad.Trans.Compose
 
-import Data.Kind ( Type )
 import Data.List.Kind
 
 
@@ -180,7 +179,8 @@ weaken
 weaken (Handler run halg)
   = (Handler (\oalg -> run (oalg . injs)) (\oalg -> halg (oalg . injs) . injs))
 
--- | Hides the effects in @heffs@ from the handler.
+-- | Hides the effects in @heffs@ from the handler. The type argument @heffs@ typically
+-- needs given explicitly.
 {-# INLINE hide #-}
 hide
   :: forall heffs effs oeffs ts fs
@@ -188,6 +188,18 @@ hide
   => Handler effs oeffs ts fs
   -> Handler (effs :\\ heffs) oeffs ts fs
 hide h = weaken h
+
+-- | Operations from the output effect @oeffs@ of a handler can be added
+-- to the input effect if the handler can forward it.
+{-# INLINE bypass #-}
+bypass
+  :: forall beffs effs oeffs ts fs
+  . ( Injects beffs oeffs, Forwards beffs ts, 
+      Append effs (beffs :\\ effs), Injects (beffs :\\ effs) beffs )
+  => Handler effs oeffs ts fs
+  -> Handler (effs `Union` beffs) oeffs ts fs
+bypass (Handler run alg) = Handler run (\oalg -> 
+  hunion @effs @beffs (alg oalg) (fwds (oalg . injs)))
 
 -- | The result of @interpret rephrase@ is a new @Handler effs oeffs IdentityT Identity@.
 -- This is created by using the supplied @rephrase :: Effs effs m x -> Prog oeffs x@
@@ -495,11 +507,12 @@ handleP :: forall effs oeffs xeffs t f a .
   -> Prog xeffs (Apply f a)
 handleP = handleM progAlg
 
--- | @handleM' xalg h p@ uses the handler @h@ to evaluate the program @p@. Any
--- residual effects in @xeffs@ not recognised by @h@ must be consumed by the
--- algebra @xalg@. 
--- The difference from `handleM` is that the effect signature of @p@ is allowed
--- to have duplication here and the type constraints are simpler.
+-- | @handleM' xalg h p@ is a variant of `handleM` where @effs `Union` xeffs@ is replaced
+-- by simply '(:++)'. This function should be used only when @effs@ and @xeffs@ have
+-- empty intersection. 
+-- In most cases, you should just use `handleM` but sometimes limitations regarding class 
+-- constraints in GHC necessitate the use of @handleM'@ (for example, in `Control.Effect.HOStore.Safe.handleHSM`.)
+
 handleM' :: forall effs oeffs xeffs m t f a .
   ( Monad m
   , forall m . Monad m => Monad (t m)
@@ -516,23 +529,6 @@ handleM' xalg (Handler run halg)
   = unsafeCoerce @(m (f a)) @(m (Apply f a))
   . run @m (xalg . injs)
   . eval (heither @effs @xeffs (halg (xalg . injs)) (fwds xalg))
-
--- | @handleMP' h p@ uses the handler @h@ to evaluate the program @p@, resulting
--- in a program with effects @xeffs@ that are not recognised by @h@.
--- The difference from `handleMP` is that the effect signature of @p@ is allowed
--- to have duplication here and the type constraints are simpler.
-handleP' :: forall effs oeffs xeffs t f a .
-  ( forall m . Monad m => Monad (t m)
-  , Forwards xeffs t
-  , Injects oeffs xeffs
-  , Append effs xeffs
-  , HFunctor (Effs (effs :++ xeffs))
-  )
-  => Handler effs oeffs t f        -- ^ Handler @h@
-  -> Prog (effs :++ xeffs) a       -- ^ Program @p@ that contains @xeffs@
-  -> Prog xeffs (Apply f a)
-handleP' = handleM' progAlg
-
 
 -- | @Apply f a@ normalises a functor @f@ so that when it is applied to
 -- @a@, any t`Identity` or t`Compose` functors are removed.

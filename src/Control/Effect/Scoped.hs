@@ -87,7 +87,7 @@ instance Functor sig => Forward (Scp sig) (ReaderT w) where
   fwd alg (Scp op) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op)))
 
 -- | Unary scoped operations can be forwarded by `ListT` by applying the
--- operation recursively to all `m`-actions inside the `ListT` value.
+-- operation recursively to all @m@-actions inside the `ListT` value.
 instance U.Unary sig => Forward (Scp sig) ListT where
   fwd :: forall m. Monad m => (forall x. Scp sig m x -> m x) 
       -> (forall x. Scp sig (ListT m) x -> ListT m x)

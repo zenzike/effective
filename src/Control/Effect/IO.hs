@@ -67,7 +67,6 @@ import Data.HFunctor
 
 import Prelude hiding (getLine, putStrLn, putStr)
 import qualified Prelude as Prelude
-import Unsafe.Coerce ( unsafeCoerce )
 
 -- | The effects operations that the IO monad supports natively
 type IOEffects = '[ Alg IO
@@ -160,7 +159,7 @@ getCPUTimeAlg eff
       do time <- System.CPUTime.getCPUTime
          return (x time)
 
--- | Interprets `Control.Effect.Concurrency.Par` using the native concurrency API. 
+-- | Interprets t`Control.Effect.Concurrency.Par` using the native concurrency API. 
 -- from `Control.Concurrent`.
 parAlg :: Algebra '[Par] IO
 parAlg eff
@@ -168,9 +167,9 @@ parAlg eff
       do Control.Concurrent.forkIO (fmap (const ()) r)
          l
 
--- | Interprets `Control.Effect.Concurrency.JPar` using the native concurrency API. 
+-- | Interprets t`Control.Effect.Concurrency.JPar` using the native concurrency API. 
 -- from "Control.Concurrent". The result from the child thread is passed back to the 
--- main thread using `MVar`.
+-- main thread using @MVar@.
 jparAlg :: Algebra '[JPar] IO
 jparAlg eff
   | Just (Distr (JPar l r) c) <- prj eff =
@@ -181,9 +180,9 @@ jparAlg eff
          y' <- MVar.takeMVar m
          return (c (JPar x y'))
 
--- | Signature for `Control.Effect.IO.NewQSem`.
+-- | Signature for the operation of creating new semaphores.
 type NewQSem = Alg (NewQSem_)
--- | Underlying signature for `Control.Effect.IO.NewQSem`.
+-- | Underlying first-order signature for creating new semaphores.
 data NewQSem_ k = NewQSem Int (QSem.QSem -> k) deriving Functor
 
 -- | Create a new quantity semaphore with the given initial quantity,
@@ -191,39 +190,41 @@ data NewQSem_ k = NewQSem Int (QSem.QSem -> k) deriving Functor
 newQSem :: Members '[NewQSem] sig => Int -> Prog sig QSem.QSem
 newQSem n = call (Alg (NewQSem n return))
 
--- | Interprets `Control.Effect.IO.NewQSem` using `Control.Concurrent.QSem.newQSem`.
+-- | Interprets t`Control.Effect.IO.NewQSem` using `Control.Concurrent.QSem.newQSem`.
 newQSemAlg :: Algebra '[NewQSem] IO
 newQSemAlg eff
   | Just (Alg (NewQSem n x)) <- prj eff =
       do q <- QSem.newQSem n
          return (x q)
 
--- | Signature for `Control.Effect.IO.SignalQSem`.
+-- | Signature for the operation of signalling a semaphore.
 type SignalQSem = Alg (SignalQSem_)
--- | Underlying signature for `Control.Effect.IO.SignalQSem`.
+
+-- | Underlying first-order signature for the operation of signalling a semaphore.
 data SignalQSem_ k = SignalQSem QSem.QSem k deriving Functor
 
 -- | Signal that a unit of the semaphore is available
 signalQSem :: Members '[SignalQSem] sig => QSem.QSem -> Prog sig ()
 signalQSem q = call (Alg (SignalQSem q (return ())))
 
--- | Interprets `Control.Effect.IO.SignalQSem` using `Control.Concurrent.QSem.signalQSem`.
+-- | Interprets t`Control.Effect.IO.SignalQSem` using `Control.Concurrent.QSem.signalQSem`.
 signalQSemAlg :: Algebra '[SignalQSem] IO
 signalQSemAlg eff
   | Just (Alg (SignalQSem q x)) <- prj eff =
       do QSem.signalQSem q
          return x
 
--- | Signature for `Control.Effect.IO.WaitQSem`.
+-- | Signature for the operation of waiting for a semaphore.
 type WaitQSem = Alg (WaitQSem_)
--- | Underlying signature for `Control.Effect.IO.WaitQSem`.
+
+-- | Underlying first-order signature for waiting for semaphores.
 data WaitQSem_ k = WaitQSem QSem.QSem k deriving Functor
 
 -- | Wait for the semaphore to be available.
 waitQSem :: Members '[WaitQSem] sig => QSem.QSem -> Prog sig ()
 waitQSem q = call (Alg (WaitQSem q (return ())))
 
--- | Interprets `Control.Effect.IO.WaitQSem` using `Control.Concurrent.QSem.waitQSem`.
+-- | Interprets t`Control.Effect.IO.WaitQSem` using `Control.Concurrent.QSem.waitQSem`.
 waitQSemAlg :: Algebra '[WaitQSem] IO
 waitQSemAlg eff
   | Just (Alg (WaitQSem q x)) <- prj eff =
