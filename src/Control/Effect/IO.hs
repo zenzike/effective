@@ -87,7 +87,7 @@ ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAl
 
 -- | Treating an IO computation as an operation of signature `Alg IO`. 
 liftIO :: Members '[Alg IO] sig => IO a -> Prog sig a
-liftIO o = call (Alg (fmap return o))
+liftIO o = call' (Alg o)
 
 -- | Algebra for the generic algebraic IO effect
 nativeAlg :: Algebra '[Alg IO] IO

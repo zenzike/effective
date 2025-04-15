@@ -19,7 +19,6 @@ import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Forward
 
-import GHC.TypeLits
 import GHC.Base
 import Unsafe.Coerce
 
@@ -529,6 +528,23 @@ handleM' xalg (Handler run halg)
   = unsafeCoerce @(m (f a)) @(m (Apply f a))
   . run @m (xalg . injs)
   . eval (heither @effs @xeffs (halg (xalg . injs)) (fwds xalg))
+
+
+-- | @handleP' h p@ is a variant of `handleP` where @effs `Union` xeffs@ is replaced
+-- by simply '(:++)'. This function should be used only when @effs@ and @xeffs@ have
+-- empty intersection. 
+-- In most cases, you should just use `handleP` but sometimes limitations regarding class 
+-- constraints in GHC necessitate the use of @handleP'@ (for example, in `Control.Effect.HOStore.Safe.handleHSM`.)
+handleP' :: forall effs oeffs xeffs t f a .
+  ( Forwards xeffs t
+  , forall m . Monad m => Monad (t m)
+  , Injects oeffs xeffs
+  , Append effs xeffs
+  , HFunctor (Effs (effs :++ xeffs))
+  ) => Handler effs oeffs t f        -- ^ Handler @h@
+  -> Prog (effs :++ xeffs) a         -- ^ Program @p@ that contains @xeffs@
+  -> Prog xeffs (Apply f a)
+handleP' = handleM' progAlg
 
 -- | @Apply f a@ normalises a functor @f@ so that when it is applied to
 -- @a@, any t`Identity` or t`Compose` functors are removed.

@@ -86,11 +86,11 @@ import Data.HFunctor ( HFunctor(..) )
 -- | Internally locations in the store are just integers.
 type Loc = Int
 
--- | The type for references storing values of type `a`. This module shall 
+-- | The type for references storing values of type @a@. This module shall 
 -- not export the internal representation of t`Ref`.
 newtype Ref a = Ref { unRef :: Loc } 
 
--- | Signature for the operation of allocating a new memory cell of type `a`. 
+-- | Signature for the operation of allocating a new memory cell of type @a@. 
 -- Note that this is not an ordinary algebraic operation because of the 
 -- polymorphic @a@.
 data New (f :: * -> *) (x :: *) where

@@ -61,7 +61,7 @@ data Catch_ e k where
 
 -- | Syntax for catching exceptions of type @e@. This operation is scoped.
 catch :: forall e sig a . Member (Catch e) sig => Prog sig a -> (e -> Prog sig a) -> Prog sig a
-catch p q = call @(Catch e) (Scp (Catch (fmap return p) (fmap return . q)))
+catch p q = call' @(Catch e) (Scp (Catch p q))
 
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
 -- If it fails, then @q@ is executed.

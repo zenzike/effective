@@ -24,6 +24,7 @@ module Control.Effect.Reader (
   -- ** Handlers
   reader,
   reader',
+  readerAsk,
 
   -- ** Algebras
   readerAlg,
@@ -35,6 +36,7 @@ module Control.Effect.Reader (
 import Control.Effect
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Data.Functor.Unary
 
 import qualified Control.Monad.Trans.Reader as R
 
@@ -63,12 +65,15 @@ data Local_ r k where
   Local :: (r -> r) -> k -> Local_ r k
   deriving Functor
 
+instance Unary (Local_ r) where
+  get (Local _ x) = x
+
 -- | Execute a computation in a transformed environment
 local :: Member (Local r) sig
   => (r -> r)    -- ^ Function to transform the environment
   -> Prog sig a  -- ^ Computation to run in the transformed environment
   -> Prog sig a
-local f p = call (Scp (Local f (fmap return p)))
+local f p = call' (Scp (Local f p))
 
 -- | The `reader` handler supplies a static environment @r@ to the program
 -- that can be accessed with `ask`, and locally transformed with `local`.
@@ -98,3 +103,14 @@ readerAlg oalg eff
          return (p r)
   | Just (Scp (Local (f :: r -> r) p)) <- prj eff =
       R.local f p
+
+readerAsk :: r -> Handler '[Ask r] '[] (R.ReaderT r) Identity
+readerAsk r = handler (fmap Identity . flip R.runReaderT r) readerAlg where
+  readerAlg
+    :: Monad m
+    => (forall x. oeff m x -> m x)
+    -> (forall x.  Effs '[Ask r] (R.ReaderT r m) x -> R.ReaderT r m x)
+  readerAlg oalg eff
+    | Just (Alg (Ask p)) <- prj eff =
+        do r <- R.ask
+           return (p r)

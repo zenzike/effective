@@ -62,7 +62,7 @@ data Catch_ k where
 
 -- | Syntax for catching exceptions. This operation is scoped.
 catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
-catch p q = call (Scp (Catch (fmap return p) (fmap return q)))
+catch p q = call' (Scp (Catch p q))
 
 
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.

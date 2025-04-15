@@ -53,7 +53,7 @@ cut :: (Members [Choose, CutFail] sig) => Prog sig ()
 cut = or skip cutFail
 
 cutCall :: Member CutCall sig => Prog sig a -> Prog sig a
-cutCall p = call (Scp (CutCall (fmap return p)))
+cutCall p = call' (Scp (CutCall p))
 
 cutCallM :: (Monad m, Member CutCall sig)
   => (forall a . Effs sig m a -> m a) -> m a -> m a

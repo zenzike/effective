@@ -23,7 +23,7 @@ stop  = call (Alg Empty)
 
 {-# INLINE or #-}
 or :: Members '[Choose] sig => Prog sig a -> Prog sig a -> Prog sig a
-or x y = call (Scp (Choose (fmap return x) (fmap return y)))
+or x y = call' (Scp (Choose x y))
 
 select :: Members [Choose, Empty] sig => [a] -> Prog sig a
 select = foldr (or . return) stop
@@ -51,7 +51,7 @@ data Once' a where
 
 once
   :: Member Once sig => Prog sig a -> Prog sig a
-once p = call (Scp (Once (fmap return p)))
+once p = call' (Scp (Once p))
 
 -- Everything can be handled together. Here is the non-modular way
 -- list :: (Member (Choose) sig, Member (Empty) sig, Member (Once) sig) => Prog sig a -> [a]

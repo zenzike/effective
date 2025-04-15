@@ -32,5 +32,5 @@ instance (Functor s) => HFunctor (ResT s) where
   {-# INLINE hmap #-}
   hmap h (ResT mx) = ResT (fmap (fmap (fmap (hmap h))) (h mx))
 
-instance MonadTrans (ResT s) where
+instance (Functor s) => MonadTrans (ResT s) where
   lift m = ResT (fmap Left m)
