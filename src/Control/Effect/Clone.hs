@@ -18,14 +18,11 @@ module Control.Effect.Clone (
   clone, 
   cloneAlg,
   cloneScp,
-  clone1,
 
   -- * Semantics
   cloneHdl,
 ) where
 
-import Control.Effect.Internal.Prog
-import Control.Effect.Internal.Effs.Sum
 import Control.Effect
 import Data.List.Kind
 import Data.HFunctor
@@ -51,15 +48,17 @@ cloneHdl h = unsafeCoerce h  -- There is safer way to do this but this is quicke
 
 -- | @clone x k@ invokes the clone version of the operation @x@ (together with its
 -- continuation @k@).
-cloneK :: forall eff effs a x . Member (Clone eff) effs 
+cloneK :: forall eff effs a x . 
+          (HFunctor eff, Member (Clone eff) effs )
        => eff (Prog effs) x 
        -> (x -> Prog effs a)
        -> Prog effs a
-cloneK x k = Call (inj (Clone x)) k
+cloneK x k = callK (Clone x) k
 
 -- | @clone x k@ invokes the clone version of the operation @x@.
-clone :: forall eff effs a . Member (Clone eff) effs => eff (Prog effs) (Prog effs a) -> Prog effs a
-clone x = Call (inj (Clone x)) id
+clone :: forall eff effs a . (HFunctor eff, Member (Clone eff) effs)
+      => eff (Prog effs) (Prog effs a) -> Prog effs a
+clone x = call (Clone x)
 
 -- | A special case of `cloneK` for algebraic operations.
 cloneAlg :: (Member (Clone (Alg f)) effs, Functor f) => f a -> Prog effs a
@@ -68,19 +67,3 @@ cloneAlg f = cloneK (Alg f) return
 -- | A special case of `cloneK` for scoped operations.
 cloneScp :: (Member (Clone (Scp f)) effs, Functor f) => f (Prog effs a) -> Prog effs a
 cloneScp f = cloneK (Scp f) return
-
--- | Turn the outermost operation call from @eff@ to @Clone eff@.
--- There are two limitations to this function:
---  1. the argument @eff@ always needs to be explicitly passed to this
---      function since it is not exposed by the type of the argument;
---  2. the operation @eff@ and @Clone eff@ have to be both present in 
---      the effect signature.
-clone1 :: forall eff effs a . 
-           ( HFunctor eff
-           , Member (Clone eff) effs
-           , Member eff effs ) 
-           => Prog effs a -> Prog effs a
-clone1 (Return x) = Return x
-clone1 p@(Call op k) = case prj @eff op of 
-  Just op' -> cloneK op' k
-  Nothing  -> p

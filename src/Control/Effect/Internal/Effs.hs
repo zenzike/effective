@@ -21,6 +21,7 @@ module Control.Effect.Internal.Effs
   , Effect
   , Effs (Effs, Eff)
   , Algebra
+  , callM, callM'
   , Injects (..)
   , Append
   , absurdEffs
@@ -38,3 +39,18 @@ import Control.Effect.Internal.Effs.Indexed
 #else
 import Control.Effect.Internal.Effs.Sum
 #endif
+
+import Control.Monad
+import Data.HFunctor
+
+-- | A variant of `call` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callM #-}
+callM :: forall eff effs a m . (Monad m, Member eff effs, HFunctor eff) 
+      => Algebra effs m -> eff m (m a) -> m a
+callM oalg x = join (oalg (inj x))
+
+-- | A variant of `call'` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callM' #-}
+callM' :: forall eff effs a m . (Monad m, Member eff effs, HFunctor eff) 
+      => Algebra effs m -> eff m a -> m a
+callM' oalg x = oalg (inj x)

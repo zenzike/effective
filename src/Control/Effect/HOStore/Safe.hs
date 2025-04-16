@@ -44,7 +44,6 @@ module Control.Effect.HOStore.Safe (
 ) where
 
 import Control.Effect
-import Control.Effect.Internal.Prog (progAlg)
 import Control.Monad.Trans.Class
 import GHC.Types (Any)
 import Unsafe.Coerce
@@ -53,6 +52,9 @@ import qualified Control.Monad.Trans.State as St
 import Data.HFunctor
 import Data.List.Kind
 import Control.Effect.Internal.Forward
+#ifdef INDEXED
+import GHC.TypeNats
+#endif
 
 -- | Internally locations in the store are just integers.
 type Loc = Int
@@ -144,13 +146,26 @@ handleHS = runHS
 
 -- | Running a program with higher-order store and other effects @effs@ on @m@, 
 -- resulting in an @m@ program. 
-handleHSM :: forall effs a m. (forall s. ForwardEffs effs (St.StateT s), HFunctor (Effs effs), Monad m) 
+handleHSM :: forall effs a m. 
+          ( forall s. ForwardEffs effs (St.StateT s)
+#ifdef INDEXED
+          , KnownNat (Length effs) 
+#endif
+          , HFunctor (Effs effs)
+          , Monad m
+          ) 
           => Algebra effs m -> (forall w. Prog (HSEffs w :++ effs) a) -> m a
 handleHSM alg p = handleM' alg hstore p
 
 -- | Running a program with higher-order store and other effects @effs@, resulting
 -- in a program with effects @effs@. 
-handleHSP :: forall effs a. (forall s. ForwardEffs effs (St.StateT s), HFunctor (Effs effs)) 
+handleHSP :: forall effs a. 
+             ( forall s. ForwardEffs effs (St.StateT s)
+#ifdef INDEXED
+             , KnownNat (Length effs) 
+#endif
+             , HFunctor (Effs effs)
+             ) 
           => (forall w. Prog (HSEffs w :++ effs) a) -> Prog effs a
 handleHSP p = handleM' progAlg hstore p
 

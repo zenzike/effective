@@ -7,7 +7,10 @@ import Control.Effect.Algebraic
 import Control.Monad.Trans.YRes 
 import Data.HFunctor
 import qualified Control.Monad.Trans.YRes as Y
-
+#ifdef INDEXED
+import GHC.TypeNats
+import Data.List.Kind
+#endif
 
 type Yield a b = Alg (Yield_ a b)
 data Yield_ a b x = Yield a (b -> x) deriving Functor 
@@ -23,6 +26,9 @@ yieldAlg eff
 
 pingpongWith :: forall oeffs a b y .
                 ( HFunctor (Effs oeffs)
+#ifdef INDEXED
+                , KnownNat (Data.List.Kind.Length oeffs)
+#endif
                 , ForwardEffs oeffs (YResT b a) )
              => (a -> Prog (Yield b a ': oeffs) y)
              -> Handler '[Yield a b] oeffs (YResT a b) (Either y)

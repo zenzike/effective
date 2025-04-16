@@ -24,9 +24,7 @@ import Control.Effect.Internal.Effs.Sum.Type
 import Data.HFunctor
 import Data.List.Kind
 
-import GHC.TypeLits
 import GHC.Exts
-import Unsafe.Coerce
 
 
 -- | Constructs an operation in the union @Effs effs f a@ from a single

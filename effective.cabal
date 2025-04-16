@@ -24,9 +24,10 @@ source-repository head
 
 library
   default-language: GHC2021
-  default-extensions: DataKinds
+  default-extensions: DataKinds CPP
   ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file
--- cpp-options: -DINDEXED
+  --cpp-options: -DINDEXED
+  --cpp-options: -DPROGDIRECT
 
 
   exposed-modules:
@@ -70,9 +71,11 @@ library
     Control.Effect.Internal.Effs.Indexed.Type
     Control.Effect.Internal.Effs.Sum
     Control.Effect.Internal.Effs.Sum.Type
+    Control.Effect.Internal.Prog.ProgImp
+    Control.Effect.Internal.Prog.ProgDirect
+    Control.Effect.Internal.Prog
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Handler
-    Control.Effect.Internal.Prog
   hs-source-dirs:
     src
   build-depends:

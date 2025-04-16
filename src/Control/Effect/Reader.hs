@@ -48,10 +48,12 @@ data Ask_ r k where
   deriving Functor
 
 -- | Fetch the value of the environment.
+{-# INLINE ask #-}
 ask :: Member (Ask r) sig => Prog sig r
 ask = call (Alg (Ask return))
 
 -- | Retrieve a function of the current environment.
+{-# INLINE asks #-}
 asks :: Member (Ask r) sig
   => (r -> a) -- ^ The selector function to apply to the environment
   -> Prog sig a
@@ -69,6 +71,7 @@ instance Unary (Local_ r) where
   get (Local _ x) = x
 
 -- | Execute a computation in a transformed environment
+{-# INLINE local #-}
 local :: Member (Local r) sig
   => (r -> r)    -- ^ Function to transform the environment
   -> Prog sig a  -- ^ Computation to run in the transformed environment

@@ -48,6 +48,7 @@ newtype Throw_ e k where
 
 -- | Syntax for throwing exceptions of type @e@. This operation is algebraic:
 --
+{-# INLINE throw #-}
 -- > throw e >>= k = throw e
 throw :: forall e sig a . (Member (Throw e) sig) => e -> Prog sig a
 throw e = call @(Throw e) (Alg (Throw e))
@@ -60,6 +61,7 @@ data Catch_ e k where
   deriving Functor
 
 -- | Syntax for catching exceptions of type @e@. This operation is scoped.
+{-# INLINE catch #-}
 catch :: forall e sig a . Member (Catch e) sig => Prog sig a -> (e -> Prog sig a) -> Prog sig a
 catch p q = call' @(Catch e) (Scp (Catch p q))
 

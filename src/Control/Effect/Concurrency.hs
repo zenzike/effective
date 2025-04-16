@@ -117,7 +117,7 @@ ccsByQSem :: forall n. Ord n
                      '[NewQSem, WaitQSem, SignalQSem]
                      (R.ReaderT (QSemMap n) `ComposeT` (E.ExceptT String))
                      (Either String)
-ccsByQSem = interpretM alg ||> R.reader M.empty ||> E.except where
+ccsByQSem = (interpretM alg ||> R.reader M.empty) ||> E.except where
   alg :: Monad m => Algebra '[ R.Ask (QSemMap n), R.Local (QSemMap n)
                              , NewQSem, WaitQSem, SignalQSem
                              , E.Throw String 

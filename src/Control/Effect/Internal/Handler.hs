@@ -149,6 +149,7 @@ data Handler effs oeffs ts fs =
 -- | Given @hrun@ and @halg@ will construct a @Handler effs oeffs t fs@. This
 -- is a simplified version of the @Handler@ constructor where @run@ does
 -- not need to be a modular runner.
+{-# INLINE handler #-}
 handler
   :: (forall m a . Monad m => t m a -> m (f a))
   -> (forall m . Monad m => Algebra oeffs m -> Algebra effs (t m))
@@ -156,6 +157,7 @@ handler
 handler run alg = Handler (\oalg -> run) (\oalg -> alg oalg)
 
 -- | The identity handler.
+{-# INLINE identity #-}
 identity :: Handler '[] '[] IdentityT Identity
 identity = Handler hrun halg where
 
@@ -339,6 +341,60 @@ fuse (Handler run1 malg1) (Handler run2 malg2) = Handler run halg where
         (fwds @effs2 @ts1 (malg2 (oalg . injs)))
     . unsafeCoerce @(Effs effs (ts m) _) @(Effs effs (ts1 (ts2 m)) _)
 
+infixr 9 |>>
+{-# INLINE simpleFuse #-}
+simpleFuse, (|>>) 
+              :: forall effs1 t1 f1 effs2 t2 f2 t f.
+              ( Forwards effs2 t1
+              , forall m. Monad m => Monad (t2 m)
+              , forall m. Monad m => Monad (t1 (t2 m))
+              , Append effs1 effs2
+              , HFunctor (Effs (effs1 :++ effs2))
+              , t ~ (t1 `ComposeT` t2)
+              , f ~ (f2 `Compose` f1)
+              )
+           => Handler effs1 '[] t1 f1 -> Handler effs2 '[] t2 f2 
+           -> Handler (effs1 :++ effs2) '[] t f
+(|>>) = simpleFuse
+simpleFuse (Handler r1 a1) (Handler r2 a2) =
+   Handler (\(o :: Algebra '[] m) ->
+                 fmap Compose 
+               . r2 absurdEffs 
+               . r1 absurdEffs 
+               . getComposeT )
+           (\(o :: Algebra '[] m) -> 
+               ComposeT 
+             . heither (a1 absurdEffs) (fwds (a2 absurdEffs)) 
+             . hmap getComposeT)
+
+infixr 9 ||>>
+{-# INLINE simpleFuseU #-}
+{-# INLINE (||>>) #-}
+simpleFuseU, (||>>) 
+              :: forall effs1 t1 f1 effs2 t2 f2 t f.
+              ( Forwards effs2 t1
+              , forall m. Monad m => Monad (t2 m)
+              , forall m. Monad m => Monad (t1 (t2 m))
+              , Append effs1 (effs2 :\\ effs1)
+              , Injects (effs2 :\\ effs1) effs2
+              , HFunctor (Effs (effs1 `Union` effs2))
+              , t ~ (t1 `ComposeT` t2)
+              , f ~ (f2 `Compose` f1)
+              )
+           => Handler effs1 '[] t1 f1 -> Handler effs2 '[] t2 f2 
+           -> Handler (effs1 `Union` effs2) '[] t f
+(||>>) = simpleFuseU
+simpleFuseU (Handler r1 a1) (Handler r2 a2) =
+   Handler (\(o :: Algebra '[] m) ->
+                 fmap Compose 
+               . r2 absurdEffs 
+               . r1 absurdEffs 
+               . getComposeT )
+           (\(o :: Algebra '[] m) -> 
+               ComposeT 
+             . hunion (a1 absurdEffs) (fwds (a2 absurdEffs)) 
+             . hmap getComposeT)
+
 {-# INLINE pipe #-}
 {-# INLINE (||>) #-}
 pipe, (||>)
@@ -500,6 +556,7 @@ handleP :: forall effs oeffs xeffs t f a .
   , Injects (xeffs :\\ effs) xeffs
   , Append effs (xeffs :\\ effs)
   , HFunctor (Effs (effs :++ (xeffs :\\ effs)))
+  , HFunctor (Effs xeffs)
   )
   => Handler effs oeffs t f        -- ^ Handler @h@
   -> Prog (effs `Union` xeffs) a   -- ^ Program @p@ that contains @xeffs@
@@ -541,6 +598,7 @@ handleP' :: forall effs oeffs xeffs t f a .
   , Injects oeffs xeffs
   , Append effs xeffs
   , HFunctor (Effs (effs :++ xeffs))
+  , HFunctor (Effs xeffs)
   ) => Handler effs oeffs t f        -- ^ Handler @h@
   -> Prog (effs :++ xeffs) a         -- ^ Program @p@ that contains @xeffs@
   -> Prog xeffs (Apply f a)
