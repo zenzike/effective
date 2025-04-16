@@ -81,7 +81,12 @@ prog2 = do iRef <- Safe.new @Int @w 1
 -- test5 == [0, 1]
 test5 :: [Int]
 test5 = handle nondet (Safe.handleHSP prog2') where
-  prog2' :: forall w sig. (Members '[Empty, Choose] sig, GHC.TypeNats.KnownNat (Length sig)) 
+  prog2' :: forall w sig. 
+         ( Members '[Empty, Choose] sig
+#ifdef INDEXED
+         , GHC.TypeNats.KnownNat (Length sig)
+#endif   
+         ) 
          => Prog (Safe.HSEffs w :++ sig) Int
   prog2' = prog2 @w
 
