@@ -28,6 +28,7 @@ module Control.Effect.Distributive where
 
 import Data.Kind ( Type )
 import Data.HFunctor
+import Data.Iso
 import Control.Effect
 
 import Control.Monad.Trans.Except
@@ -43,14 +44,13 @@ data Distr (r :: Type -> Type) (f :: Type -> Type) a where
 -- with distributive laws `forall a. r (f a) -> f (r a)`, exhibited by the
 -- functions @distrOp@ and @opDistr@.
 
-distrOp :: (forall a. Distr r f a -> f a)
-      -> (forall a. r (f a) -> f (r a))
-distrOp op rf = op (Distr rf id)
+distrIso :: forall f r. Functor f => Iso (forall a. Distr r f a -> f a) (forall a. r (f a) -> f (r a))
+distrIso = Iso fwd bwd where
+  fwd :: (forall a. Distr r f a -> f a) -> (forall a. r (f a) -> f (r a))
+  fwd op rf = op (Distr rf id)
 
-opDistr :: Functor f 
-         => (forall a. r (f a) -> f (r a))
-         -> (forall a. Distr r f a -> f a)
-opDistr d (Distr rf c) = fmap c (d rf) 
+  bwd :: (forall a. r (f a) -> f (r a)) -> (forall a. Distr r f a -> f a)
+  bwd d (Distr rf c) = fmap c (d rf) 
 
 instance Functor r => Functor (Distr r f) where
   fmap f (Distr p c) = Distr p (f . c)

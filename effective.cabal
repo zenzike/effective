@@ -24,8 +24,8 @@ source-repository head
 
 library
   default-language: GHC2021
-  default-extensions: DataKinds CPP
-  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file
+  default-extensions: DataKinds CPP RecordWildCards ImpredicativeTypes
+  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file -Wno-star-is-type
   --cpp-options: -DINDEXED
   --cpp-options: -DPROGDIRECT
 
@@ -53,6 +53,12 @@ library
     Control.Effect.Clone
     Control.Effect.HOStore.Unsafe
     Control.Effect.HOStore.Safe
+    Control.Effect.CodeGen
+    Control.Effect.CodeGen.Type
+    Control.Effect.CodeGen.Up
+    Control.Effect.CodeGen.Down
+    Control.Effect.CodeGen.Split
+    Control.Effect.CodeGen.Gen
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
@@ -60,6 +66,7 @@ library
     Control.Monad.Trans.YRes
     Control.Monad.Trans.Compose
     Data.CutList
+    Data.Iso
     Data.HFunctor
     Data.List.Kind
     Data.Functor.Unary
@@ -79,7 +86,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    base, transformers, ghc, array, containers, ghc-prim
+    base, transformers, ghc, array, containers, ghc-prim, template-haskell
 
 test-suite docs
   type:          exitcode-stdio-1.0
