@@ -6,6 +6,7 @@ module Control.Effect.Nondet
   ( module Control.Effect.Nondet
   , Choose
   , Empty
+  , ListT (..)
   ) where
 
 import Prelude hiding (or)
@@ -93,5 +94,5 @@ backtrackAlg'
   -> (forall x. Effs [Empty, Choose, Once] (ListT m) x -> ListT m x)
 backtrackAlg' oalg = alternativeAlg oalg # backtrackOnceAlg oalg
 
-backtrack :: Handler [Empty, Choose, Once] '[] (ListT) []
+backtrack :: Handler [Empty, Choose, Once] '[] ListT []
 backtrack = handler runListT' backtrackAlg'

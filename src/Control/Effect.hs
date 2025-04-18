@@ -43,6 +43,7 @@ module Control.Effect
   , Handler (..)
   , handler
   , interpret
+  , interpret1
   , interpretM
   , identity
   , fuse, (|>)

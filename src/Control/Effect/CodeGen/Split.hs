@@ -15,9 +15,9 @@ class Split a b | a -> b where
 split :: (Member LiftGen sig, Split a b) => Up a -> Prog sig b 
 split = liftGen . genSplit
 
-{-# INLINE caseK #-}
-caseK :: (Member LiftGen sig, Split a b) => Up a -> (b -> Prog sig c) -> Prog sig c
-caseK ua k = split ua >>= k 
+{-# INLINE caseM #-}
+caseM :: (Member LiftGen sig, Split a b) => Up a -> (b -> Prog sig c) -> Prog sig c
+caseM ua k = split ua >>= k 
 
 instance Split Bool Bool where 
   genSplit cb = Gen \k -> [|| if $$cb then $$(k True) else $$(k False) ||]

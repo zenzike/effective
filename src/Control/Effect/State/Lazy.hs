@@ -24,6 +24,9 @@ module Control.Effect.State.Lazy
 
     -- ** Algebras
     stateAlg,
+
+    -- ** Re-export the carrier
+    Lazy.StateT(..),
   ) where
 
 import Control.Effect

@@ -217,6 +217,14 @@ interpret rephrase = interpretM talg
          -> (forall x. Effs effs m x  -> m x)
     talg oalg op = eval oalg (rephrase op)
 
+-- | A special case of `interpret` for one effect @eff@.
+interpret1
+  :: forall eff oeffs
+  .  ( HFunctor eff, HFunctor (Effs oeffs) )
+  => (forall m x . eff m x -> Prog oeffs x)
+  -> Handler '[eff] oeffs IdentityT Identity
+interpret1 rephrase = interpret (\(Eff e) -> rephrase e)
+
 -- | The result of @interpretM mrephrase@ is a new @Handler effs oeffs IdentityT Identity@.
 -- This is created by using the supplied @mrephrase :: (forall x . Effs oeffs m x -> m x) -> Effs effs m x -> m x@ parameter.
 -- to rephrase @effs@ into an arbitrary monad @m@.

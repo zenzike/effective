@@ -24,7 +24,7 @@ source-repository head
 
 library
   default-language: GHC2021
-  default-extensions: DataKinds CPP RecordWildCards ImpredicativeTypes
+  default-extensions: DataKinds CPP RecordWildCards ImpredicativeTypes LambdaCase
   ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file -Wno-star-is-type
   --cpp-options: -DINDEXED
   --cpp-options: -DPROGDIRECT

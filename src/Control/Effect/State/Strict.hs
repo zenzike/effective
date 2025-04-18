@@ -23,7 +23,10 @@ module Control.Effect.State.Strict
   , state, state_
 
     -- ** Algebras
-  , stateAlg
+  , stateAlg,
+
+    -- ** Re-export the carrier
+    Strict.StateT(..),
   ) where
 
 import Control.Effect
