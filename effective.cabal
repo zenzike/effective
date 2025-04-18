@@ -59,6 +59,7 @@ library
     Control.Effect.CodeGen.Down
     Control.Effect.CodeGen.Split
     Control.Effect.CodeGen.Gen
+    Control.Effect.CodeGen.Handlers
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
@@ -131,3 +132,14 @@ test-suite hostore
   default-extensions: DataKinds
   hs-source-dirs:  test
   build-depends: base, transformers, effective, containers
+
+test-suite staged
+  type:          exitcode-stdio-1.0
+  ghc-options:   -ddump-simpl -ddump-splices -dsuppress-all -dno-suppress-type-signatures -ddump-to-file
+  main-is:       Staged.hs
+  default-language: GHC2021
+  default-extensions: DataKinds TemplateHaskell
+  hs-source-dirs:  test
+  build-depends: base, transformers, effective, containers, template-haskell
+  other-modules:
+    StagedGen

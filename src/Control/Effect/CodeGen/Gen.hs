@@ -30,8 +30,8 @@ instance Monad Gen where
 
 type LiftGen = Alg Gen
 
-genAlg :: Algebra '[LiftGen] Gen
-genAlg o 
+liftGenAlg :: Algebra '[LiftGen] Gen
+liftGenAlg o 
   | Just (Alg o) <- prj o = o
 
 {-# INLINE liftGen #-}

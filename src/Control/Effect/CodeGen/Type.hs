@@ -2,6 +2,10 @@
 module Control.Effect.CodeGen.Type where
 
 import Language.Haskell.TH
-import Language.Haskell.TH.Syntax
 
 type Up = CodeQ
+
+printUp :: Up a -> IO ()
+printUp a = do
+  x <- unType <$> runQ (examineCode a)
+  print $ ppr x

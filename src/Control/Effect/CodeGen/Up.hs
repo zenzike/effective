@@ -38,8 +38,8 @@ upIso = Iso fwd bwd where
 upAlgIso :: Functor n => Iso (Algebra '[UpOp m] n)  (forall x. Up (m x) -> n (Up x))
 upAlgIso = trans singAlgIso upIso 
 
-upGen :: Algebra '[UpOp Identity] Gen
-upGen = bwd upAlgIso (\cm -> return [||runIdentity $$cm||])
+upGenAlg :: Algebra '[UpOp Identity] Gen
+upGenAlg = bwd upAlgIso (\cm -> return [||runIdentity $$cm||])
 
 {-# INLINE up #-}
 up :: forall sig m a . (Member (UpOp m) sig) => Up (m a) -> Prog sig (Up a) 
