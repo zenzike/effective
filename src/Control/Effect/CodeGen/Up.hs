@@ -62,7 +62,7 @@ upMaybe = interpret1 $ \(Alg (UpOp la k)) ->
        Nothing -> Mb.throw
        Just a  -> return (k a)
 
-upExcept :: Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), LiftGen] IdentityT Identity
+upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), LiftGen] IdentityT Identity
 upExcept = interpret1 $ \(Alg (UpOp la k)) ->
   do ex <- up [|| Ex.runExceptT $$la ||] 
      caseM ex $ \case

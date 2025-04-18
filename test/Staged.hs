@@ -7,6 +7,7 @@ import Control.Effect.State.Strict
 
 import Language.Haskell.TH
 import StagedGen
+import Control.Effect.Except
 
 {-
 Generated code: 
@@ -28,5 +29,23 @@ countdown = $$(down $ StateT \cs -> fmap (\(s,a) -> (a,s)) $
   handleM genAlg 
     (letPut @Int |> upStateStrict @Int @Identity |> state @(Up Int) cs) 
     (countdownGen [|| countdown ||]))
+
+{-
+Generated code:
+    ExceptT
+      (Identity
+         (if (n_a4nE > 0) then
+              case runIdentity (runExceptT (catchProgram (n_a4nE - 1))) of
+                Left a_a4Uc -> Left ()
+                Right b_a4Ud -> Right b_a4Ud
+          else
+              Left ()))
+-}
+
+catchProgram :: Int -> ExceptT () Identity ()
+catchProgram n = $$(down $ ExceptT $ 
+  handleM genAlg 
+          (upExcept @() @Identity |> except) 
+          (catchGen [||n||] [||catchProgram||]))
 
 main = return ()
