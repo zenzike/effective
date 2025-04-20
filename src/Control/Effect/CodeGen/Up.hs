@@ -41,9 +41,6 @@ upIso = Iso fwd bwd where
 upAlgIso :: forall n m. Functor n => Iso (Algebra '[UpOp m] n)  (forall x. Up (m x) -> n (Up x))
 upAlgIso = trans singAlgIso upIso 
 
-upGenAlg :: Algebra '[UpOp Identity] Gen
-upGenAlg = bwd upAlgIso (\cm -> return [||runIdentity $$cm||])
-
 {-# INLINE up #-}
 up :: forall sig m a . (Member (UpOp m) sig) => Up (m a) -> Prog sig (Up a) 
 up = fwd upIso call'
@@ -58,23 +55,23 @@ up' u k = call' (Alg (UpOp u k))
 --
 -- I am not sure which one is better.
 
-upMaybe :: Handler '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, LiftGen] IdentityT Identity
+upMaybe :: Handler '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] IdentityT Identity
 upMaybe = interpret1 $ \(Alg (UpOp la k)) ->
   do mb <- up [|| Mb.runMaybeT $$la ||] 
-     caseM mb $ \case
+     genCase mb $ \case
        Nothing -> Mb.throw
        Just a  -> return (k a)
 
-upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), LiftGen] IdentityT Identity
+upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] IdentityT Identity
 upExcept = interpret1 $ \(Alg (UpOp la k)) ->
   do ex <- up [|| Ex.runExceptT $$la ||] 
-     caseM ex $ \case
+     genCase ex $ \case
        Left e -> Ex.throw e
        Right a  -> return (k a)
 
 upStateLazy :: forall s l.
   Handler '[UpOp (LS.StateT s l)] 
-          '[UpOp l, LS.Put (Up s), LS.Get (Up s), LiftGen]
+          '[UpOp l, LS.Put (Up s), LS.Get (Up s), CodeGen]
           IdentityT 
           Identity
 upStateLazy = interpret1 $ \(Alg (UpOp la k)) ->
@@ -86,7 +83,7 @@ upStateLazy = interpret1 $ \(Alg (UpOp la k)) ->
 
 upStateStrict :: forall s l.
   Handler '[UpOp (SS.StateT s l)] 
-          '[UpOp l, SS.Put (Up s), SS.Get (Up s), LiftGen]
+          '[UpOp l, SS.Put (Up s), SS.Get (Up s), CodeGen]
           IdentityT 
           Identity
 upStateStrict = interpret1 $ \(Alg (UpOp la k)) ->
@@ -97,7 +94,7 @@ upStateStrict = interpret1 $ \(Alg (UpOp la k)) ->
      return (k a)
 
 upReader :: Handler '[UpOp (R.ReaderT r l)] 
-                    '[UpOp l, R.Ask (Up r), LiftGen] IdentityT Identity
+                    '[UpOp l, R.Ask (Up r), CodeGen] IdentityT Identity
 upReader = interpret1 $ \(Alg (UpOp la k)) ->
   do cr <- R.ask
      a <- up [|| R.runReaderT $$la $$cr ||]
@@ -107,11 +104,11 @@ upReader = interpret1 $ \(Alg (UpOp la k)) ->
 -- The following is wrong because it generates infinitely branches of pattern matching.
 -- The right thing to do is to use PushT as the compile-time version of ListT.
 
-upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, LiftGen] IdentityT Identity
+upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, CodeGen] IdentityT Identity
 upNdet = interpret1 $ 
   let go (Alg (UpOp la k)) =
          do a <- up [|| ND.runListT $$la ||]
-            caseM a $ \case
+            genCase a $ \case
               Nothing -> ND.stop
               (Just am) -> do (ca, cm) <- split am
                               return (k ca) ND.<|> go (Alg (UpOp cm k))
@@ -133,8 +130,8 @@ upPushAlg' :: forall m n a. (Monad m, Functor n, n $~> m)
           => Algebra '[UpOp m] n 
           -> Up (ListT m a) -> PushT n (Up a)
 upPushAlg' oalg cl = PushT $ \c n -> upMN [|| 
-  let cons = (\a ms -> $$(down (c [||a||] (upMN [|| ms ||]))))
-      nil = $$(down n)
+  let cons a ms = $$(down (c [||a||] (upMN [|| ms ||])))
+      nil       = $$(down n)
   in foldListT cons nil $$cl ||]
   where
     upMN :: forall x. Up (m x) -> n (Up x) 

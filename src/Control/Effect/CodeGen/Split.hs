@@ -9,15 +9,13 @@ import Control.Effect
 -- the code generation in all branches.
 -- The instances are rather mundane and we may generate them generically in the future.
 class Split a b | a -> b where
-  genSplit :: Up a -> Gen b
+  genSplit  :: Up a -> Gen b
 
-{-# INLINE split #-}
-split :: (Member LiftGen sig, Split a b) => Up a -> Prog sig b 
+split :: (Member CodeGen sig, Split a b) => Up a -> Prog sig b 
 split = liftGen . genSplit
 
-{-# INLINE caseM #-}
-caseM :: (Member LiftGen sig, Split a b) => Up a -> (b -> Prog sig c) -> Prog sig c
-caseM ua k = split ua >>= k 
+genCase :: (Member CodeGen sig, Split a b) => Up a -> (b -> Prog sig c) -> Prog sig c
+genCase ua k = split ua >>= k 
 
 instance Split Bool Bool where 
   genSplit cb = Gen \k -> [|| if $$cb then $$(k True) else $$(k False) ||]

@@ -10,7 +10,7 @@ import Control.Monad.Trans.List
 import Language.Haskell.TH
 import Data.Iso
 
-countdownGen :: Members '[LiftGen, UpOp m, Put (Up Int), Get (Up Int)] sig 
+countdownGen :: Members '[CodeGen, UpOp m, Put (Up Int), Get (Up Int)] sig 
              => Up (m ()) -> Prog sig (Up ())
 countdownGen self = 
   do cs <- get @(Up Int)
@@ -19,7 +19,7 @@ countdownGen self =
           else return [|| () ||]
 
 
-catchGen :: forall sig m. Members '[LiftGen, UpOp m, Catch (Up ()), Throw (Up ())] sig 
+catchGen :: forall sig m. Members '[CodeGen, UpOp m, Catch (Up ()), Throw (Up ())] sig 
              => Up Int -> Up (Int -> m ()) -> Prog sig (Up ())
 catchGen cN self = 
   do b <- split [|| $$cN > 0 ||]
