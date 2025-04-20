@@ -85,4 +85,5 @@ import Control.Monad.Trans.Compose
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Handler
+import Control.Effect.Internal.Handler.Type
 import Control.Effect.Internal.Forward
