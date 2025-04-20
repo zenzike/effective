@@ -14,6 +14,7 @@ import Control.Monad.Trans.List
 import Control.Monad.Trans.Resump
 import Control.Monad.Trans.CRes 
 import Control.Monad.Trans.YRes
+import Control.Monad.Trans.Push
 
 
 -- | The type constructor @n@ at compile time lowers to the monad @m@ at runtime.
@@ -71,8 +72,22 @@ instance (Monad n, n $~> m) => MaybeT n $~> MaybeT m where
 instance (Monad n, n $~> m) => ExceptT (Up e) n $~> ExceptT e m where
   down (ExceptT nEx) = [|| ExceptT $$(down (fmap down nEx)) ||]
 
+{-
 instance (Monad n, n $~> m) => ListT n $~> ListT m where
   down g = [|| ListT $$((down . fmap (down . fmap (down . fmap down))) (runListT g)) ||]
 
 instance (Functor s, Monad n, n $~> m, s $~> t) => ResT s n $~> ResT t m where 
   down g = [|| ResT $$((down . fmap (down . fmap (down . fmap down))) (unResT g)) ||]
+-}
+
+{-
+downLG :: LG (Up a) -> Up [a]
+downLG lg = downGen (runLG lg (\a gas -> fmap (\as -> [|| $$a : $$as ||]) gas) (upGen [||[]||])) 
+-}
+
+instance (Monad n, Monad m, n $~> m) => PushT n $~> ListT m where
+  down :: forall x. (Monad n, Monad m, n $~> m) => PushT n (Up x) -> Up (ListT m x)
+  down p = let tmp :: n (Up (Maybe (x, ListT m x)))
+               tmp = runPushT p (\ca -> fmap (\cas -> [|| Just ($$ca, ListT (return $$cas)) ||])) 
+                                (return [|| Nothing ||])
+           in [|| ListT $$(down tmp) ||]

@@ -1,19 +1,22 @@
-{-# LANGUAGE TemplateHaskell, LambdaCase #-}
+{-# LANGUAGE TemplateHaskell, LambdaCase, TypeFamilies #-}
 module Control.Effect.CodeGen.Up where
 
 import Control.Effect hiding (fwd)
 import Control.Effect.Algebraic
+import Control.Effect.Scoped
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Gen
+import Control.Effect.CodeGen.Down
+import Control.Monad.Trans.Push as P
+import Control.Monad.Trans.List
+import Control.Effect.Nondet 
 import Data.Iso
 
 import qualified Control.Effect.Maybe as Mb 
 import qualified Control.Effect.Except as Ex
 import qualified Control.Effect.State.Lazy as LS
 import qualified Control.Effect.State.Strict as SS
-import qualified Control.Effect.Nondet as ND
-import qualified Control.Effect.Alternative as ND
 import qualified Control.Effect.Reader as R
 
 type UpOp :: (* -> *) -> Effect
@@ -35,7 +38,7 @@ upIso = Iso fwd bwd where
   bwd :: (forall x. Up (m x) -> n (Up x)) -> (forall x. UpOp m n x -> n x) 
   bwd o2 (Alg (UpOp uma k)) = fmap k (o2 uma)
 
-upAlgIso :: Functor n => Iso (Algebra '[UpOp m] n)  (forall x. Up (m x) -> n (Up x))
+upAlgIso :: forall n m. Functor n => Iso (Algebra '[UpOp m] n)  (forall x. Up (m x) -> n (Up x))
 upAlgIso = trans singAlgIso upIso 
 
 upGenAlg :: Algebra '[UpOp Identity] Gen
@@ -102,16 +105,7 @@ upReader = interpret1 $ \(Alg (UpOp la k)) ->
 
 {-
 -- The following is wrong because it generates infinitely branches of pattern matching.
--- The right thing to do is to generalise from Gen to GenT 
---   
---   newtype GenT m a = GenT { runGenT :: forall r. (a -> Up (m r)) -> Up (m r) } 
---
--- so that we could have a trivial
--- 
---   up :: Up (ListT l a) -> GenT (ListT l) (Up a)
---   up c = GenT (\@r (k :: Up a -> Up (ListT l r)) -> [|| do a <- $$c; $$(k [||a||])  ||] )
---
--- that embeds an object monadic program into the meta world without pattern matching. 
+-- The right thing to do is to use PushT as the compile-time version of ListT.
 
 upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, LiftGen] IdentityT Identity
 upNdet = interpret1 $ 
@@ -123,3 +117,71 @@ upNdet = interpret1 $
                               return (k ca) ND.<|> go (Alg (UpOp cm k))
   in go
 -}
+
+upPushAlg :: forall m n a. (Monad m, Functor n, n $~> m) 
+          => Algebra '[UpOp m] n 
+          -> Up (ListT m a) -> PushT n (Up a)
+upPushAlg oalg cl = PushT $ \c n -> upMN [|| 
+  foldListT (\a ms -> $$(down (c [||a||] (upMN [|| ms ||])))) 
+            $$(down n) $$cl ||]
+  where
+    upMN :: forall x. Up (m x) -> n (Up x) 
+    upMN = fwd upAlgIso oalg
+
+-- | A variant that generates two let-bindings for readability
+upPushAlg' :: forall m n a. (Monad m, Functor n, n $~> m) 
+          => Algebra '[UpOp m] n 
+          -> Up (ListT m a) -> PushT n (Up a)
+upPushAlg' oalg cl = PushT $ \c n -> upMN [|| 
+  let cons = (\a ms -> $$(down (c [||a||] (upMN [|| ms ||]))))
+      nil = $$(down n)
+  in foldListT cons nil $$cl ||]
+  where
+    upMN :: forall x. Up (m x) -> n (Up x) 
+    upMN = fwd upAlgIso oalg
+
+-- TODO: @PushT@ doesn't have a reasonable runner so it doesn't fit into
+-- the current @Handler@ API. I will refactor the Handler API and make
+-- push a handler.
+pushAlg :: forall m n. (Monad m, Functor n, n $~> m) 
+        => Algebra '[UpOp m] n
+        -> Algebra '[UpOp (ListT m), Empty, Choose, Once] (PushT n)
+pushAlg oalg op
+  | (Just (Alg (UpOp o k))) <- prj op = bwd upIso (upPushAlg oalg) (Alg (UpOp o k))
+  | (Just (Alg Empty))      <- prj op = empty
+  | (Just (Scp (Choose x y))) <- prj op = x <|> y
+  | (Just (Scp (Once x))) <- prj op   = P.once x
+
+{-
+The following is up and down for the special case @PushT Gen@.
+If you are puzzled by the general case, having a look at the special version may
+be helpful. I will keep it here for a while for playing.
+-}
+
+newtype LG a  = LG {runLG :: forall t. (a -> Gen (Up t) -> Gen (Up t)) 
+                          -> Gen (Up t) -> Gen (Up t)}
+
+instance Functor LG where
+  fmap f lg = do x <- lg; return (f x)
+
+instance Applicative LG where
+  f <*> x = do f' <- f; x' <- x; return (f' x') 
+  pure x = LG $ \c n -> c x n
+instance Monad LG where
+  lg >>= k = LG $ \c n -> runLG lg (\a as -> runLG (k a) c as) n
+
+upLG :: Up [a] -> LG (Up a)
+upLG cl = LG $ \c n -> upGen [|| 
+  foldr (\a ms -> $$(downGen (c [||a||] (upGen [||ms||])))) 
+        $$(downGen n)   
+        $$cl  
+  ||]
+
+downLG :: LG (Up a) -> Up [a]
+downLG lg = downGen (runLG lg (\a gas -> fmap (\as -> [|| $$a : $$as ||]) gas) (upGen [||[]||])) 
+
+upGen :: forall a. Up a -> Gen (Up a)
+upGen c = return c
+
+downGen :: forall a. Gen (Up a) -> Up a
+downGen g = unGen g id

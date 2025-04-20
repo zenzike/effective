@@ -66,6 +66,7 @@ library
     Control.Monad.Trans.CRes
     Control.Monad.Trans.YRes
     Control.Monad.Trans.Compose
+    Control.Monad.Trans.Push
     Data.CutList
     Data.Iso
     Data.HFunctor
@@ -138,7 +139,7 @@ test-suite staged
   ghc-options:   -ddump-simpl -ddump-splices -dsuppress-all -dno-suppress-type-signatures -ddump-to-file
   main-is:       Staged.hs
   default-language: GHC2021
-  default-extensions: DataKinds TemplateHaskell
+  default-extensions: DataKinds TemplateHaskell ImpredicativeTypes
   hs-source-dirs:  test
   build-depends: base, transformers, effective, containers, template-haskell
   other-modules:

@@ -6,6 +6,8 @@ import Control.Monad (ap)
 import Control.Effect
 import Control.Effect.Algebraic
 
+--   newtype GenT m a = GenT { runGenT :: forall r. (a -> Up (m r)) -> Up (m r) } 
+
 newtype Gen a = Gen { unGen :: forall r. (a -> Up r) -> Up r }
 
 runGen :: Gen (Up a) -> Up a

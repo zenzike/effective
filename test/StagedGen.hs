@@ -1,12 +1,14 @@
-{-# LANGUAGE BlockArguments, TemplateHaskell #-}
+{-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes #-}
 module StagedGen where
 
 import Control.Effect
 import Control.Effect.CodeGen
 import Control.Effect.State.Strict
 import Control.Effect.Except 
-
+import Control.Monad.Trans.Push
+import Control.Monad.Trans.List
 import Language.Haskell.TH
+import Data.Iso
 
 countdownGen :: Members '[LiftGen, UpOp m, Put (Up Int), Get (Up Int)] sig 
              => Up (m ()) -> Prog sig (Up ())
@@ -22,5 +24,18 @@ catchGen :: forall sig m. Members '[LiftGen, UpOp m, Catch (Up ()), Throw (Up ()
 catchGen cN self = 
   do b <- split [|| $$cN > 0 ||]
      if b 
-      then catch @(Up ()) (up [|| $$self ($$cN - 1)||]) (\_ -> throw @(Up ()) [||()||])
+      then catch (up [|| $$self ($$cN - 1)||]) (\(_ :: Up ()) -> throw @(Up ()) [||()||])
       else throw @(Up ()) [|| () ||]
+
+
+type PS a = PushT (StateT (Up Int) Gen) a
+type LS a = ListT (StateT Int Identity) a
+
+upPS :: Up (LS a) -> PS (Up a)
+upPS = upPushAlg' (bwd upAlgIso upSt)
+
+genlet :: Up a -> Gen (Up a)
+genlet c = Gen (\k -> [||let x = $$c in $$(k [||x||])||])
+
+upSt :: forall x. Up (StateT Int Identity x) -> StateT (Up Int) Gen (Up x)
+upSt m = StateT $ \cs -> (do r <- genlet [|| runIdentity (runStateT $$m $$cs) ||]; genSplit r)

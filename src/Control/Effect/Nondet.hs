@@ -5,7 +5,11 @@
 module Control.Effect.Nondet
   ( module Control.Effect.Nondet
   , Choose
+  , Choose_(Choose)
   , Empty
+  , Empty_(Empty)
+  , (<|>)
+  , empty
   , ListT (..)
   ) where
 
