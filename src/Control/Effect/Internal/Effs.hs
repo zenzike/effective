@@ -14,6 +14,7 @@ Stability   : experimental
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module Control.Effect.Internal.Effs
   ( Member
@@ -53,13 +54,20 @@ callM oalg x = join (oalg (inj x))
 
 -- | A variant of `call'` for which the effect is on a given monad rather than the `Prog` monad.
 {-# INLINE callM' #-}
-callM' :: forall eff effs a m . (Monad m, Member eff effs, HFunctor eff) 
+callM' :: forall eff effs a m . 
+      ( Monad m, Member eff effs, HFunctor eff
+      ) 
       => Algebra effs m -> eff m a -> m a
 callM' oalg x = oalg (inj x)
 
 -- | An obvious isomorphism between two representations of an algebra for a single effect @eff@.
 {-# INLINE singAlgIso #-}
-singAlgIso :: Iso  (Algebra '[eff] m) (forall x. eff m x -> m x)
+singAlgIso :: 
+#ifdef INDEXED
+  forall eff m. HFunctor eff =>
+#endif
+  Iso  (Algebra '[eff] m) (forall x. eff m x -> m x)
+
 singAlgIso = Iso fwd bwd where
   {-# INLINE fwd #-}
   fwd :: Algebra '[eff] m -> (forall x. eff m x -> m x)

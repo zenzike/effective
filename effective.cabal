@@ -85,10 +85,10 @@ library
     Control.Effect.Internal.Prog.ProgDirect
     Control.Effect.Internal.Prog
     Control.Effect.Internal.Forward
+    Control.Effect.Internal.Forward.ForwardC
     Control.Effect.Internal.Handler
     Control.Effect.Internal.Handler.LowLevel
     Control.Effect.Internal.Handler.Type
-    Control.Effect.Internal.Handler.Forward
   hs-source-dirs:
     src
   build-depends:

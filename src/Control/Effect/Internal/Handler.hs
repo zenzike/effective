@@ -418,9 +418,7 @@ pipe, (||>)
     , forall m . Monad m => Monad (ts2 m)
 #endif
     , Forwards (oeffs1 :\\ effs2) ts2
-    , Forwards effs2 ts1
     , Injects (oeffs1 :\\ effs2) oeffs
-    , Injects (effs2 :\\ effs1) effs2
     , Injects oeffs2 oeffs
     , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
     -- , KnownNat (Length effs2)

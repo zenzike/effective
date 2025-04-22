@@ -8,7 +8,7 @@ module Control.Effect.Internal.Handler.LowLevel where
 import Control.Effect.Internal.Handler.Type
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
-import Control.Effect.Internal.Handler.Forward
+import Control.Effect.Internal.Forward.ForwardC
 
 import Unsafe.Coerce
 import Data.List.Kind
@@ -70,17 +70,17 @@ idAT :: forall effs cs. AlgTrans effs effs IdentityT cs
 idAT = AlgTrans \(alg :: Algebra effs m) -> alg
   `under` unsafeCoerce @(Algebra effs m) @(Algebra effs (IdentityT m)) 
 
-class (cs2 m, cs1 (ts2 m)) => CompATC ts2 cs1 cs2 m where
-instance (cs2 m, cs1 (ts2 m)) => CompATC ts2 cs1 cs2 m where
+class (cs2 m, cs1 (ts2 m)) => CompC ts2 cs1 cs2 m where
+instance (cs2 m, cs1 (ts2 m)) => CompC ts2 cs1 cs2 m where
 
 {-# INLINE compAT #-}
 compAT :: forall effs1 effs2 effs3 ts1 ts2 cs1 cs2.
          AlgTrans effs1 effs2 ts1 cs1
        -> AlgTrans effs2 effs3 ts2 cs2
-       -> AlgTrans effs1 effs3 (ts1 `ComposeT` ts2) (CompATC ts2 cs1 cs2)
+       -> AlgTrans effs1 effs3 (HRAssoc (ComposeT ts1 ts2)) (CompC ts2 cs1 cs2)
 compAT alg1 alg2 = AlgTrans \oalg -> getAT alg1 (getAT alg2 oalg)
   `under` unsafeCoerce @(Algebra effs1 (ts1 (ts2 _))) 
-                       @(Algebra effs1 (ComposeT ts1 ts2 _))
+                       @(Algebra effs1 (HRAssoc (ComposeT ts1 ts2) _))
 
 {-# INLINE weaken #-}
 weaken :: (Injects effs' effs, Injects oeffs oeffs', forall m. cs' m => cs m)
@@ -142,19 +142,19 @@ weakenIEffs at = AlgTrans \ oalg x -> getAT at oalg (injs x)
 
 {-# INLINE withFwds #-}
 withFwds :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
+            ( ForwardsC cs2 xeffs ts, Injects xeffs oeffs
             , AutoCaseTrans effs xeffs )
          => AlgTrans effs oeffs ts cs1
          -> AlgTrans (effs `Union` xeffs) oeffs ts (AndC cs1 cs2)
-withFwds at = caseAT at (weakenOEffs @oeffs @xeffs fwds)
+withFwds at = caseAT at (weakenOEffs @oeffs @xeffs fwdsC)
 
 {-# INLINE withFwds' #-}
 withFwds' :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
+            ( ForwardsC cs2 xeffs ts, Injects xeffs oeffs
             , AutoCaseTrans' effs xeffs )
          => AlgTrans effs oeffs ts cs1
          -> AlgTrans (effs :++ xeffs) oeffs ts (AndC cs1 cs2)
-withFwds' at = caseAT' at (weakenOEffs @oeffs @xeffs fwds)
+withFwds' at = caseAT' at (weakenOEffs @oeffs @xeffs fwdsC)
 
 type AutoFuseAT effs1 effs2 oeffs1 oeffs2 = 
    (  Injects (oeffs1 :\\ effs2) ((oeffs1 :\\ effs2) `Union` oeffs2)
@@ -165,13 +165,13 @@ type AutoFuseAT effs1 effs2 oeffs1 oeffs2 =
     , Append effs1 (effs2 :\\ effs1)
    )
 
--- | `fuseAT at1 at2` composes @at1@ and @at2@ in a way that uses @at2@ maximally:
+-- | @fuseAT at1 at2@ composes @at1@ and @at2@ in a way that uses @at2@ maximally:
 --    1. all the input effects @effs2@ of @at2@ are visible in the input effects of the final result, and
 --    2. the output effects @oeffs1@ of @at1@ are intercepted by @effs2@ as much as possible.
 {-# INLINE fuseAT #-}
 fuseAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-          ( Forwards cs1 effs2 ts1
-          , Forwards cs2 (oeffs1 :\\ effs2) ts2
+          ( ForwardsC cs1 effs2 ts1
+          , ForwardsC cs2 (oeffs1 :\\ effs2) ts2
           , AutoFuseAT effs1 effs2 oeffs1 oeffs2
           )
        => AlgTrans effs1 oeffs1 ts1 cs1 
@@ -179,16 +179,109 @@ fuseAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
        -> AlgTrans (effs1 `Union` effs2) 
                    ((oeffs1 :\\ effs2) `Union` oeffs2) 
                    (HRAssoc (ComposeT ts1 ts2))
-                   (CompATC ts2 cs1 cs2)
+                   (CompC ts2 cs1 cs2)
 fuseAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
       unsafeCoerce @(ts1 (ts2 m) _) @((HRAssoc (ComposeT ts1 ts2)) m _)
     . hunion @effs1 @effs2
         (getAT at1 (weakenAlg $
           heither @(oeffs1 :\\ effs2) @effs2
-            (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
+            (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
             (getAT at2 (weakenAlg oalg))))
-        (getAT (fwds @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
-    . unsafeCoerce @(Effs _effs (HRAssoc (ComposeT ts1 ts2) m) _) @(Effs _effs (ts1 (ts2 m)) _)
+        (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+    . unsafeCoerce @(Effs _ (HRAssoc (ComposeT ts1 ts2) m) _) @(Effs _ (ts1 (ts2 m)) _)
+
+type AutoPipeAT effs2 oeffs1 oeffs2 = 
+   (  Injects (oeffs1 :\\ effs2) ((oeffs1 :\\ effs2) `Union` oeffs2)
+    , Injects oeffs2 ((oeffs1 :\\ effs2) `Union` oeffs2)
+    , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
+    , Append (oeffs1 :\\ effs2) effs2
+   )
+
+-- | @pipeAT at1 at2@ composes @at1@ and @at2@ in a way that 
+--    1. the input effects @effs2@ of @at2@ are /not/ visible in the input effects of the final result, and
+--    2. the output effects @oeffs1@ of @at1@ are intercepted by @effs2@ as much as possible.
+{-# INLINE pipeAT #-}
+pipeAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
+          ( ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          , AutoPipeAT effs2 oeffs1 oeffs2
+          )
+       => AlgTrans effs1 oeffs1 ts1 cs1 
+       -> AlgTrans effs2 oeffs2 ts2 cs2
+       -> AlgTrans effs1 
+                   ((oeffs1 :\\ effs2) `Union` oeffs2) 
+                   (HRAssoc (ComposeT ts1 ts2))
+                   (CompC ts2 cs1 cs2)
+pipeAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
+      unsafeCoerce @(ts1 (ts2 m) _) @((HRAssoc (ComposeT ts1 ts2)) m _)
+    . (getAT at1 (weakenAlg $
+         heither @(oeffs1 :\\ effs2) @effs2
+           (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
+           (getAT at2 (weakenAlg oalg))))
+    . unsafeCoerce @(Effs effs1 (HRAssoc (ComposeT ts1 ts2) m) _) @(Effs effs1 (ts1 (ts2 m)) _)
+
+
+type AutoPassAT effs1 effs2 oeffs1 oeffs2 = 
+   (  Injects (effs2 :\\ effs1) effs2
+    , Injects oeffs2 (oeffs1 `Union` oeffs2)
+    , Injects oeffs1 (oeffs1 `Union` oeffs2)
+    , Append effs1 (effs2 :\\ effs1)
+   )
+
+-- | @passAT at1 at2@ composes @at1@ and @at2@ in a way that 
+--    1. all the input effects @effs2@ of @at2@ are visible in the input effects of the final result, and
+--    2. the output effects @oeffs1@ of @at1@ are /not/ intercepted by @effs2@ at all.
+-- If an effect is in the intersection of @effs1@ and @effs2@, it is handled by @at1@.
+{-# INLINE passAT #-}
+passAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
+          ( ForwardsC cs1 effs2 ts1
+          , ForwardsC cs2 oeffs1 ts2
+          , AutoPassAT effs1 effs2 oeffs1 oeffs2
+          )
+       => AlgTrans effs1 oeffs1 ts1 cs1 
+       -> AlgTrans effs2 oeffs2 ts2 cs2
+       -> AlgTrans (effs1 `Union` effs2) 
+                   (oeffs1 `Union` oeffs2) 
+                   (HRAssoc (ComposeT ts1 ts2))
+                   (CompC ts2 cs1 cs2)
+passAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
+      unsafeCoerce @(ts1 (ts2 m) _) @((HRAssoc (ComposeT ts1 ts2)) m _)
+    . hunion @effs1 @effs2
+        (getAT at1 (getAT (fwdsC @cs2 @oeffs1) (oalg . injs)))
+        (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+    . unsafeCoerce @(Effs (effs1 `Union` effs2) (HRAssoc (ComposeT ts1 ts2) m) _) 
+                   @(Effs (effs1 `Union` effs2) (ts1 (ts2 m)) _)
+
+
+type AutoPassAT' effs1 effs2 oeffs1 oeffs2 = 
+   (  Injects (effs1 :\\ effs2) effs1
+    , Injects oeffs2 (oeffs1 `Union` oeffs2)
+    , Injects oeffs1 (oeffs1 `Union` oeffs2)
+    , Injects (effs1 `Union` effs2) (effs2 `Union` effs1)
+    , Append effs2 (effs1 :\\ effs2)
+   )
+
+-- | @passAT' at1 at2@ is the same as `passAT` except that if an effect is in the 
+-- intersection of @effs1@ and @effs2@, it is handled by @at2@.
+{-# INLINE passAT' #-}
+passAT' :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
+          ( ForwardsC cs1 effs2 ts1
+          , ForwardsC cs2 oeffs1 ts2
+          , AutoPassAT' effs1 effs2 oeffs1 oeffs2
+          )
+         => AlgTrans effs1 oeffs1 ts1 cs1 
+         -> AlgTrans effs2 oeffs2 ts2 cs2
+         -> AlgTrans (effs1 `Union` effs2) 
+                     (oeffs1 `Union` oeffs2) 
+                     (HRAssoc (ComposeT ts1 ts2))
+                     (CompC ts2 cs1 cs2)
+passAT' at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
+      unsafeCoerce @(ts1 (ts2 m) _) @((HRAssoc (ComposeT ts1 ts2)) m _)
+    . hunion @effs2 @effs1
+        (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+        (getAT at1 (getAT (fwdsC @cs2 @oeffs1) (oalg . injs)))
+    . injs
+    . unsafeCoerce @(Effs (effs1 `Union` effs2) (HRAssoc (ComposeT ts1 ts2) m) _) 
+                   @(Effs (effs1 `Union` effs2) (ts1 (ts2 m)) _)
 
 -- * Building runners
 
@@ -203,22 +296,24 @@ compRunner :: forall effs1 effs2 ts1 ts2 fs1 fs2 cs1 cs2.
            => AlgTrans effs1 effs2 ts2 cs2
            -> Runner effs1 ts1 fs1 cs1
            -> Runner effs2 ts2 fs2 cs2
-           -> Runner effs2 (ComposeT ts1 ts2) (Compose fs2 fs1) (CompATC ts2 cs1 cs2)
-compRunner at r1 r2 = Runner \oalg (ComposeT ts12) ->
-   fmap Compose (getR r2 oalg (getR r1 (getAT at oalg) ts12))
+           -> Runner effs2 (HRAssoc (ComposeT ts1 ts2))
+                           (RAssoc (Compose fs2 fs1))
+                           (CompC ts2 cs1 cs2)
+compRunner at r1 r2 = Runner \oalg ->
+    unsafeCoerce @(_m (fs2 (fs1 _))) @(_m (RAssoc (Compose fs2 fs1) _))
+    .
+    getR r2 oalg 
+    . 
+    getR r1 (getAT at oalg)
+    .
+    unsafeCoerce @(HRAssoc (ComposeT ts1 ts2) _ _) @(ts1 (ts2 _) _)
 
-type AutoFuseR effs2 oeffs1 oeffs2 = 
-   (  Injects (oeffs1 :\\ effs2) ((oeffs1 :\\ effs2) `Union` oeffs2)
-    , Injects oeffs2 ((oeffs1 :\\ effs2) `Union` oeffs2)
-    , Injects oeffs1 ((oeffs1 :\\ effs2) :++ effs2)
-    , Append (oeffs1 :\\ effs2) effs2
-   )
 
 {-# INLINE fuseR #-}
 fuseR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
-          ( Forwards cs1 effs2 ts1
-          , Forwards cs2 (oeffs1 :\\ effs2) ts2
-          , AutoFuseR effs2 oeffs1 oeffs2
+          ( ForwardsC cs1 effs2 ts1
+          , ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          , AutoPipeAT effs2 oeffs1 oeffs2
           )
        => AlgTrans effs2 oeffs2 ts2 cs2
        -> Runner oeffs1 ts1 fs1 cs1 
@@ -226,13 +321,35 @@ fuseR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
        -> Runner ((oeffs1 :\\ effs2) `Union` oeffs2) 
                  (HRAssoc (ComposeT ts1 ts2))
                  (RAssoc (Compose fs2 fs1))
-                 (CompATC ts2 cs1 cs2)
+                 (CompC ts2 cs1 cs2)
 fuseR at2 r1 r2 = Runner \(oalg :: Algebra _ m) ->
       unsafeCoerce @(m (fs2 (fs1 _x))) @(m ((RAssoc (Compose fs2 fs1)) _x))
     . getR r2 (oalg . injs)
     . getR r1 (weakenAlg @oeffs1 @((oeffs1 :\\ effs2) :++ effs2) $
         heither @(oeffs1 :\\ effs2) @effs2
-          (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @(ts2))
+          (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @(ts2))
             (weakenAlg @(oeffs1 :\\ effs2) @_ oalg))
           (getAT at2 (weakenAlg @oeffs2 @_ oalg)))
+    . unsafeCoerce @(HRAssoc (ComposeT ts1 ts2) m _) @(ts1 (ts2 m) _)
+
+
+type AutoPassR effs2 oeffs1 oeffs2 = 
+   ( Injects oeffs1 (oeffs1 `Union` oeffs2)
+   , Injects oeffs2 (oeffs1 `Union` oeffs2))
+
+{-# INLINE passR #-}
+passR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
+      ( ForwardsC cs2 oeffs1 ts2
+      , AutoPassR effs2 oeffs1 oeffs2 )
+      => AlgTrans effs2 oeffs2 ts2 cs2
+      -> Runner oeffs1 ts1 fs1 cs1 
+      -> Runner oeffs2 ts2 fs2 cs2
+      -> Runner (oeffs1 `Union` oeffs2) 
+                (HRAssoc (ComposeT ts1 ts2))
+                (RAssoc (Compose fs2 fs1))
+                (CompC ts2 cs1 cs2)
+passR at2 r1 r2 = Runner \(oalg :: Algebra _ m) ->
+      unsafeCoerce @(m (fs2 (fs1 _x))) @(m ((RAssoc (Compose fs2 fs1)) _x))
+    . getR r2 (oalg . injs)
+    . getR r1 (getAT (fwdsC @cs2 @oeffs1 @ts2) (oalg . injs))
     . unsafeCoerce @(HRAssoc (ComposeT ts1 ts2) m _) @(ts1 (ts2 m) _)
