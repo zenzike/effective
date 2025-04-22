@@ -45,7 +45,7 @@ instance Functor (h (k m)) => Functor (ComposeT h k m) where
     fmap :: forall a b . (a -> b) -> ComposeT h k m a -> ComposeT h k m b
     fmap = coerce (fmap :: (a -> b) -> h (k m) a -> h (k m) b)
 
-instance (Applicative (h (k f)), Applicative f) =>
+instance (Applicative (h (k f))) =>
   Applicative (ComposeT h k f) where
 
     {-# INLINE pure #-}
@@ -68,12 +68,7 @@ instance (Applicative (h (k f)), Applicative f) =>
     liftA2 :: forall a b c . (a -> b -> c) -> ComposeT h k f a -> ComposeT h k f b -> ComposeT h k f c
     liftA2 = coerce (liftA2 :: (a -> b -> c) -> h (k f) a -> h (k f) b -> h (k f) c)
 
-#if __GLASGOW_HASKELL__ <= 904
-instance (MonadTrans t1, MonadTrans t2, Monad m, Monad (t1(t2 m))) =>
-#else
-instance (MonadTrans t1, MonadTrans t2, Monad m) =>
-#endif
-  Monad (ComposeT t1 t2 m) where
+instance (Monad (t1 (t2 m))) => Monad (ComposeT t1 t2 m) where
     {-# INLINE return #-}
     return :: forall a . a -> ComposeT t1 t2 m a
     return = coerce (return :: a -> t1 (t2 m) a)

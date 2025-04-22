@@ -6,12 +6,42 @@
 
 module Control.Effect.Internal.Handler.Type where
 
+import Control.Effect.Internal.Effs
+
 import Data.Kind
 import Data.Functor.Identity
 import Data.Functor.Compose
 import Data.List.Kind
 import Control.Monad.Trans.Compose
 import Control.Monad.Trans.Identity
+
+-- * The primitive types of modular effect handlers
+
+
+-- | Transforming effects @oeffs@ into effects @effs@ on a functor satisfying @cs@.
+type AlgTrans
+  :: [Effect]                             -- ^ effs  : input effects
+  -> [Effect]                             -- ^ oeffs : output effects
+  -> ((Type -> Type) -> (Type -> Type))   -- ^ ts    : carrier transformer
+  -> ((Type -> Type) -> Constraint)       -- ^ cs    : carrier constraint
+  -> Type
+newtype AlgTrans effs oeffs ts cs = AlgTrans {
+   getAT :: forall m . cs m => Algebra oeffs m -> Algebra effs (ts m) }
+
+-- | Running a carrier transformer @ts@, resulting in a functor @fs@.
+type Runner
+  :: [Effect]                             -- ^ oeffs : output effects
+  -> ((Type -> Type) -> (Type -> Type))   -- ^ ts    : carrier transformer
+  -> (Type -> Type)                       -- ^ fs    : result functor
+  -> ((Type -> Type) -> Constraint)       -- ^ cs    : carrier constraint
+  -> Type
+
+newtype Runner oeffs ts fs cs = Runner {
+  getR :: forall m . cs m => Algebra oeffs m -> (forall x . ts m x -> m (fs x)) }
+
+
+-- * Some helper type families
+
 
 -- | @Apply f a@ normalises a functor @f@ so that when it is applied to
 -- @a@, any t`Identity` or t`Compose` functors are removed.
@@ -27,7 +57,7 @@ type family HApply
   (f :: Type -> Type) :: (Type -> Type)
   where
   HApply IdentityT        f = f
-  HApply (ComposeT h1 h2) f = h1 (h2 f)
+  HApply (ComposeT h1 h2) f = HApply h1 (HApply h2 f)
   HApply h  f               = h f
 
 -- TODO: Implement O(n) version

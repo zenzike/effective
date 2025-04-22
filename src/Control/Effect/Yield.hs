@@ -1,8 +1,7 @@
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DataKinds, MonoLocalBinds #-}
 module Control.Effect.Yield where
 
 import Control.Effect
-import Control.Effect.Internal.Forward
 import Control.Effect.Algebraic
 import Control.Monad.Trans.YRes 
 import Data.HFunctor
@@ -29,10 +28,10 @@ pingpongWith :: forall oeffs a b y .
 #ifdef INDEXED
                 , KnownNat (Data.List.Kind.Length oeffs)
 #endif
-                , ForwardEffs oeffs (YResT b a) )
+                , Forwards oeffs (YResT b a) )
              => (a -> Prog (Yield b a ': oeffs) y)
              -> Handler '[Yield a b] oeffs (YResT a b) (Either y)
 pingpongWith q = Handler run (\_ -> yieldAlg) where
   run :: forall m . Monad m => Algebra oeffs m 
       -> (forall x. YResT a b m x -> m (Either y x))
-  run oalg p = pingpong p (eval (yieldAlg # fwdEffs oalg) . q)
+  run oalg p = pingpong p (eval (yieldAlg # fwds oalg) . q)

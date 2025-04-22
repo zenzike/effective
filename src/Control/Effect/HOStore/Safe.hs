@@ -1,4 +1,4 @@
-{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE QuantifiedConstraints, MonoLocalBinds #-}
 {-|
 Module      : Control.Effect.HOStore.Safe
 Description : Higher-order store (safe implementation)
@@ -51,7 +51,6 @@ import qualified Data.Map as M
 import qualified Control.Monad.Trans.State as St
 import Data.HFunctor
 import Data.List.Kind
-import Control.Effect.Internal.Forward
 #ifdef INDEXED
 import GHC.TypeNats
 #endif
@@ -147,7 +146,7 @@ handleHS = runHS
 -- | Running a program with higher-order store and other effects @effs@ on @m@, 
 -- resulting in an @m@ program. 
 handleHSM :: forall effs a m. 
-          ( forall s. ForwardEffs effs (St.StateT s)
+          ( forall s. Forwards effs (St.StateT s)
 #ifdef INDEXED
           , KnownNat (Length effs) 
 #endif
@@ -160,7 +159,7 @@ handleHSM alg p = handleM' alg hstore p
 -- | Running a program with higher-order store and other effects @effs@, resulting
 -- in a program with effects @effs@. 
 handleHSP :: forall effs a. 
-             ( forall s. ForwardEffs effs (St.StateT s)
+             ( forall s. Forwards effs (St.StateT s)
 #ifdef INDEXED
              , KnownNat (Length effs) 
 #endif

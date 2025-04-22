@@ -11,8 +11,9 @@ Stability   : experimental
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_HADDOCK ignore-exports #-}
 
-module Control.Effect.Internal.Forward where
+module Control.Effect.Internal.Forward (Forward (..), Forwards (..)) where
 import Control.Effect.Internal.Effs
 
 import Data.Kind ( Type )
