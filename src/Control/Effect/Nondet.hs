@@ -40,12 +40,12 @@ selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
 
 {-# INLINE nondet #-}
 nondet :: Handler [Empty, Choose] '[] (ListT) []
-nondet = handler runListT' alternativeAlg
+nondet = handler' runListT' alternativeAlg
 
 -- This does not work becuase `Choose` is algebraic, for a greedy approach
 -- it must favour the lhs, but `return x <|> return y` prevents this
 -- greedy :: Handler [Empty, Choose] '[] MaybeT '[Maybe]
--- greedy = handler runMaybeT alternativeAlg
+-- greedy = handler' runMaybeT alternativeAlg
 
 -------------------------------
 -- Example: Backtracking (and Culling?)
@@ -99,4 +99,4 @@ backtrackAlg'
 backtrackAlg' oalg = alternativeAlg oalg # backtrackOnceAlg oalg
 
 backtrack :: Handler [Empty, Choose, Once] '[] ListT []
-backtrack = handler runListT' backtrackAlg'
+backtrack = handler' runListT' backtrackAlg'

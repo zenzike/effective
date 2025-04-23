@@ -39,6 +39,8 @@ type Runner
 newtype Runner oeffs ts fs cs = Runner {
   getR :: forall m . cs m => Algebra oeffs m -> (forall x . ts m x -> m (fs x)) }
 
+--newtype Runner oeffs ts fs cs = Runner {
+--  getR :: forall m . cs m => Algebra oeffs m -> (forall x . ts m x -> m (Composes fs x)) }
 
 -- * Some helper type families
 

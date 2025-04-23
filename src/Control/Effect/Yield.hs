@@ -31,7 +31,7 @@ pingpongWith :: forall oeffs a b y .
                 , Forwards oeffs (YResT b a) )
              => (a -> Prog (Yield b a ': oeffs) y)
              -> Handler '[Yield a b] oeffs (YResT a b) (Either y)
-pingpongWith q = Handler run (\_ -> yieldAlg) where
+pingpongWith q = handler run (\_ -> yieldAlg) where
   run :: forall m . Monad m => Algebra oeffs m 
       -> (forall x. YResT a b m x -> m (Either y x))
   run oalg p = pingpong p (eval (yieldAlg # fwds oalg) . q)

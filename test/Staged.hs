@@ -4,6 +4,10 @@ module Main where
 import Control.Effect
 import Control.Effect.CodeGen
 import Control.Effect.State.Strict
+import Control.Effect.Nondet
+import Control.Effect.Internal.Handler.LowLevel
+import Control.Effect.Internal.Handler.Type
+import Control.Effect.Internal.Forward.ForwardC
 import qualified Control.Monad.Trans.State.Strict as S
 
 import StagedGen
@@ -11,7 +15,6 @@ import Control.Effect.Except
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Class
-import Data.Iso
 
 {-
 Generated code: 
@@ -25,7 +28,6 @@ Generated code:
                        (a_a4dx, b_a4dy) -> (a_a4dx, b_a4dy)
                else
                    ((), s_a4dv)))
-
 -}
 
 countdown :: StateT Int Identity ()
@@ -103,11 +105,11 @@ listExample3 as = $$(downLG $
 
 {- The following even does fold fusion automatically.
     foldr
-      (\ a_a3KU ms_a3KV
+      (\ a_a6Sk ms_a6Sl
          -> foldr
-              (\ a_a3KW ms_a3KX -> ((a_a3KU + a_a3KW) : ms_a3KX)) ms_a3KV
-              as_a1BF)
-      [] as_a1BF
+              (\ a_a6Sm ms_a6Sn -> ((f_a5Y3 a_a6Sk + g_a5Y4 a_a6Sm) : ms_a6Sn))
+              ms_a6Sl as_a5Y5)
+      [] as_a5Y5
 -}
 listExample4 :: (Int -> Int) -> (Int -> Int) -> [Int] -> [Int]
 listExample4 f g as = $$(downLG $ 
@@ -146,5 +148,50 @@ listExample5 as = $$(down $
      j <- upPS [||as||]
      lift (S.put [|| $$i * $$j ||])
      return ([||$$s + $$i + $$j||]))
+
+
+{-
+    ListT
+      (Identity
+         (if (n_a5YZ > 0) then
+              runIdentity
+                (foldListT
+                   (\ a_a6JH ms_a6JI
+                      -> Identity (Just (a_a6JH, ListT (return (runIdentity ms_a6JI)))))
+                   (Identity (Just (n_a5YZ, ListT (return Nothing))))
+                   (choice (n_a5YZ - 1)))
+          else
+              Nothing))
+-}
+choice :: Int -> ListT Identity Int
+choice n = $$(down $
+  evalTr (withFwdsSameC @'[CodeGen] (weakenOEffs @'[CodeGen, UpOp Identity] (pushAT @Identity)))  genAlg 
+    (choiceGen [||n||] [|| choice ||]))
+
+
+{-
+  StateT
+      (\ s_a6QG
+         -> ListT
+              (Identity
+                 (if (n_a60H > 0) then
+                      runIdentity
+                        (foldListT
+                           (\ a_a6QH ms_a6QI
+                              -> Identity
+                                   (Just ((a_a6QH, s_a6QG), ListT (return (runIdentity ms_a6QI)))))
+                           (Identity (Just ((n_a60H, s_a6QG), ListT (return Nothing))))
+                           (choice (n_a60H - 1)))
+                  else
+                      Nothing)))
+-}
+choiceST :: Int -> StateT Int (ListT Identity) Int
+choiceST n = $$(down $
+  evalTr (fuseAT (stateAT @(Up Int))
+           (withFwdsSameC @'[CodeGen] 
+            (weakenOEffs @'[CodeGen, UpOp Identity] 
+            (pushAT @Identity))))
+    genAlg 
+    (choiceGen [||n||] [|| choice ||]))
 
 main = return ()

@@ -68,7 +68,7 @@ catch p q = call' (Scp (Catch p q))
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
 -- If it fails, then @q@ is executed.
 except :: Handler [Throw, Catch] '[] MaybeT Maybe
-except = handler runMaybeT exceptAlg
+except = handler' runMaybeT exceptAlg
 
 -- | The algebra for the 'except' handler.
 exceptAlg :: Monad m
@@ -88,7 +88,7 @@ exceptAlg _ eff
 -- If the recovery fails then the computation is failed overall.
 -- If the recovery succeeds, then @catch p q@ is attempted again.
 retry :: Handler [Throw, Catch] '[] MaybeT Maybe
-retry = handler runMaybeT retryAlg
+retry = handler' runMaybeT retryAlg
 
 -- | The algebra for the 'retry' handler.
 retryAlg :: Monad m

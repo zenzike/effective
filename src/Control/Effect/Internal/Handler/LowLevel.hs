@@ -31,14 +31,27 @@ under' :: (a -> b) -> (b -> c) -> a -> c
 under' f g = g . f
 
 {-# INLINE evalTr #-}
-evalTr :: forall effs ts cs m a. 
+evalTr :: forall effs oeffs xeffs ts cs m a. 
        ( HFunctor (Effs effs) 
        , cs m
+       , Injects oeffs xeffs
        , Monad (ts m) )
-       => AlgTrans effs '[] ts cs
+       => AlgTrans effs oeffs ts cs
+       -> Algebra xeffs m
        -> Prog effs a
        -> HApply ts m a
-evalTr alg = eval (getAT alg absurdEffs) 
+evalTr alg oalg = eval (getAT alg (oalg . injs)) 
+  `under'` unsafeCoerce @(ts m a) @(HApply ts m a) 
+
+{-# INLINE evalTr' #-}
+evalTr' :: forall effs ts cs m a. 
+        ( HFunctor (Effs effs) 
+        , cs m
+        , Monad (ts m) )
+        => AlgTrans effs '[] ts cs
+        -> Prog effs a
+        -> HApply ts m a
+evalTr' alg = eval (getAT alg absurdEffs) 
   `under'` unsafeCoerce @(ts m a) @(HApply ts m a) 
 
 {-# INLINE run #-}
@@ -140,6 +153,25 @@ weakenIEffs :: forall effs' effs oeffs ts cs.
        -> AlgTrans effs' oeffs ts cs
 weakenIEffs at = AlgTrans \ oalg x -> getAT at oalg (injs x)
 
+{-# INLINE caseATSameC #-}
+caseATSameC 
+       :: forall effs1 effs2 cs oeffs ts. 
+          (AutoCaseTrans effs1 effs2)
+       => AlgTrans effs1 oeffs ts cs
+       -> AlgTrans effs2 oeffs ts cs
+       -> AlgTrans (effs1 `Union` effs2) oeffs ts cs
+caseATSameC at1 at2 = AlgTrans \oalg -> hunion (getAT at1 oalg) (getAT at2 oalg)
+
+{-# INLINE caseATSameC' #-}
+caseATSameC'
+       :: forall effs1 effs2 cs oeffs ts. 
+          (AutoCaseTrans' effs1 effs2)
+        => AlgTrans effs1 oeffs ts cs
+        -> AlgTrans effs2 oeffs ts cs
+        -> AlgTrans (effs1 :++ effs2) oeffs ts cs
+caseATSameC' at1 at2 = AlgTrans \oalg -> heither (getAT at1 oalg) (getAT at2 oalg)
+
+
 {-# INLINE withFwds #-}
 withFwds :: forall xeffs effs oeffs ts cs1 cs2. 
             ( ForwardsC cs2 xeffs ts, Injects xeffs oeffs
@@ -155,6 +187,26 @@ withFwds' :: forall xeffs effs oeffs ts cs1 cs2.
          => AlgTrans effs oeffs ts cs1
          -> AlgTrans (effs :++ xeffs) oeffs ts (AndC cs1 cs2)
 withFwds' at = caseAT' at (weakenOEffs @oeffs @xeffs fwdsC)
+
+
+{-# INLINE withFwdsSameC #-}
+withFwdsSameC
+         :: forall xeffs effs oeffs ts cs. 
+            ( ForwardsC cs xeffs ts, Injects xeffs oeffs
+            , AutoCaseTrans effs xeffs )
+         => AlgTrans effs oeffs ts cs
+         -> AlgTrans (effs `Union` xeffs) oeffs ts cs
+withFwdsSameC at = caseATSameC at (weakenOEffs @oeffs @xeffs fwdsC)
+
+
+{-# INLINE withFwdsSameC' #-}
+withFwdsSameC' :: forall xeffs effs oeffs ts cs. 
+            ( ForwardsC cs xeffs ts, Injects xeffs oeffs
+            , AutoCaseTrans' effs xeffs )
+         => AlgTrans effs oeffs ts cs
+         -> AlgTrans (effs :++ xeffs) oeffs ts cs
+withFwdsSameC' at = caseATSameC' at (weakenOEffs @oeffs @xeffs fwdsC)
+
 
 type AutoFuseAT effs1 effs2 oeffs1 oeffs2 = 
    (  Injects (oeffs1 :\\ effs2) ((oeffs1 :\\ effs2) `Union` oeffs2)
@@ -286,14 +338,14 @@ passAT' at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) ->
 -- * Building runners
 
 {-# INLINE idRunner #-}
-idRunner :: (forall m. cs m => Functor m) 
-         => Runner effs IdentityT Identity cs
-idRunner = Runner \_ (IdentityT x) -> fmap Identity x
+idRunner :: forall effs cs. 
+            Runner effs IdentityT Identity cs
+idRunner = Runner \_ (IdentityT (x :: m x)) -> unsafeCoerce @(m x) @(m (Identity x)) x
+
 
 {-# INLINE compRunner #-}
 compRunner :: forall effs1 effs2 ts1 ts2 fs1 fs2 cs1 cs2.
-              (forall m. cs2 m => Functor m)
-           => AlgTrans effs1 effs2 ts2 cs2
+              AlgTrans effs1 effs2 ts2 cs2
            -> Runner effs1 ts1 fs1 cs1
            -> Runner effs2 ts2 fs2 cs2
            -> Runner effs2 (HRAssoc (ComposeT ts1 ts2))
@@ -311,8 +363,7 @@ compRunner at r1 r2 = Runner \oalg ->
 
 {-# INLINE fuseR #-}
 fuseR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
-          ( ForwardsC cs1 effs2 ts1
-          , ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          ( ForwardsC cs2 (oeffs1 :\\ effs2) ts2
           , AutoPipeAT effs2 oeffs1 oeffs2
           )
        => AlgTrans effs2 oeffs2 ts2 cs2
@@ -353,3 +404,17 @@ passR at2 r1 r2 = Runner \(oalg :: Algebra _ m) ->
     . getR r2 (oalg . injs)
     . getR r1 (getAT (fwdsC @cs2 @oeffs1 @ts2) (oalg . injs))
     . unsafeCoerce @(HRAssoc (ComposeT ts1 ts2) m _) @(ts1 (ts2 m) _)
+
+{-# INLINE weakenR #-}
+weakenR :: forall cs' cs effs' effs ts fs. 
+           (forall m. cs' m => cs m, Injects effs effs')
+        => Runner effs ts fs cs
+        -> Runner effs' ts fs cs'
+weakenR r1 = Runner \oalg -> getR r1 (oalg . injs)
+
+{-# INLINE weakenRC #-}
+weakenRC :: forall cs' cs effs ts fs. 
+           (forall m. cs' m => cs m)
+        => Runner effs ts fs cs
+        -> Runner effs ts fs cs'
+weakenRC r1 = Runner \oalg -> getR r1 oalg

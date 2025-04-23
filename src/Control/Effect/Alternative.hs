@@ -67,7 +67,7 @@ alternative
   , forall m . Monad m => Alternative (t m))
   => (forall m . Monad m => (forall a . t m a -> m (f a)))
   -> Handler '[Empty, Choose] '[] t f
-alternative run = Handler (\_ -> run) alternativeAlg
+alternative run = handler' run alternativeAlg
 
 -- | The algebra that corresponds to the 'alternative' handler. This uses an
 -- underlying 'Alternative' instance for @t m@ given by a transformer @t@.

@@ -38,12 +38,12 @@ import qualified Control.Monad.Trans.State.Lazy as Lazy
 -- | The `state` handler deals with stateful operations and
 -- returns the final state @s@.
 state :: s -> Handler [Put s, Get s] '[] (Lazy.StateT s) ((,) s)
-state s = handler (fmap (\ ~(x, y) -> (y, x)) . flip Lazy.runStateT s) stateAlg
+state s = handler' (fmap (\ ~(x, y) -> (y, x)) . flip Lazy.runStateT s) stateAlg
 
 -- | The `state_` handler deals with stateful operations and silenty
 -- discards the final state.
 state_ :: s -> Handler [Put s, Get s] '[] (Lazy.StateT s) Identity
-state_ s = handler (fmap Identity . flip Lazy.evalStateT s) stateAlg
+state_ s = handler' (fmap Identity . flip Lazy.evalStateT s) stateAlg
 
 -- | An algebra that interprets t'Get' and t'Put' using the lazy t'Lazy.StateT'.
 stateAlg

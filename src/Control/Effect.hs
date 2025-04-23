@@ -42,14 +42,13 @@ module Control.Effect
   -- * Handlers
   , Handler (..)
   , handler
+  , handler'
   , interpret
   , interpret1
   , interpretM
   , identity
   , fuse, (|>)
   , pipe, (||>)
-  , simpleFuse, (|>>)
-  , simpleFuseU, (||>>)
   , hide
 
   -- * Evaluation
@@ -60,6 +59,8 @@ module Control.Effect
   , handleP
   , handleM'
   , handleP'
+  , handleMApp
+  , handlePApp
 
   -- * Type families
   -- | The types of handlers are normalised when they are fused together, as are

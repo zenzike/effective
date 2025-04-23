@@ -73,37 +73,37 @@ jresumpAlg eff
 -- | Resumption-based handler of concurrency. Non-deterministic branches are explored 
 -- by backtracking, resulting in a list of all (successful) traces.
 resump :: forall a. Action a => Handler '[Act a, Par, Res a] '[] (C.CResT a) (C.ListActs a) 
-resump = handler runAll (\_ -> resumpAlg)
+resump = handler' runAll (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic choices are resolved
 -- with the given list Booleans.
 resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] (C.CResT a) (ActsMb a)
-resumpWith choices = handler (runWith choices) (\_ -> resumpAlg)
+resumpWith choices = handler' (runWith choices) (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic choices are resolved
 -- with the given program (of effect @sig@).
 resumpWithM :: forall sig a. 
                ( HFunctor (Effs sig) , Action a ) 
             => Prog sig Bool -> Handler '[Act a, Par, Res a] sig (C.CResT a) (ActsMb a)
-resumpWithM pb = Handler (\oalg -> runWithM (eval oalg pb))  (\_ -> resumpAlg)
+resumpWithM pb = handler (\oalg -> runWithM (eval oalg pb))  (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition.
 -- Non-deterministic branches are explored by backtracking, resulting in a list 
 -- of all (successful) traces.
 jresump :: forall a. Action a => Handler '[Act a, JPar, Res a] '[] (C.CResT a) (C.ListActs a) 
-jresump = handler runAll (\_ -> jresumpAlg)
+jresump = handler' runAll (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition. 
 -- Non-deterministic choices are resolved with the given list Booleans.
 jresumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, JPar, Res a] '[] (C.CResT a) (ActsMb a)
-jresumpWith choices = handler (runWith choices) (\_ -> jresumpAlg)
+jresumpWith choices = handler' (runWith choices) (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition. 
 -- Non-deterministic choices are resolved with the given program (of effect @sig@).
 jresumpWithM :: forall sig a. 
                 ( HFunctor (Effs sig) , Action a ) 
              => Prog sig Bool -> Handler '[Act a, JPar, Res a] sig (C.CResT a) (ActsMb a)
-jresumpWithM pb = Handler (\oalg -> runWithM (eval oalg pb)) (\_ -> jresumpAlg)
+jresumpWithM pb = handler (\oalg -> runWithM (eval oalg pb)) (\_ -> jresumpAlg)
 
 type QSemMap a = M.Map a (QSem, QSem)
 

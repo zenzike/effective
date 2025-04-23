@@ -112,6 +112,6 @@ prog6' n
                    prog6' n'
 
 test10 :: IO (Either Int Int)
-test10 = handleIO' @'[PutStrLn] 
+test10 = handleIOApp @'[PutStrLn] 
            (pingpongWith (prog6' @'[Yield Int Int, PutStrLn])) 
            (prog6 0)

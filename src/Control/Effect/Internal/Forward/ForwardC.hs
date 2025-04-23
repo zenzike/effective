@@ -81,10 +81,7 @@ instance ForwardEffsC cs effs t => ForwardsC cs effs t where
   fwdsC = fwdEffsC @cs
 
 instance {-# OVERLAPS #-} 
-  ( HFunctor (Effs effs)
-  , forall m . cs m => cs (IdentityT m)
-  ) 
-  => ForwardsC cs effs IdentityT where
+  ForwardsC cs effs IdentityT where
   {-# INLINE fwdsC #-}
   fwdsC :: AlgTrans effs effs IdentityT cs
   fwdsC = AlgTrans $ \(alg :: Algebra effs m) -> 

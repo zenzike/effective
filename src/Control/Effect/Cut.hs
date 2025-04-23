@@ -73,7 +73,7 @@ cutListAlg oalg op
   | Just (Scp (CutCall xs))    <- prj op = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
 
 cutList :: Handler [Empty, Choose, CutFail, CutCall] '[] CutListT []
-cutList = handler fromCutListT cutListAlg
+cutList = handler' fromCutListT cutListAlg
 
 instance HFunctor CutListT where
   hmap :: (Functor f, Functor g) =>

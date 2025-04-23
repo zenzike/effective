@@ -69,12 +69,12 @@ writerAlg _ eff
 -- | The `writer` handler consumes `tell` operations, and
 -- returns the final state @w@.
 writer :: Monoid w => Handler '[Tell w] '[] (W.WriterT w) ((,) w)
-writer = handler (fmap swap . W.runWriterT) writerAlg
+writer = handler' (fmap swap . W.runWriterT) writerAlg
 
 -- | The `writer_` handler deals with `tell` operations, and
 -- silently discards the final state.
 writer_ :: Monoid w => Handler '[Tell w] '[] (W.WriterT w) Identity
-writer_ = handler (fmap (Identity . fst) . W.runWriterT) writerAlg
+writer_ = handler' (fmap (Identity . fst) . W.runWriterT) writerAlg
 
 -- | The `writerIO` handler translates `tell` operations to 
 -- physical IO printing.
@@ -103,7 +103,7 @@ censor cipher p = call (Scp (Censor cipher (fmap return p)))
 -- @p@ will be censored by the composition @f . f'@, and the `censor` operation
 -- will be consumed.
 censors :: forall w . Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w]  (ReaderT (w -> w)) Identity
-censors cipher = handler run alg where
+censors cipher = handler' run alg where
   run :: Monad m => (forall x. ReaderT (w -> w) m x -> m (Identity x))
   run (ReaderT mx) = fmap Identity (mx cipher)
 
@@ -120,7 +120,7 @@ censors cipher = handler run alg where
 
 -- | The `uncensors` handler removes any occurrences of `censor`.
 uncensors :: forall w . Monoid w => Handler '[Censor w] '[] IdentityT Identity
-uncensors = handler run alg where
+uncensors = handler' run alg where
   run :: Monad m => (forall x. IdentityT m x -> m (Identity x))
   run (IdentityT mx) = fmap Identity mx
 

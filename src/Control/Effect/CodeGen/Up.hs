@@ -1,9 +1,12 @@
-{-# LANGUAGE TemplateHaskell, LambdaCase, TypeFamilies #-}
+{-# LANGUAGE TemplateHaskell, LambdaCase, UndecidableInstances, TypeFamilies #-}
 module Control.Effect.CodeGen.Up where
 
 import Control.Effect hiding (fwd)
 import Control.Effect.Algebraic
 import Control.Effect.Scoped
+import Control.Effect.Internal.Handler.LowLevel
+import Control.Effect.Internal.Forward.ForwardC
+import Control.Effect.Internal.Handler.Type
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Gen
@@ -137,9 +140,12 @@ upPushAlg' oalg cl = PushT $ \c n -> upMN [||
     upMN :: forall x. Up (m x) -> n (Up x) 
     upMN = fwd upAlgIso oalg
 
--- TODO: @PushT@ doesn't have a reasonable runner so it doesn't fit into
--- the current @Handler@ API. I will refactor the Handler API and make
--- push a handler.
+class (Monad n, n $~> m) => PushC m n where
+instance (Monad n, n $~> m) => PushC m n where
+
+instance ForwardC Monad effs t => ForwardC (PushC m) effs t where
+  fwdC = fwdC @Monad @effs @t
+
 pushAlg :: forall m n. (Monad m, Functor n, n $~> m) 
         => Algebra '[UpOp m] n
         -> Algebra '[UpOp (ListT m), Empty, Choose, Once] (PushT n)
@@ -148,6 +154,10 @@ pushAlg oalg op
   | (Just (Alg Empty))      <- prj op = empty
   | (Just (Scp (Choose x y))) <- prj op = x <|> y
   | (Just (Scp (Once x))) <- prj op   = P.once x
+
+pushAT :: Monad m => AlgTrans '[UpOp (ListT m), Empty, Choose, Once] '[UpOp m] PushT (PushC m)
+pushAT = AlgTrans $ pushAlg
+
 
 {-
 The following is up and down for the special case @PushT Gen@.

@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# OPTIONS_GHC -fsimpl-tick-factor=500 #-}
 {-|
 Module      : Control.Effect.IO
 Description : Effects for input/output
@@ -36,6 +37,7 @@ module Control.Effect.IO (
   evalIO,
   handleIO,
   handleIO',
+  handleIOApp,
 
   -- * Algebras
   ioAlg,
@@ -83,7 +85,8 @@ type IOEffects = '[ Alg IO
 
 -- | Interprets IO operations using their standard semantics in `IO`.
 ioAlg :: Algebra IOEffects IO
-ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg # parAlg # jparAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
+ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg 
+        # parAlg # jparAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
 
 -- | Treating an IO computation as an operation of signature `Alg IO`. 
 liftIO :: Members '[Alg IO] sig => IO a -> Prog sig a
@@ -236,41 +239,54 @@ waitQSemAlg eff
 evalIO :: Prog IOEffects a -> IO a
 evalIO = eval ioAlg
 
--- | @`handleIO` h p@ evaluates @p@ using the handler @h@. Any residual
--- effects are then interpreted in `IO` using their standard semantics.
+type AutoHandleIO effs oeffs xeffs = 
+  ( Injects (xeffs :\\ effs) xeffs
+  , Append effs (xeffs :\\ effs)
+  , HFunctor (Effs (effs `Union` xeffs)))
+
+-- | @`handleIO` h p@ evaluates @p@ using the handler @h@. The handler may
+-- output some effects @xeffs@ that are a subset of the IO effects and
+-- the program may also use @xeffs@ .
 -- The type argument @xeffs@ usually can't be inferred and needs given
 -- explicitly. 
+
 handleIO
   :: forall xeffs effs oeffs t f a
   . ( Injects oeffs xeffs
-    , Injects (xeffs :\\ effs) xeffs
-    , Functor f
     , Forwards xeffs t
     , forall m . Monad m => Monad (t m)
     , Injects xeffs IOEffects
-    , Append effs (xeffs :\\ effs)
-    , HFunctor (Effs (effs :++ (xeffs :\\ effs)))
-    )
+    , AutoHandleIO effs oeffs xeffs )
 
   => Handler effs oeffs t f
   -> Prog (effs `Union` xeffs) a -> IO (Apply f a)
 handleIO = handleM @effs @oeffs @xeffs (ioAlg . injs)
+
+-- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. Any residual
+-- effects are then interpreted in `IO` using their standard semantics.
+handleIO'
+  :: forall effs oeffs t f a
+  . ( forall m . Monad m => Monad (t m)
+    , Injects oeffs IOEffects
+    , HFunctor (Effs effs) ) 
+  => Handler effs oeffs t f
+  -> Prog effs a -> IO (Apply f a)
+handleIO' = handleM' @effs @oeffs ioAlg
 
 
 -- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. Any residual
 -- effects @xeffs@ are then interpreted in `IO` using their standard semantics.
 -- The type argument @xeffs@ usually can't be inferred and needs given
 -- explicitly. 
-handleIO' :: forall xeffs effs oeffs t f a .
+handleIOApp :: forall xeffs effs oeffs t f a .
   ( forall m . Monad m => Monad (t m)
   , Forwards xeffs t
   , Injects oeffs xeffs
   , Append effs xeffs
   , HFunctor (Effs (effs :++ xeffs))
-  , Injects xeffs IOEffects
-  )
+  , Injects xeffs IOEffects )
   => Handler effs oeffs t f
   -> Prog (effs :++ xeffs) a
   -> IO (Apply f a)
 
-handleIO' = handleM' @effs @oeffs @xeffs (ioAlg . injs) 
+handleIOApp = handleMApp @effs @oeffs @xeffs (ioAlg . injs) 

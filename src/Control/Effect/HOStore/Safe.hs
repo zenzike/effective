@@ -115,7 +115,7 @@ type HSEffs w = '[Put w, Get w, New w]
 -- effective does not have a world-indexed handdler API. Users of higher-order
 -- store now can only use functions such as `handleHSM` exported by this module.
 hstore :: Handler (HSEffs w) '[] (St.StateT Mem) Identity
-hstore = handler (fmap Identity . flip St.evalStateT M.empty) (\_ -> hstoreAlg)
+hstore = handler' (fmap Identity . flip St.evalStateT M.empty) (\_ -> hstoreAlg)
 
 hstoreAlg :: forall m w. 
      Monad m
@@ -154,7 +154,7 @@ handleHSM :: forall effs a m.
           , Monad m
           ) 
           => Algebra effs m -> (forall w. Prog (HSEffs w :++ effs) a) -> m a
-handleHSM alg p = handleM' alg hstore p
+handleHSM alg p = handleMApp alg hstore p
 
 -- | Running a program with higher-order store and other effects @effs@, resulting
 -- in a program with effects @effs@. 
@@ -166,7 +166,7 @@ handleHSP :: forall effs a.
              , HFunctor (Effs effs)
              ) 
           => (forall w. Prog (HSEffs w :++ effs) a) -> Prog effs a
-handleHSP p = handleM' progAlg hstore p
+handleHSP p = handleMApp progAlg hstore p
 
 instance (MonadTrans t) => Forward (New w) t where
   fwd oalg (New a k) = lift (oalg (New a k))

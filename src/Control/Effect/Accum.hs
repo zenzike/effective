@@ -15,4 +15,4 @@ data Accum' m a = Accum m a
 data For m a = For m
 
 runAccum :: w -> Handler '[Accum, For] '[] '[AccumT w] '[((,) w)]
-runAccum w = handler _ undefined -- (runAccumT w)
+runAccum w = handler' _ undefined -- (runAccumT w)
