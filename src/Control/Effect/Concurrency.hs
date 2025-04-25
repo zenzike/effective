@@ -72,37 +72,37 @@ jresumpAlg eff
 
 -- | Resumption-based handler of concurrency. Non-deterministic branches are explored 
 -- by backtracking, resulting in a list of all (successful) traces.
-resump :: forall a. Action a => Handler '[Act a, Par, Res a] '[] (C.CResT a) (C.ListActs a) 
+resump :: forall a. Action a => Handler '[Act a, Par, Res a] '[] '[C.CResT a] '[C.ListActs a]
 resump = handler' runAll (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic choices are resolved
 -- with the given list Booleans.
-resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] (C.CResT a) (ActsMb a)
+resumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, Par, Res a] '[] '[C.CResT a] '[ActsMb a]
 resumpWith choices = handler' (runWith choices) (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic choices are resolved
 -- with the given program (of effect @sig@).
 resumpWithM :: forall sig a. 
                ( HFunctor (Effs sig) , Action a ) 
-            => Prog sig Bool -> Handler '[Act a, Par, Res a] sig (C.CResT a) (ActsMb a)
+            => Prog sig Bool -> Handler '[Act a, Par, Res a] sig '[C.CResT a] '[ActsMb a]
 resumpWithM pb = handler (\oalg -> runWithM (eval oalg pb))  (\_ -> resumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition.
 -- Non-deterministic branches are explored by backtracking, resulting in a list 
 -- of all (successful) traces.
-jresump :: forall a. Action a => Handler '[Act a, JPar, Res a] '[] (C.CResT a) (C.ListActs a) 
+jresump :: forall a. Action a => Handler '[Act a, JPar, Res a] '[] '[C.CResT a] '[C.ListActs a]
 jresump = handler' runAll (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition. 
 -- Non-deterministic choices are resolved with the given list Booleans.
-jresumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, JPar, Res a] '[] (C.CResT a) (ActsMb a)
+jresumpWith :: forall a. Action a => [Bool] -> Handler '[Act a, JPar, Res a] '[] '[C.CResT a] '[ActsMb a]
 jresumpWith choices = handler' (runWith choices) (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency with joined parallel composition. 
 -- Non-deterministic choices are resolved with the given program (of effect @sig@).
 jresumpWithM :: forall sig a. 
                 ( HFunctor (Effs sig) , Action a ) 
-             => Prog sig Bool -> Handler '[Act a, JPar, Res a] sig (C.CResT a) (ActsMb a)
+             => Prog sig Bool -> Handler '[Act a, JPar, Res a] sig '[C.CResT a] '[ActsMb a]
 jresumpWithM pb = handler (\oalg -> runWithM (eval oalg pb)) (\_ -> jresumpAlg)
 
 type QSemMap a = M.Map a (QSem, QSem)
@@ -115,8 +115,8 @@ type QSemMap a = M.Map a (QSem, QSem)
 ccsByQSem :: forall n. Ord n 
           => Handler '[Act (CCSAction n), Res (CCSAction n)]
                      '[NewQSem, WaitQSem, SignalQSem]
-                     (R.ReaderT (QSemMap n) `ComposeT` (E.ExceptT String))
-                     (Either String)
+                     '[R.ReaderT (QSemMap n), E.ExceptT String]
+                     '[Either String]
 ccsByQSem = (interpretM alg ||> R.reader M.empty) ||> E.except where
   alg :: Monad m => Algebra '[ R.Ask (QSemMap n), R.Local (QSemMap n)
                              , NewQSem, WaitQSem, SignalQSem

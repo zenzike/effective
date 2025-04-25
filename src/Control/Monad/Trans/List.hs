@@ -5,7 +5,6 @@ import Data.HFunctor ( HFunctor(..) )
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
 import Control.Monad.Trans.Class ( MonadTrans(..) )
-import Control.Arrow ( Arrow(second) )
 
 newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
   deriving Functor

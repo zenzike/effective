@@ -18,5 +18,5 @@ nondetTreeAlg oalg op
   | Just (Alg Empty)          <- prj op = empty
   | Just (Scp (Choose xs ys)) <- prj op = xs <|> ys
 
-nondetTree :: Handler [Empty, Choose] '[] (TreeT) []
+nondetTree :: Handler [Empty, Choose] '[] '[TreeT] '[[]]
 nondetTree = handler' runTreeA nondetTreeAlg

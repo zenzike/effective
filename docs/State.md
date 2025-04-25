@@ -50,9 +50,9 @@ catchDecr' = catchDecr @[Get Int, Put Int, Throw, Catch]
 
 globalState
   :: s -> Handler '[Throw, Catch, Put s, Get s]
-                   '[]
-                   (ComposeT MaybeT (StateT s))
-                   (Compose ((,) s) Maybe)
+                  '[]
+                  '[MaybeT, (StateT s)]
+                  '[((,) s), Maybe]
 globalState s = except `fuse` state s
 
 -- This is global state because the `Int` is decremented
@@ -65,9 +65,9 @@ example_globalState = property $
 
 localState
   :: s -> Handler '[Put s, Get s, Throw, Catch]
-                   '[]
-                   (ComposeT (StateT s) MaybeT)
-                   (Compose Maybe ((,) s))
+                  '[]
+                  '[(StateT s), MaybeT]
+                  '[Maybe, ((,) s)]
 localState s = state s `fuse` except
 
 -- With local state, the state is reset to its value
@@ -131,7 +131,7 @@ example_Retry1 = property $
 getAsk :: Progs '[Get Int, Local Int, Ask Int] (Int, Int)
 getAsk = local (+ (100 :: Int)) (do x <- get ; y <- ask ; return (x , y) )
 
-getToAsk :: Handler '[Get Int] '[Ask Int] IdentityT Identity
+getToAsk :: Handler '[Get Int] '[Ask Int] '[] '[]
 getToAsk= interpret $
     \(Eff (Alg (Get k))) -> do y <- ask @Int
                                return (k (y))

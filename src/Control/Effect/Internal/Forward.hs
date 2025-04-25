@@ -31,10 +31,10 @@ import Control.Effect.Internal.Handler.Type
 -- typeclass that the library user will define instances for, so we create a new
 -- typeclass that implies the internal typeclass `F.Forward`.
 type Forward :: Effect -> ((Type -> Type) -> (Type -> Type)) -> Constraint
-class Forward eff ts where 
+class Forward eff t where 
   fwd :: forall m . Monad m
       => (forall x . eff m x  -> m x)
-      -> (forall x . eff (ts m) x -> ts m x)
+      -> (forall x . eff (t m) x -> t m x)
 
 instance Forward effs t => F.ForwardC Monad effs t where
   {-# INLINE fwdC #-}
@@ -50,10 +50,10 @@ instance Forward effs t => F.ForwardC Monad effs t where
 -- This is a typeclass that the library user will assume, so we create a new typeclass
 -- that is implied by the internal typeclass.
 
-type Forwards :: [Effect] -> ((Type -> Type) -> (Type -> Type))-> Constraint
+type Forwards :: [Effect] -> [(Type -> Type) -> (Type -> Type)] -> Constraint
 class F.ForwardsC Monad effs ts => Forwards effs ts where
   {-# INLINE fwds #-}
-  fwds :: forall m. Monad m => Algebra effs m -> Algebra effs (ts m)
+  fwds :: forall m. Monad m => Algebra effs m -> Algebra effs (Apply ts m)
   fwds = getAT (F.fwdsC @Monad @effs @ts)
 
 instance F.ForwardsC Monad effs ts => Forwards effs ts where

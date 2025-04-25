@@ -42,5 +42,5 @@ specialise g = GenM (unGen g)
 
 -- | As a result of `specialise`, whenever we have an effect @CodeGenM m@, we can
 -- use the effect `CodeGen` as well (for example, generating let-bindings using `genLet`).
-specialiseGen :: forall m . Handler '[CodeGen] '[CodeGenM m] IdentityT Identity
+specialiseGen :: forall m . Handler '[CodeGen] '[CodeGenM m] '[] '[]
 specialiseGen = interpret1 $ \(Alg g) -> liftGenM @m (specialise g)

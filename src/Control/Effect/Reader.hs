@@ -80,20 +80,20 @@ local f p = call' (Scp (Local f p))
 
 -- | The `reader` handler supplies a static environment @r@ to the program
 -- that can be accessed with `ask`, and locally transformed with `local`.
-reader :: r -> Handler [Ask r, Local r] '[] (R.ReaderT r) Identity
-reader r = handler' (fmap Identity . flip R.runReaderT r) readerAlg
+reader :: r -> Handler [Ask r, Local r] '[] '[R.ReaderT r] '[]
+reader r = handler' (flip R.runReaderT r) readerAlg
 
 -- | The `reader'` handler supplies an environment @r@ computed using the 
 -- output effects to the program that can be accessed with `ask`, and 
 -- locally transformed with `local`.
 reader' :: forall oeffs r. (forall m . Monad m => Algebra oeffs m -> m r)
-        -> Handler [Ask r, Local r] oeffs (R.ReaderT r) Identity
+        -> Handler [Ask r, Local r] oeffs '[R.ReaderT r] '[]
 reader' mr = handler run readerAlg where
   run :: forall m . Monad m => Algebra oeffs m 
-      -> (forall x. R.ReaderT r m x -> m (Identity x))
+      -> (forall x. R.ReaderT r m x -> m x)
   run oalg rmx = do r <- mr oalg
                     x <- R.runReaderT rmx r
-                    return (Identity x)
+                    return x
 
 -- | The algebra for the 'reader' handler.
 readerAlg
@@ -107,8 +107,8 @@ readerAlg oalg eff
   | Just (Scp (Local (f :: r -> r) p)) <- prj eff =
       R.local f p
 
-readerAsk :: r -> Handler '[Ask r] '[] (R.ReaderT r) Identity
-readerAsk r = handler' (fmap Identity . flip R.runReaderT r) readerAlg where
+readerAsk :: r -> Handler '[Ask r] '[] '[R.ReaderT r] '[]
+readerAsk r = handler' (flip R.runReaderT r) readerAlg where
   readerAlg
     :: Monad m
     => (forall x. oeff m x -> m x)

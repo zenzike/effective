@@ -63,18 +63,18 @@ data Choose_ a where
 -- for any monad @m@ to provide semantics.
 alternative
   :: forall t f
-  . (Monad f, Alternative f
-  , forall m . Monad m => Alternative (t m))
+  .  (forall m . Monad m => Alternative (t m))
   => (forall m . Monad m => (forall a . t m a -> m (f a)))
-  -> Handler '[Empty, Choose] '[] t f
+  -> Handler '[Empty, Choose] '[] '[t] '[f]
 alternative run = handler' run alternativeAlg
 
 -- | The algebra that corresponds to the 'alternative' handler. This uses an
 -- underlying 'Alternative' instance for @t m@ given by a transformer @t@.
 alternativeAlg
-  :: forall oeffs t m . (Alternative (t m), Functor m)
-  => (Algebra oeffs m)
-  -> (Algebra [Empty , Choose] (t m))
+  :: forall oeffs t m . 
+     Alternative (t m)
+  => Algebra oeffs m
+  -> Algebra [Empty , Choose] (t m)
 alternativeAlg oalg eff
   | (Just (Alg Empty))          <- prj eff = empty
   | (Just (Scp (Choose xs ys))) <- prj eff = xs <|> ys

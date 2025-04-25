@@ -67,9 +67,7 @@ module Control.Effect
   -- any results when a handler is applied. This normalisation removes unnecessary
   -- t`Identity`, t`Compose`, t`IdentityT`, and t`ComposeT` functors.
   , Apply
-  , HApply
-  , RAssoc
-  , HRAssoc
+  , Assoc
 
   -- * Re-exports
   , Compose(..)

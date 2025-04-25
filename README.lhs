@@ -120,15 +120,15 @@ implied (because the constraints are not ordered), and nor is the list necessari
 
 The `ticker` and `unticker` handlers have the following types:
 ```haskell ignore
-ticker   :: Handler '[Tick] '[] (StateT Int) ((,) Int)
-unticker :: Handler '[Tick] '[] IdentityT    Identity
+ticker   :: Handler '[Tick] '[] '[StateT Int] [(,) Int]
+unticker :: Handler '[Tick] '[] '[] '[]
 ```
 Here is what the different parameters mean for the `ticker` handler:
 ```haskell ignore
-ticker   :: Handler '[Tick]        -- input effects
-                    '[]            -- output effects
-                    (StateT Int)   -- transformer
-                    ((,) Int)      -- wrapper
+ticker   :: Handler '[Tick]         -- input effects
+                    '[]             -- output effects
+                    '[StateT Int]   -- transformer
+                    '[(,) Int]      -- wrapper
 ```
 
 The signature of the handler tells us how it behaves:
@@ -191,8 +191,8 @@ state is initialised to `s`:
 ```haskell ignore
 state :: s -> Handler '[Put s, Get s]  -- input effects
                       '[]              -- output effects
-                      (StateT s)       -- transformer
-                      ((,) s)          -- wrapper
+                      '[StateT s]       -- transformer
+                      '[(,) s]          -- wrapper
 ```
 
 Executing the `incr` program with this handler can be achieved as follows:
@@ -223,7 +223,7 @@ return value of the program.
 A variation of the `state` handler is `state_`,
 which does not return the final state:
 ```haskell ignore
-state_ :: s -> Handler [Put s, Get s] IdentityT Identity
+state_ :: s -> Handler [Put s, Get s] '[] '[]
 ```
 Here the final output wrapper is `Identity`, and so applying this to a program
 of type `Prog sig a` will simply return a value of type `a`, since `Apply Identity a = a`.
@@ -278,7 +278,7 @@ The `unticker` and `ticker` handlers are examples of interpreters that
 will interpret `Tick` in different ways. The simplest one is `unticker`,
 which removes all instances of `Tick`:
 ```haskell
-unticker :: Handler '[Tick] '[] IdentityT Identity
+unticker :: Handler '[Tick] '[] '[] '[]
 unticker = interpret gen where
   gen :: Effs '[Tick] m x -> Prog '[] x
   gen (Eff (Alg (Tick x))) = return x
@@ -292,7 +292,7 @@ the `tick` operation into `get` and `put` operations, which interact
 with an `Int` to keep track of how many ticks have been produced.
 Notice that the `gen` function generates these operations from the given `tick`:
 ```haskell
-tickState :: Handler '[Tick] '[Put Int, Get Int] IdentityT Identity
+tickState :: Handler '[Tick] '[Put Int, Get Int] '[] '[]
 tickState = interpret gen where
   gen :: Effs '[Tick] m x -> Prog [Put Int, Get Int] x
   gen (Eff (Alg (Tick x))) = do n <- get
@@ -304,7 +304,7 @@ the _pipe_ combinator, written `h1 ||> h2` to pipe the handler `h1` into the
 handler `h2`.
 
 ```haskell
-ticker :: Handler '[Tick] '[] (StateT Int) ((,) Int)
+ticker :: Handler '[Tick] '[] '[StateT Int] '[(,) Int]
 ticker = tickState ||> state (0 :: Int)
 ```
 Given `h1 :: Handler eff1 oeff1 t1 f1` and `h2 :: Handler eff2 oeff2 t2 f2`, the
@@ -357,8 +357,8 @@ emit it again while also incrementing a counter in the state:
 getLineIncr
   :: Handler '[GetLine]                       -- input effects
              '[GetLine, Get Int, Put Int]     -- output effects
-             IdentityT                        -- transformer
-             Identity                         -- wrapper
+             '[]                              -- transformer
+             '[]                              -- wrapper
 getLineIncr = interpret $
   \(Eff (Alg (GetLine k))) -> do xs <- getLine
                                  incr
@@ -372,8 +372,8 @@ be achieved with a `pipe`, which we write as `||>`:
 ```haskell
 getLineIncrState :: Handler '[GetLine]   -- input effects
                             '[GetLine]   -- output effects
-                            (StateT Int)
-                            ((,) Int)
+                            '[StateT Int]
+                            '[(,) Int]
 getLineIncrState = getLineIncr ||> (state (0 :: Int))
 ```
 This can then be executed using `handleIO`, which will deal with
@@ -413,7 +413,7 @@ list of strings. Here is how `getLine` can be interpreted in terms of the
 operations `get` and `put` from a state containing a list of strings:
 ```haskell
 getLineState
-  :: Handler '[GetLine] '[Get [String], Put [String]] IdentityT Identity
+  :: Handler '[GetLine] '[Get [String], Put [String]] '[] '[]
 getLineState = interpret $
   \(Eff (Alg (GetLine k))) -> do xss <- get
                                  case xss of
@@ -434,10 +434,10 @@ effects. These can be handled by a state handler. The output of the
 `getLineState` handler can be piped into the `state` handler to produce
 a new handler. Here are two variations:
 ```haskell
-getLinePure :: [String] -> Handler '[GetLine] '[] (StateT [String]) ((,) [String])
+getLinePure :: [String] -> Handler '[GetLine] '[] '[StateT [String]] '[(,) [String]]
 getLinePure str = getLineState ||> (state str)
 
-getLinePure_ :: [String] -> Handler '[GetLine] '[] (StateT [String]) Identity
+getLinePure_ :: [String] -> Handler '[GetLine] '[] '[StateT [String]] '[]
 getLinePure_ str = getLineState ||> (state_ str)
 ```
 Now we have a means of executing a program that contains only a `GetLine` effect,
@@ -506,7 +506,7 @@ Using this, values can be written as the output of a program.
 Now the task is to interpret all `putStrLn` operations in terms of the
 `tell` operation:
 ```haskell
-putStrLnTell :: Handler '[PutStrLn] '[Tell [String]] IdentityT Identity
+putStrLnTell :: Handler '[PutStrLn] '[Tell [String]] '[] '[]
 putStrLnTell = interpret $
   \(Eff (Alg (PutStrLn str k))) -> do tell [str]
                                       return k
@@ -514,7 +514,7 @@ putStrLnTell = interpret $
 This can in turn be piped into the `writer` handler to make
 a pure version of `putStrLn`:
 ```haskell
-putStrLnPure :: Handler '[PutStrLn] '[] (WriterT [String]) ((,) [String])
+putStrLnPure :: Handler '[PutStrLn] '[] '[WriterT [String]] '[(,) [String]]
 putStrLnPure = putStrLnTell ||> writer
 ```
 Now, a pure handler for both `putStrLn` and `getLine` can
@@ -523,8 +523,8 @@ be defined as the fusion of `putStrLnPure` and `getLinePure`.
 teletype :: [String]
          -> Handler '[GetLine, PutStrLn]
                     '[]
-                    (ComposeT (StateT [String]) (WriterT [String]))
-                    ((,) [String])
+                    '[(StateT [String]), (WriterT [String])]
+                    '[(,) [String]]
 teletype str = getLinePure_ str |> putStrLnPure
 ```
 The `fuse` combinator takes two handlers and creates one that accepts the union
@@ -556,8 +556,8 @@ to interpret `getLine` before passing the resulting `getLine` to `teletype`:
 teletypeTick
   :: [String]
   -> Handler '[GetLine, PutStrLn] '[]
-             (ComposeT (StateT Int) (ComposeT (StateT [String]) (WriterT [String])))
-             (Compose ((,) [String]) ((,) Int) )
+             '[StateT Int, StateT [String], WriterT [String]]
+             '[(,) [String], ((,) Int) ]
 teletypeTick str = getLineIncrState |> teletype str
 ```
 This can be executed using `handle`, passing in the
@@ -586,7 +586,7 @@ with handlers. An example of this is to apply a transformation to all the
 interpreting handler called `retell` can be defined, which takes in a function used
 to modify output:
 ```haskell
-retell :: forall w w' . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] IdentityT Identity
+retell :: forall w w' . (Monoid w, Monoid w') => (w -> w') -> Handler '[Tell w] '[Tell w'] '[] '[]
 retell f = interpret $
   \(Eff (Alg (Tell w k))) -> do tell (f w)
                                 return k
@@ -657,7 +657,7 @@ Hiding Operations
 Since `censor` is an operation, it can be given different semantics by a
 different handler. For instance, here is type of the `uncensor` handler:
 ```haskell ignore
-uncensors :: forall w . Monoid w => Handler '[Censor w] IdentityT Identity '[]
+uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[] '[]
 ```
 This handler removes all censorship from the program. The type promises that no other
 effects are generated, and that the result is pure.
@@ -671,7 +671,7 @@ remove any generated `tell` operations. To prevent this handler from touching
 any `tell` operations that were in the program before censor, the `hide`
 combinator removes them from being seen:
 ```haskell
-uncensors :: forall w . Monoid w => Handler '[Censor w] '[] (ComposeT (ReaderT (w -> w)) (WriterT w)) Identity
+uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[(ReaderT (w -> w)), (WriterT w)] '[]
 uncensors = hide @'[Tell w] (censors @w id |> writer_ @w)
 ```
 The key combinator here is `hide`:
@@ -700,7 +700,7 @@ and `tell`. Suppose the task is now to censor the `echo` program.
 It is easy enough to see how a variation of `retell` could be written,
 by interpreting `PutStrLn` operations:
 ```haskell
-rePutStrLn :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] IdentityT Identity
+rePutStrLn :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] '[] '[]
 rePutStrLn f = interpret $
   \(Eff (Alg (PutStrLn str k))) -> do putStrLn (f str)
                                       return k
@@ -736,7 +736,7 @@ first transform any `putStrLn` operation into a `tell` using
 `putStrLnTell`, then apply the `censors` handler, and finally
 turn any `tell` back into `putStrLn` with using `tellPutStrLn`:
 ```haskell
-tellPutStrLn :: Handler '[Tell [String]] '[PutStrLn] IdentityT Identity
+tellPutStrLn :: Handler '[Tell [String]] '[PutStrLn] '[] '[]
 tellPutStrLn = interpret $
   \(Eff (Alg (Tell strs k))) -> do putStrLn (unwords strs)
                                    return k
@@ -744,7 +744,7 @@ tellPutStrLn = interpret $
 This chain of handlers might be called `censorsPutStrLn`:
 ```haskell
 censorsPutStrLn :: ([String] -> [String])
-                -> Handler [PutStrLn, Tell [String], Censor [String]] '[PutStrLn] (ReaderT ([String] -> [String])) Identity
+                -> Handler [PutStrLn, Tell [String], Censor [String]] '[PutStrLn] '[ReaderT ([String] -> [String])] '[]
 censorsPutStrLn cipher = putStrLnTell |> censors cipher |> tellPutStrLn
 ```
 The ensuing chain of handlers seems to do the job:
@@ -821,7 +821,7 @@ logger str = do time <- getCPUTime
 However, this is a case where a reinterpretation might be better where all
 instances of `tell` are augmented with the appropriate timestamp.
 ```haskell
-telltime :: forall w . Monoid w => Handler '[Tell w] '[Tell [(Integer, w)], GetCPUTime] IdentityT Identity
+telltime :: forall w . Monoid w => Handler '[Tell w] '[Tell [(Integer, w)], GetCPUTime] '[] '[]
 telltime = interpret $
   \(Eff (Alg (Tell (w :: w) k))) -> do time <- getCPUTime
                                        tell [(time, w)]
@@ -857,7 +857,7 @@ is executed. Then `ask` emits a pair consisting of `(name, t' - t)`,
 thus showing how much time was spent in `p`.
 
 ```haskell
-timer :: Handler '[Profile] '[Tell [(String, Integer)], GetCPUTime] IdentityT Identity
+timer :: Handler '[Profile] '[Tell [(String, Integer)], GetCPUTime] '[] '[]
 timer = interpretM timerAlg
 
 timerAlg :: forall effs oeffs m
@@ -879,7 +879,7 @@ to be implemented, or for logs to be enabled and disabled.
 More generally, there may be other instruments that could be used, and indeed
 the `timer` handler can alternatively be defined by using `profiler`:
 ```haskell
-timer' :: Handler '[Profile] '[Tell [(String, Integer)], GetCPUTime] IdentityT Identity
+timer' :: Handler '[Profile] '[Tell [(String, Integer)], GetCPUTime] '[] '[]
 timer' = profiler (flip (-)) getCPUTime
 ```
 A new `profiler f instrument p` will inject the `instrument` before and after
@@ -888,7 +888,7 @@ executed. These are then combined by the given function `f` and emitted using
 `ask`.
 ```haskell
 profiler :: forall instr a b . (HFunctor instr, Member instr '[Tell [(String, b)], instr])
-  => (a -> a -> b) -> Prog '[instr] a -> Handler '[Profile] '[Tell [(String, b)], instr] IdentityT Identity
+  => (a -> a -> b) -> Prog '[instr] a -> Handler '[Profile] '[Tell [(String, b)], instr] '[] '[]
 profiler f instrument = interpretM (profilerAlg @instr f instrument)
 
 profilerAlg :: forall instr effs oeffs m a b
@@ -909,7 +909,7 @@ profilerAlg f instrument oalg (Eff (Scp (Profile name p))) =
 For our teletype example, we can instrument all of the `getLine` operations
 with a profiler as follows:
 ```haskell
-getLineProfile :: Handler '[GetLine] '[Profile, GetLine] IdentityT Identity
+getLineProfile :: Handler '[GetLine] '[Profile, GetLine] '[] '[]
 getLineProfile = interpret alg where
   alg :: Effs '[GetLine] m x -> Prog [Profile, GetLine] x
   alg (Eff (Alg (GetLine k))) = profile "getLine" (getLine >>= return . k)

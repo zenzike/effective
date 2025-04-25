@@ -58,14 +58,14 @@ up' u k = call' (Alg (UpOp u k))
 --
 -- I am not sure which one is better.
 
-upMaybe :: Handler '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] IdentityT Identity
+upMaybe :: Handler '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] '[] '[]
 upMaybe = interpret1 $ \(Alg (UpOp la k)) ->
   do mb <- up [|| Mb.runMaybeT $$la ||] 
      genCase mb $ \case
        Nothing -> Mb.throw
        Just a  -> return (k a)
 
-upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] IdentityT Identity
+upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] '[] '[]
 upExcept = interpret1 $ \(Alg (UpOp la k)) ->
   do ex <- up [|| Ex.runExceptT $$la ||] 
      genCase ex $ \case
@@ -75,8 +75,8 @@ upExcept = interpret1 $ \(Alg (UpOp la k)) ->
 upStateLazy :: forall s l.
   Handler '[UpOp (LS.StateT s l)] 
           '[UpOp l, LS.Put (Up s), LS.Get (Up s), CodeGen]
-          IdentityT 
-          Identity
+          '[]
+          '[]
 upStateLazy = interpret1 $ \(Alg (UpOp la k)) ->
   do cs <- LS.get @(Up s)
      as <- up [|| LS.runStateT $$la $$cs ||]
@@ -87,8 +87,8 @@ upStateLazy = interpret1 $ \(Alg (UpOp la k)) ->
 upStateStrict :: forall s l.
   Handler '[UpOp (SS.StateT s l)] 
           '[UpOp l, SS.Put (Up s), SS.Get (Up s), CodeGen]
-          IdentityT 
-          Identity
+          '[]
+          '[]
 upStateStrict = interpret1 $ \(Alg (UpOp la k)) ->
   do cs <- SS.get @(Up s)
      as <- up [|| SS.runStateT $$la $$cs ||]
@@ -97,7 +97,7 @@ upStateStrict = interpret1 $ \(Alg (UpOp la k)) ->
      return (k a)
 
 upReader :: Handler '[UpOp (R.ReaderT r l)] 
-                    '[UpOp l, R.Ask (Up r), CodeGen] IdentityT Identity
+                    '[UpOp l, R.Ask (Up r), CodeGen] '[] '[]
 upReader = interpret1 $ \(Alg (UpOp la k)) ->
   do cr <- R.ask
      a <- up [|| R.runReaderT $$la $$cr ||]
@@ -107,7 +107,7 @@ upReader = interpret1 $ \(Alg (UpOp la k)) ->
 -- The following is wrong because it generates infinitely branches of pattern matching.
 -- The right thing to do is to use PushT as the compile-time version of ListT.
 
-upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, CodeGen] IdentityT Identity
+upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, CodeGen] '[] '[]
 upNdet = interpret1 $ 
   let go (Alg (UpOp la k)) =
          do a <- up [|| ND.runListT $$la ||]
@@ -155,7 +155,7 @@ pushAlg oalg op
   | (Just (Scp (Choose x y))) <- prj op = x <|> y
   | (Just (Scp (Once x))) <- prj op   = P.once x
 
-pushAT :: Monad m => AlgTrans '[UpOp (ListT m), Empty, Choose, Once] '[UpOp m] PushT (PushC m)
+pushAT :: Monad m => AlgTrans '[UpOp (ListT m), Empty, Choose, Once] '[UpOp m] '[PushT] (PushC m)
 pushAT = AlgTrans $ pushAlg
 
 

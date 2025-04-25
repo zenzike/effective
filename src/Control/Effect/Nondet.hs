@@ -39,7 +39,7 @@ selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
                                             return (y, x:ys)
 
 {-# INLINE nondet #-}
-nondet :: Handler [Empty, Choose] '[] (ListT) []
+nondet :: Handler [Empty, Choose] '[] '[ListT] '[[]]
 nondet = handler' runListT' alternativeAlg
 
 -- This does not work becuase `Choose` is algebraic, for a greedy approach
@@ -98,5 +98,5 @@ backtrackAlg'
   -> (forall x. Effs [Empty, Choose, Once] (ListT m) x -> ListT m x)
 backtrackAlg' oalg = alternativeAlg oalg # backtrackOnceAlg oalg
 
-backtrack :: Handler [Empty, Choose, Once] '[] ListT []
+backtrack :: Handler [Empty, Choose, Once] '[] '[ListT] '[[]]
 backtrack = handler' runListT' backtrackAlg'

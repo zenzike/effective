@@ -41,9 +41,9 @@ instance Forward eff t => Forward (Clone eff) t where
   fwd alg (Clone op) = fwd (alg . Clone) op
 
 -- | Every handler of @effs@ gives rise to a handler of its clone.
-cloneHdl :: forall effs oeffs t f.
-                Handler effs oeffs t f 
-             -> Handler (Map Clone effs) oeffs t f
+cloneHdl :: forall effs oeffs ts fs.
+                Handler effs oeffs ts fs 
+             -> Handler (Map Clone effs) oeffs ts fs
 cloneHdl h = unsafeCoerce h  -- There is safer way to do this but this is quicker
 
 -- | @clone x k@ invokes the clone version of the operation @x@ (together with its

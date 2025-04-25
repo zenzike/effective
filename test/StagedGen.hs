@@ -53,5 +53,5 @@ choiceGen cN self =
       else empty
 
 
-stateAT :: AlgTrans [Put s, Get s] '[] (StateT s) Monad
+stateAT :: AlgTrans [Put s, Get s] '[] '[StateT s] Monad
 stateAT = AlgTrans stateAlg

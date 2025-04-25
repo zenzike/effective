@@ -12,7 +12,6 @@ module Control.Effect.State.Type where
 
 import Control.Effect
 import Control.Effect.Algebraic
-import GHC.TypeLits
 
 -- | Signature for putting a value into the state.
 type Put s = Alg (Put_ s)

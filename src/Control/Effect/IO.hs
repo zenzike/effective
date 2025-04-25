@@ -251,26 +251,25 @@ type AutoHandleIO effs oeffs xeffs =
 -- explicitly. 
 
 handleIO
-  :: forall xeffs effs oeffs t f a
+  :: forall xeffs effs oeffs ts fs a
   . ( Injects oeffs xeffs
-    , Forwards xeffs t
-    , forall m . Monad m => Monad (t m)
+    , Forwards xeffs ts
+    , Monad (Apply ts IO)
     , Injects xeffs IOEffects
     , AutoHandleIO effs oeffs xeffs )
-
-  => Handler effs oeffs t f
-  -> Prog (effs `Union` xeffs) a -> IO (Apply f a)
+  => Handler effs oeffs ts fs
+  -> Prog (effs `Union` xeffs) a -> IO (Apply fs a)
 handleIO = handleM @effs @oeffs @xeffs (ioAlg . injs)
 
 -- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. Any residual
 -- effects are then interpreted in `IO` using their standard semantics.
 handleIO'
-  :: forall effs oeffs t f a
-  . ( forall m . Monad m => Monad (t m)
-    , Injects oeffs IOEffects
+  :: forall effs oeffs ts fs a
+  . ( Injects oeffs IOEffects
+    , Monad (Apply ts IO)
     , HFunctor (Effs effs) ) 
-  => Handler effs oeffs t f
-  -> Prog effs a -> IO (Apply f a)
+  => Handler effs oeffs ts fs
+  -> Prog effs a -> IO (Apply fs a)
 handleIO' = handleM' @effs @oeffs ioAlg
 
 
@@ -278,15 +277,15 @@ handleIO' = handleM' @effs @oeffs ioAlg
 -- effects @xeffs@ are then interpreted in `IO` using their standard semantics.
 -- The type argument @xeffs@ usually can't be inferred and needs given
 -- explicitly. 
-handleIOApp :: forall xeffs effs oeffs t f a .
-  ( forall m . Monad m => Monad (t m)
-  , Forwards xeffs t
+handleIOApp :: forall xeffs effs oeffs ts fs a .
+  ( Monad (Apply ts IO)
+  , Forwards xeffs ts
   , Injects oeffs xeffs
   , Append effs xeffs
   , HFunctor (Effs (effs :++ xeffs))
   , Injects xeffs IOEffects )
-  => Handler effs oeffs t f
+  => Handler effs oeffs ts fs
   -> Prog (effs :++ xeffs) a
-  -> IO (Apply f a)
+  -> IO (Apply fs a)
 
 handleIOApp = handleMApp @effs @oeffs @xeffs (ioAlg . injs) 

@@ -11,7 +11,7 @@ import Control.Effect.State
 import Control.Effect.Algebraic
 import Data.Iso
 
-letPut :: Handler '[Put (Up s)] '[Put (Up s), CodeGen] IdentityT Identity
+letPut :: Handler '[Put (Up s)] '[Put (Up s), CodeGen] '[] '[]
 letPut = interpret1 (\(Alg (Put s k)) -> do s' <- genLet s; put s'; return k) 
 
 genAlg :: Algebra [CodeGen, UpOp Identity] Gen 
