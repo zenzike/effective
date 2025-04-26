@@ -23,7 +23,7 @@ module Control.Effect.State.Lazy
     state, state_,
 
     -- ** Algebras
-    stateAlg,
+    stateAT,
 
     -- ** Re-export the carrier
     Lazy.StateT(..),
@@ -31,7 +31,7 @@ module Control.Effect.State.Lazy
 
 import Control.Effect
 import Control.Effect.State.Type
-import Control.Effect.Algebraic
+import Control.Effect.Family.Algebraic
 
 import qualified Control.Monad.Trans.State.Lazy as Lazy
 
@@ -45,7 +45,11 @@ state s = handler' (fmap (\ ~(x, y) -> (y, x)) . flip Lazy.runStateT s) stateAlg
 state_ :: s -> Handler [Put s, Get s] '[] '[Lazy.StateT s] '[]
 state_ s = handler' (flip Lazy.evalStateT s) stateAlg
 
--- | An algebra that interprets t'Get' and t'Put' using the lazy t'Lazy.StateT'.
+-- | An algebra transformer that interprets t'Get' and t'Put' using the lazy t'Lazy.StateT'.
+stateAT :: AlgTransM [Put s, Get s] '[] '[Lazy.StateT s]
+stateAT = AlgTrans stateAlg
+
+-- | The underlying algebra of the state handler.
 stateAlg
   :: Monad m
   => (forall x. oeff m x -> m x)

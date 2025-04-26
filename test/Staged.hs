@@ -165,7 +165,7 @@ listExample5 as = $$(down $
 -}
 choice :: Int -> ListT Identity Int
 choice n = $$(down $
-  evalTr (withFwdsSameC @'[CodeGen] (weakenOEffs @'[CodeGen, UpOp Identity] (pushAT @Identity)))  genAlg 
+  evalTr genAlg (withFwdsSameC @'[CodeGen] (weakenOEffs @'[CodeGen, UpOp Identity] (pushAT @Identity)))  
     (choiceGen [||n||] [|| choice ||]))
 
 
@@ -187,11 +187,19 @@ choice n = $$(down $
 -}
 choiceST :: Int -> StateT Int (ListT Identity) Int
 choiceST n = $$(down $
-  evalTr (fuseAT (stateAT @(Up Int))
-           (withFwdsSameC @'[CodeGen] 
-            (weakenOEffs @'[CodeGen, UpOp Identity] 
-            (pushAT @Identity))))
-    genAlg 
+  evalTr genAlg  
+    (fuseAT (stateAT @(Up Int))
+            (withFwdsSameC @'[CodeGen] 
+              (weakenOEffs @'[CodeGen, UpOp Identity] 
+              (pushAT @Identity))))
+    (choiceGen [||n||] [|| choice ||]))
+
+choiceST' :: Int -> StateT Int (ListT Identity) Int
+choiceST' n = $$(down $
+  evalTr'
+    (stateAT @(Up Int) 
+      `fuseAT` pushAT 
+      `fuseAT` asAT genAlg)
     (choiceGen [||n||] [|| choice ||]))
 
 main = return ()

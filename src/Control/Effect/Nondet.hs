@@ -16,8 +16,8 @@ module Control.Effect.Nondet
 import Prelude hiding (or)
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.Alternative
 
 import Control.Monad.Trans.List
@@ -40,7 +40,7 @@ selects (x:xs)  =  return (x, xs)  <|>  do  (y, ys) <- selects xs
 
 {-# INLINE nondet #-}
 nondet :: Handler [Empty, Choose] '[] '[ListT] '[[]]
-nondet = handler' runListT' alternativeAlg
+nondet = handler' runListT' (getAT alternativeAT)
 
 -- This does not work becuase `Choose` is algebraic, for a greedy approach
 -- it must favour the lhs, but `return x <|> return y` prevents this
@@ -70,18 +70,6 @@ list = eval halg where
                                                   []     -> []
                                                   (x:xs) -> [x]
 
-backtrackAlg
-  :: Monad m => (forall x. oeff m x -> m x)
-  -> (forall x. Effs [Empty, Choose, Once] (ListT m) x -> ListT m x)
-backtrackAlg oalg op
-  | Just (Alg Empty)            <- prj op = empty
-  | Just (Scp (Choose xs ys))   <- prj op = xs <|> ys
-  | Just (Scp (Once p))         <- prj op =
-    ListT $ do mx <- runListT p
-               case mx of
-                 Nothing       -> return Nothing
-                 Just (x, mxs) -> return (Just (x, empty))
-
 backtrackOnceAlg
   :: Monad m
   => (forall x . oeff m x -> m x)
@@ -93,10 +81,13 @@ backtrackOnceAlg oalg op
                  Nothing       -> return Nothing
                  Just (x, mxs) -> return (Just (x, empty))
 
-backtrackAlg'
-  :: Monad m => (forall x. Effs oeff m x -> m x)
+backtrackAlg
+  :: Monad m => (forall x. Effs '[] m x -> m x)
   -> (forall x. Effs [Empty, Choose, Once] (ListT m) x -> ListT m x)
-backtrackAlg' oalg = alternativeAlg oalg # backtrackOnceAlg oalg
+backtrackAlg oalg = (getAT alternativeAT oalg) # backtrackOnceAlg oalg
+
+backtrackAT :: AlgTransM [Empty, Choose, Once] '[] '[ListT] 
+backtrackAT = AlgTrans backtrackAlg
 
 backtrack :: Handler [Empty, Choose, Once] '[] '[ListT] '[[]]
-backtrack = handler' runListT' backtrackAlg'
+backtrack = handler' runListT' backtrackAlg

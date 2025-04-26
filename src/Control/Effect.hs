@@ -51,6 +51,18 @@ module Control.Effect
   , pipe, (||>)
   , hide
 
+  -- * Algebra transformers
+  , AlgTrans (..)
+  , AlgTransM 
+  , asAT
+  , idAT
+  , compAT
+  , weakenAT
+  , fuseAT
+  , pipeAT
+  , passAT
+
+
   -- * Evaluation
   , eval
  -- , fold
@@ -61,6 +73,8 @@ module Control.Effect
   , handleP'
   , handleMApp
   , handlePApp
+  , evalTr
+  , evalTr'
 
   -- * Type families
   -- | The types of handlers are normalised when they are fused together, as are
@@ -68,21 +82,10 @@ module Control.Effect
   -- t`Identity`, t`Compose`, t`IdentityT`, and t`ComposeT` functors.
   , Apply
   , Assoc
-
-  -- * Re-exports
-  , Compose(..)
-  , Identity(..)
-  , ComposeT(..)
-  , IdentityT(..)
   ) where
-
-import Data.Functor.Identity
-import Data.Functor.Compose ( Compose(..) )
-import Control.Monad.Trans.Identity
-import Control.Monad.Trans.Compose
 
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Handler
-import Control.Effect.Internal.Handler.Type
+import Control.Effect.Internal.AlgTrans
 import Control.Effect.Internal.Forward

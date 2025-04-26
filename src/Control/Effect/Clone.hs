@@ -27,8 +27,8 @@ import Control.Effect
 import Data.List.Kind
 import Data.HFunctor
 import Unsafe.Coerce
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 
 -- | Make a copy of an effect signature, which is useful when more than one
 -- instances of the same effect are needed in a program.
@@ -42,9 +42,15 @@ instance Forward eff t => Forward (Clone eff) t where
 
 -- | Every handler of @effs@ gives rise to a handler of its clone.
 cloneHdl :: forall effs oeffs ts fs.
-                Handler effs oeffs ts fs 
-             -> Handler (Map Clone effs) oeffs ts fs
+            Handler effs oeffs ts fs 
+         -> Handler (Map Clone effs) oeffs ts fs
 cloneHdl h = unsafeCoerce h  -- There is safer way to do this but this is quicker
+
+-- | Every algebra transformer of @effs@ gives rise to one of its clone.
+cloneAT :: forall effs oeffs ts cs.
+           AlgTrans effs oeffs ts cs
+        -> AlgTrans (Map Clone effs) oeffs ts cs
+cloneAT h = unsafeCoerce h
 
 -- | @clone x k@ invokes the clone version of the operation @x@ (together with its
 -- continuation @k@).

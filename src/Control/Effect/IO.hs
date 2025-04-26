@@ -55,9 +55,9 @@ module Control.Effect.IO (
   where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
-import Control.Effect.Distributive
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
+import Control.Effect.Family.Distributive
 import Control.Effect.Concurrency.Types (Par, Par_(..), JPar, JPar_(..))
 
 import qualified System.CPUTime

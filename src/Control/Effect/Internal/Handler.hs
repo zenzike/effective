@@ -16,23 +16,15 @@ Stability   : experimental
 
 module Control.Effect.Internal.Handler where
 
-import Control.Effect.Internal.Handler.Type
-import Control.Effect.Internal.Handler.LowLevel as LL hiding (weaken)
+import Control.Effect.Internal.AlgTrans as LL hiding (weaken)
+import Control.Effect.Internal.Runner as LL
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Forward
 
-import GHC.Base
-import Unsafe.Coerce
-
-import Control.Monad.Trans.Identity
-import Control.Monad.Trans.Compose
-
+import Data.Kind
 import Data.List.Kind
-
-
 import Data.Functor.Identity
-import Data.Functor.Compose
 import Data.HFunctor
 
 
@@ -136,10 +128,10 @@ type Handler
 data Handler effs oeffs ts fs =
   Handler
   { -- | Monad transformer runner 
-    hrun :: Runner oeffs ts fs Monad
+    hrun :: RunnerM oeffs ts fs
 
     -- | Algebra transformer into @ts m@
-  , halg :: AlgTrans effs oeffs ts Monad
+  , halg :: AlgTransM effs oeffs ts
   }
 
 -- | Given @hrun@ and @halg@ will construct a @Handler effs oeffs t fs@. This
@@ -201,7 +193,7 @@ bypass
   -> Handler (effs `Union` beffs) oeffs ts fs
 bypass (Handler run alg) = Handler run (LL.withFwdsSameC @beffs alg)
 
--- | The result of @interpret rephrase@ is a new @Handler effs oeffs IdentityT Identity@.
+-- | The result of @interpret rephrase@ is a new @Handler effs oeffs '[] '[]@.
 -- This is created by using the supplied @rephrase :: Effs effs m x -> Prog oeffs x@
 -- parameter to translate @effs@ into a program that uses @oeffs@.
 interpret

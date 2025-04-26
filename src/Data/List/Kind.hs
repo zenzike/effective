@@ -115,3 +115,16 @@ type family Foldr1 (f :: a -> a -> a) (xs :: [a]) :: a where
 type family Map (f :: a -> b) (xs :: [a]) :: [b] where
   Map f '[]       = '[]
   Map f (x ': xs) = f x ': Map f xs
+
+-- | @`Apply fs a`@ applies a list @fs@ of type-level functions to the given @a@.
+type family Apply (fs :: [k -> k]) (a :: k) where
+  Apply '[] a     = a
+  Apply (f:fs) a  = f (Apply fs a)
+
+-- | For all closed type-level lists @fs1@ and @fs2@, the type @Apply fs1 (Apply fs2 a)@ 
+-- and @@Apply (fs1 :++ fs2) a@ will be exactly the same, but GHC doesn't know this, so
+-- whenever we need this, we will need to manually assume this as a constraint @Assoc fs1 fs2 a@,
+-- which is going to be automatically discharged when @fs1@ and @fs2@ are substituted by closed lists.
+
+class (Apply fs1 (Apply fs2 a) ~ Apply (fs1 :++ fs2) a) => Assoc fs1 fs2 a where
+instance (Apply fs1 (Apply fs2 a) ~ Apply (fs1 :++ fs2) a) => Assoc fs1 fs2 a where

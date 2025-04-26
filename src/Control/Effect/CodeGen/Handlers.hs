@@ -8,7 +8,8 @@ import Control.Effect.CodeGen.GenM
 
 import Control.Effect
 import Control.Effect.State
-import Control.Effect.Algebraic
+import Control.Effect.Family.Algebraic
+import Data.Functor.Identity
 import Data.Iso
 
 letPut :: Handler '[Put (Up s)] '[Put (Up s), CodeGen] '[] '[]

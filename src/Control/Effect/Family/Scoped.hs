@@ -10,7 +10,7 @@ Stability   : experimental
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Control.Effect.Scoped where
+module Control.Effect.Family.Scoped where
 
 import Control.Effect
 
@@ -26,6 +26,7 @@ import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Resump
+import Control.Monad.Trans.Identity
 
 -- A scoped operation has the following type:
 --

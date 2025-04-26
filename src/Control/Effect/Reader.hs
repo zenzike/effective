@@ -27,15 +27,17 @@ module Control.Effect.Reader (
   readerAsk,
 
   -- ** Algebras
-  readerAlg,
+  readerAT,
+  readerAskAT,
 
   -- ** Underlying monad transformers
   R.ReaderT(..),
 ) where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Internal.AlgTrans
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Data.Functor.Unary
 
 import qualified Control.Monad.Trans.Reader as R
@@ -81,14 +83,14 @@ local f p = call' (Scp (Local f p))
 -- | The `reader` handler supplies a static environment @r@ to the program
 -- that can be accessed with `ask`, and locally transformed with `local`.
 reader :: r -> Handler [Ask r, Local r] '[] '[R.ReaderT r] '[]
-reader r = handler' (flip R.runReaderT r) readerAlg
+reader r = handler' (flip R.runReaderT r) (\_ -> readerAlg)
 
 -- | The `reader'` handler supplies an environment @r@ computed using the 
 -- output effects to the program that can be accessed with `ask`, and 
 -- locally transformed with `local`.
 reader' :: forall oeffs r. (forall m . Monad m => Algebra oeffs m -> m r)
         -> Handler [Ask r, Local r] oeffs '[R.ReaderT r] '[]
-reader' mr = handler run readerAlg where
+reader' mr = handler run (\_ -> readerAlg) where
   run :: forall m . Monad m => Algebra oeffs m 
       -> (forall x. R.ReaderT r m x -> m x)
   run oalg rmx = do r <- mr oalg
@@ -97,23 +99,19 @@ reader' mr = handler run readerAlg where
 
 -- | The algebra for the 'reader' handler.
 readerAlg
-  :: Monad m
-  => (forall x. oeff m x -> m x)
-  -> (forall x.  Effs [Ask r, Local r] (R.ReaderT r m) x -> R.ReaderT r m x)
-readerAlg oalg eff
+  :: Monad m => Algebra [Ask r, Local r] (R.ReaderT r m)
+readerAlg eff
   | Just (Alg (Ask p)) <- prj eff =
       do r <- R.ask
          return (p r)
   | Just (Scp (Local (f :: r -> r) p)) <- prj eff =
       R.local f p
 
+readerAT :: AlgTransM '[Ask r, Local r] '[] '[R.ReaderT r]
+readerAT = AlgTrans (\_ -> readerAlg)
+
+readerAskAT :: AlgTransM '[Ask r] '[] '[R.ReaderT r]
+readerAskAT = weakenIEffs readerAT
+
 readerAsk :: r -> Handler '[Ask r] '[] '[R.ReaderT r] '[]
-readerAsk r = handler' (flip R.runReaderT r) readerAlg where
-  readerAlg
-    :: Monad m
-    => (forall x. oeff m x -> m x)
-    -> (forall x.  Effs '[Ask r] (R.ReaderT r m) x -> R.ReaderT r m x)
-  readerAlg oalg eff
-    | Just (Alg (Ask p)) <- prj eff =
-        do r <- R.ask
-           return (p r)
+readerAsk r = handler' (flip R.runReaderT r) (getAT readerAskAT)

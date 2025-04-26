@@ -970,8 +970,8 @@ This file has a number of imports:
 
 ```haskell top
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.IO
 import Control.Effect.State
 import Control.Effect.Writer hiding (uncensors)

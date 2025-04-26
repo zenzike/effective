@@ -5,7 +5,7 @@ import Control.Effect
 import Control.Effect.CodeGen.Gen (Gen(..), CodeGen, genLet)
 import Control.Effect.CodeGen.Type
 import Control.Monad (ap)
-import Control.Effect.Algebraic
+import Control.Effect.Family.Algebraic
 
 newtype GenM m a = GenM { unGenM :: forall r. (a -> Up (m r)) -> Up (m r) } 
 

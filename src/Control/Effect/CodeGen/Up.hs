@@ -2,11 +2,9 @@
 module Control.Effect.CodeGen.Up where
 
 import Control.Effect hiding (fwd)
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
-import Control.Effect.Internal.Handler.LowLevel
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.Internal.Forward.ForwardC
-import Control.Effect.Internal.Handler.Type
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Gen

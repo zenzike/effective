@@ -21,7 +21,7 @@ module Control.Effect.Internal.Forward (Forward(..), fwds, Forwards) where
 import Data.Kind
 import Control.Effect.Internal.Effs
 import qualified Control.Effect.Internal.Forward.ForwardC as F
-import Control.Effect.Internal.Handler.Type
+import Control.Effect.Internal.AlgTrans
 
 -- | The class demonstrating that an effect @eff@ can be forwarded through a transformer @t@.
 -- This is the typeclass that the user of @effective@ should instantiate and it will be used

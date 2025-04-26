@@ -14,8 +14,8 @@ module Control.Effect.Cut where
 import Prelude hiding (or)
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.Alternative
 import Control.Effect.Nondet
 import Control.Monad.Trans.CutList.CPS
@@ -72,6 +72,9 @@ cutListAlg oalg op
   | Just (Alg CutFail)         <- prj op = CutListT (\cons nil zero -> zero)
   | Just (Scp (CutCall xs))    <- prj op = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
 
+cutListAT :: AlgTransM [Empty, Choose, CutFail, CutCall] '[] '[CutListT] 
+cutListAT = AlgTrans cutListAlg
+
 cutList :: Handler [Empty, Choose, CutFail, CutCall] '[] '[CutListT] '[[]]
 cutList = handler' fromCutListT cutListAlg
 
@@ -83,6 +86,9 @@ instance HFunctor CutListT where
 
 onceCut :: Handler '[Once] '[CutCall, CutFail, Choose] '[] '[]
 onceCut = interpretM onceCutAlg
+
+onceCutAT :: AlgTransM '[Once] '[CutCall, CutFail, Choose] '[] 
+onceCutAT = AlgTrans onceCutAlg
 
 onceCutAlg :: forall oeff m . (Monad m , Members [CutCall, CutFail, Choose] oeff)
   => (forall x. Effs oeff m x -> m x)

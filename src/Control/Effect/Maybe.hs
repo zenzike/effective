@@ -26,16 +26,16 @@ module Control.Effect.Maybe (
   retry,
 
   -- ** Algebras
-  exceptAlg,
-  retryAlg,
+  exceptAT,
+  retryAT,
 
   -- ** Underlying monad transformers
   MaybeT(..)
 ) where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 
 import Control.Monad.Trans.Maybe
 
@@ -70,6 +70,10 @@ catch p q = call' (Scp (Catch p q))
 except :: Handler [Throw, Catch] '[] '[MaybeT] '[Maybe]
 except = handler' runMaybeT exceptAlg
 
+-- | The algebra transformer for the 'except' handler.
+exceptAT :: AlgTransM [Throw, Catch] '[] '[MaybeT]
+exceptAT = AlgTrans exceptAlg
+
 -- | The algebra for the 'except' handler.
 exceptAlg :: Monad m
   => (forall x. oeff m x -> m x)
@@ -91,6 +95,9 @@ retry :: Handler [Throw, Catch] '[] '[MaybeT] '[Maybe]
 retry = handler' runMaybeT retryAlg
 
 -- | The algebra for the 'retry' handler.
+retryAT :: AlgTransM [Throw, Catch] '[] '[MaybeT]
+retryAT = AlgTrans retryAlg
+
 retryAlg :: Monad m
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)

@@ -28,8 +28,8 @@ module Control.Effect.Concurrency (
   resump,
   resumpWith,
   resumpWithM,
-  resumpAlg,
-  jresumpAlg,
+  resumpAT,
+  jresumpAT,
   jresump,
   jresumpWith,
 
@@ -43,9 +43,9 @@ module Control.Effect.Concurrency (
   ) where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
-import Control.Effect.Distributive
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
+import Control.Effect.Family.Distributive
 import Control.Effect.Concurrency.Types
 import Control.Effect.IO (NewQSem, SignalQSem, WaitQSem, newQSem, signalQSem, waitQSem)
 import qualified Control.Effect.Reader as R
@@ -69,6 +69,14 @@ jresumpAlg eff
   | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
   | Just (Distr (JPar l r) c) <- prj eff = fmap (\(x, y) -> c (JPar x y)) (C.jpar l r)
   | Just (Scp (Res a p)) <- prj eff = C.res a p
+
+-- | Algebra transformer for the resumption-based handler of t`Par`, t`Act`, and t`Res`.
+resumpAT :: forall a. Action a => AlgTransM '[Act a, Par, Res a] '[] '[C.CResT a]
+resumpAT = AlgTrans (\_ -> resumpAlg)
+
+-- | Algebra transformer for the resumption-based handler of t`JPar`, t`Act`, and t`Res`.
+jresumpAT :: forall a. Action a => AlgTransM '[Act a, JPar, Res a] '[] '[C.CResT a]
+jresumpAT = AlgTrans (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic branches are explored 
 -- by backtracking, resulting in a list of all (successful) traces.

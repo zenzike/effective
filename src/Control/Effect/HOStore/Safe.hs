@@ -43,7 +43,10 @@ module Control.Effect.HOStore.Safe (
   handleHSM,
 ) where
 
-import Control.Effect
+import Control.Effect.Internal.Effs
+import Control.Effect.Internal.Forward 
+import Control.Effect.Internal.Handler
+import Control.Effect.Internal.Prog ( Prog, call', progAlg )
 import Control.Monad.Trans.Class
 import GHC.Types (Any)
 import Unsafe.Coerce

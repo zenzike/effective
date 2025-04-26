@@ -29,14 +29,16 @@ module Control.Effect.Writer (
 
   -- ** Algebras
   writerAlg,
+  writeAT,
+  censorAT,
 
   -- ** Underlying monad transformers
   W.WriterT(..)
 ) where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.IO (liftIO)
 
 import qualified Data.Functor.Unary as U
@@ -56,7 +58,10 @@ data Tell_ w k where
 tell :: (Member (Tell w) sig, Monoid w) => w -> Prog sig ()
 tell w = call (Alg (Tell w (return ())))
 
--- | The algebra for the `writer` handler.
+-- | The algebra transformer for the `writer` handler.
+writeAT :: Monoid w => AlgTransM '[Tell w] '[] '[W.WriterT w]
+writeAT = AlgTrans writerAlg
+
 writerAlg
   :: (Monad m, Monoid w)
   => (forall x. oeff m x -> m x)
@@ -102,11 +107,13 @@ censor cipher p = call (Scp (Censor cipher (fmap return p)))
 -- any output produced by `tell`. If a @`censor` f' p@ operation is encountered,
 -- @p@ will be censored by the composition @f . f'@, and the `censor` operation
 -- will be consumed.
-censors :: forall w . Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[ReaderT (w -> w)] '[]
-censors cipher = handler' run alg where
+censors :: forall w . (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[ReaderT (w -> w)] '[]
+censors cipher = handler' run (getAT censorAT) where
   run :: Monad m => (forall x. ReaderT (w -> w) m x -> m x)
   run (ReaderT mx) = mx cipher
 
+censorAT :: AlgTransM '[Tell w, Censor w] '[Tell w] '[ReaderT (w -> w)]
+censorAT = AlgTrans alg where
   alg :: Monad m
       => (forall x. Effs '[Tell w] m x -> m x)
       -> (forall x. Effs '[Tell w, Censor w] (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
@@ -119,7 +126,7 @@ censors cipher = handler' run alg where
            lift (runReaderT k (cipher . cipher'))
 
 -- | The `uncensors` handler removes any occurrences of `censor`.
-uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[] '[]
+uncensors :: forall w . Handler '[Censor w] '[] '[] '[]
 uncensors = handler' id alg where
   alg :: Monad m
       => (forall x. Effs '[] m x -> m x)

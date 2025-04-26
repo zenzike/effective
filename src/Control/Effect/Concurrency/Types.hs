@@ -11,9 +11,9 @@ This module provides some shared definitions around the effect of concurrency.
 module Control.Effect.Concurrency.Types where
 
 import Data.Functor.Unary
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
-import Control.Effect.Distributive
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
+import Control.Effect.Family.Distributive
 import Control.Effect
 
 -- * Types of actions

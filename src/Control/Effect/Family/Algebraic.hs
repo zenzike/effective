@@ -9,7 +9,7 @@ Stability   : experimental
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
 
-module Control.Effect.Algebraic where
+module Control.Effect.Family.Algebraic where
 
 import Control.Effect
 

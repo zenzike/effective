@@ -47,9 +47,9 @@ library
     Control.Effect.State.Lazy
     Control.Effect.State.Strict
     Control.Effect.Writer
-    Control.Effect.Algebraic
-    Control.Effect.Scoped
-    Control.Effect.Distributive
+    Control.Effect.Family.Algebraic
+    Control.Effect.Family.Scoped
+    Control.Effect.Family.Distributive
     Control.Effect.Clone
     Control.Effect.HOStore.Unsafe
     Control.Effect.HOStore.Safe
@@ -87,8 +87,9 @@ library
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Forward.ForwardC
     Control.Effect.Internal.Handler
-    Control.Effect.Internal.Handler.LowLevel
-    Control.Effect.Internal.Handler.Type
+    Control.Effect.Internal.Runner
+    Control.Effect.Internal.AlgTrans
+    Control.Effect.Internal.AlgTrans.Type
   hs-source-dirs:
     src
   build-depends:

@@ -24,7 +24,7 @@ around the powerset functor and probabilistic distribution monad are especially
 important in the study of (nondeterministic/probabilistic) automata theory.)
 -}
 
-module Control.Effect.Distributive where
+module Control.Effect.Family.Distributive where
 
 import Data.Kind ( Type )
 import Data.HFunctor
@@ -34,6 +34,7 @@ import Control.Effect
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Identity
 
 data Distr (r :: Type -> Type) (f :: Type -> Type) a where
   Distr :: r (f b) -> (r b -> a) -> Distr r f a

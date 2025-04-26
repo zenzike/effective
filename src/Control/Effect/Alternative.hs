@@ -35,12 +35,12 @@ module Control.Effect.Alternative (
   alternative,
 
   -- ** Algebras
-  alternativeAlg,
+  alternativeAT,
 ) where
 
 import Control.Effect
-import Control.Effect.Algebraic
-import Control.Effect.Scoped
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 
 import Control.Applicative ( Alternative(empty, (<|>)) )
 
@@ -68,13 +68,17 @@ alternative
   -> Handler '[Empty, Choose] '[] '[t] '[f]
 alternative run = handler' run alternativeAlg
 
--- | The algebra that corresponds to the 'alternative' handler. This uses an
+-- | The algebra transformer underlying the 'alternative' handler. This uses an
 -- underlying 'Alternative' instance for @t m@ given by a transformer @t@.
+alternativeAT
+  :: forall t. (forall m . Monad m => Alternative (t m))
+  => AlgTransM '[Empty, Choose] '[] '[t]
+alternativeAT = AlgTrans alternativeAlg
+
 alternativeAlg
-  :: forall oeffs t m . 
-     Alternative (t m)
-  => Algebra oeffs m
-  -> Algebra [Empty , Choose] (t m)
+  :: forall oeffs t . (forall m . Monad m => Alternative (t m))
+  => forall m. Monad m 
+  => Algebra oeffs m -> Algebra [Empty, Choose] (t m)
 alternativeAlg oalg eff
   | (Just (Alg Empty))          <- prj eff = empty
   | (Just (Scp (Choose xs ys))) <- prj eff = xs <|> ys

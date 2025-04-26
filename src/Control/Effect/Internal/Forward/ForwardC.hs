@@ -23,7 +23,7 @@ module Control.Effect.Internal.Forward.ForwardC
   , ForwardsC (..)
   ) where
 
-import Control.Effect.Internal.Handler.Type
+import Control.Effect.Internal.AlgTrans.Type
 import Control.Effect.Internal.Effs
 
 import Data.Kind ( Type )
