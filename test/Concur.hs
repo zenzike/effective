@@ -5,7 +5,7 @@ import Control.Effect
 import Control.Effect.IO
 import Control.Effect.Writer
 import Control.Effect.Concurrency
-import Control.Effect.Algebraic
+import Control.Effect.Family.Algebraic
 import Control.Monad
 import Control.Effect.Clone
 import Control.Effect.Yield
