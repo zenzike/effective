@@ -22,6 +22,7 @@ module Control.Effect
   , weakenProg
   , progAlg
   , Effect
+  , Identity
 
   -- * Operations
   , Member(..)
@@ -77,9 +78,6 @@ module Control.Effect
   , evalTr'
 
   -- * Type families
-  -- | The types of handlers are normalised when they are fused together, as are
-  -- any results when a handler is applied. This normalisation removes unnecessary
-  -- t`Identity`, t`Compose`, t`IdentityT`, and t`ComposeT` functors.
   , Apply
   , Assoc
   ) where
@@ -89,3 +87,5 @@ import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Handler
 import Control.Effect.Internal.AlgTrans
 import Control.Effect.Internal.Forward
+import Data.Functor.Identity
+import Data.List.Kind

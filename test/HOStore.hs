@@ -8,6 +8,7 @@ import qualified Control.Effect.HOStore.Safe as Safe
 import qualified Control.Effect.State as St
 import Control.Effect.Nondet
 import Data.List.Kind
+import Data.Functor.Identity
 import Data.HFunctor
 #ifdef INDEXED
 import GHC.TypeNats

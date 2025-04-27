@@ -180,7 +180,10 @@ hide
   -> Handler (effs :\\ heffs) oeffs ts fs
 hide h = weaken h
 
-type AutoBypass beffs effs oeffs = (Append effs (beffs :\\ effs), Injects (beffs :\\ effs) beffs )
+type AutoBypass beffs effs oeffs = 
+  ( Append effs (beffs :\\ effs)
+  , Injects (beffs :\\ effs) beffs 
+  , Injects beffs beffs )
 
 -- | Operations from the output effect @oeffs@ of a handler can be added
 -- to the input effect if the handler can forward it.
@@ -266,9 +269,6 @@ This makes sense, since the operations in `effs2` must operate
 only after `h1` has done its work on the syntax tree.
 To make use of `malg` operate with the `t1` carrier,
 -}
-
-class    (Monad (Apply ts m)) => MonadApply ts m where
-instance (Monad (Apply ts m)) => MonadApply ts m where
 
 {-# INLINE fuse #-}
 {-# INLINE (|>) #-}

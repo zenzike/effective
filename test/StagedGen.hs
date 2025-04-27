@@ -8,9 +8,8 @@ import Control.Effect.Except
 import Control.Effect.Alternative
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.List
+import Data.Functor.Identity
 import Language.Haskell.TH
-import Control.Effect.Internal.Handler.LowLevel
-import Control.Effect.Internal.Handler.Type
 import Control.Effect.Internal.Forward.ForwardC
 import Data.Iso
 
@@ -51,7 +50,3 @@ choiceGen cN self =
      if b 
       then up [|| $$self ($$cN - 1) ||] <|> return cN
       else empty
-
-
-stateAT :: AlgTrans [Put s, Get s] '[] '[StateT s] Monad
-stateAT = AlgTrans stateAlg

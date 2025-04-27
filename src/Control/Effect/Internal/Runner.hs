@@ -78,7 +78,7 @@ type AutoFuseR effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 =
 
 {-# INLINE fuseR #-}
 fuseR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
-          ( ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          ( Forwards cs2 (oeffs1 :\\ effs2) ts2
           , AutoFuseR effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 )
        => AlgTrans effs2 oeffs2 ts2 cs2
        -> Runner oeffs1 ts1 fs1 cs1 
@@ -91,7 +91,7 @@ fuseR at2 r1 r2 = Runner \(oalg :: Algebra _ m)  ->
       getR r2 (oalg . injs)
     . getR r1 (weakenAlg @oeffs1 @((oeffs1 :\\ effs2) :++ effs2) $
         heither @(oeffs1 :\\ effs2) @effs2
-          (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @(ts2))
+          (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @(ts2))
             (weakenAlg @(oeffs1 :\\ effs2) @_ oalg))
           (getAT at2 (weakenAlg @oeffs2 @_ oalg)))
 
@@ -102,7 +102,7 @@ type AutoPassR effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 =
 
 {-# INLINE passR #-}
 passR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
-      ( ForwardsC cs2 oeffs1 ts2
+      ( Forwards cs2 oeffs1 ts2
       , AutoPassR effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2)
       => AlgTrans effs2 oeffs2 ts2 cs2
       -> Runner oeffs1 ts1 fs1 cs1 
@@ -113,7 +113,7 @@ passR :: forall effs2 oeffs1 oeffs2 ts1 ts2 fs1 fs2 cs1 cs2.
                 (CompC ts2 cs1 cs2)
 passR at2 r1 r2 = Runner \(oalg :: Algebra _ m)  ->
       getR r2 (oalg . injs)
-    . getR r1 (getAT (fwdsC @cs2 @oeffs1 @ts2) (oalg . injs))
+    . getR r1 (getAT (fwds @cs2 @oeffs1 @ts2) (oalg . injs))
 
 {-# INLINE weakenR #-}
 weakenR :: forall cs' cs effs' effs ts fs. 

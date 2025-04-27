@@ -20,6 +20,8 @@ import qualified Control.Effect.State.Lazy as LS
 import qualified Control.Effect.State.Strict as SS
 import qualified Control.Effect.Reader as R
 
+import Control.Effect.Internal.Forward.ForwardC
+
 type UpOp :: (* -> *) -> Effect
 type UpOp m = Alg (UpOp_ m)
 
@@ -140,9 +142,6 @@ upPushAlg' oalg cl = PushT $ \c n -> upMN [||
 
 class (Monad n, n $~> m) => PushC m n where
 instance (Monad n, n $~> m) => PushC m n where
-
-instance ForwardC Monad effs t => ForwardC (PushC m) effs t where
-  fwdC = fwdC @Monad @effs @t
 
 pushAlg :: forall m n. (Monad m, Functor n, n $~> m) 
         => Algebra '[UpOp m] n

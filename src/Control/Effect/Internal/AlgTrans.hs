@@ -6,7 +6,7 @@ Maintainer  : Nicolas Wu, Zhixuan Yang
 Stability   : experimental
 -}
 {-# LANGUAGE ImpredicativeTypes, QuantifiedConstraints, UndecidableInstances #-}
-{-# LANGUAGE UndecidableSuperClasses, MonoLocalBinds, LambdaCase, BlockArguments #-}
+{-# LANGUAGE MonoLocalBinds, LambdaCase, BlockArguments #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# OPTIONS_GHC -Wno-partial-type-signatures #-}
 
@@ -15,13 +15,13 @@ module Control.Effect.Internal.AlgTrans
   , module Control.Effect.Internal.AlgTrans 
   ) where
 
-import Data.List.Kind ( Union, (:\\), (:++) )
+import Data.List.Kind 
 import Data.HFunctor ( HFunctor )
 
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.AlgTrans.Type
 import Control.Effect.Internal.Prog.ProgImp ( Prog, eval )
-import Control.Effect.Internal.Forward.ForwardC
+import Control.Effect.Internal.Forward.ForwardC 
 
 -- * Using algebra transformers and runners 
 
@@ -38,7 +38,7 @@ evalTr :: forall effs oeffs xeffs ts cs m a.
 evalTr oalg alg = eval (getAT alg (oalg . injs)) 
 
 {-# INLINE evalTr' #-}
-evalTr' :: forall effs ts cs m a. 
+evalTr' :: forall m effs ts cs a. 
         ( HFunctor (Effs effs) 
         , cs m
         , Monad (Apply ts m) )
@@ -62,10 +62,6 @@ asAT alg = AlgTrans \_ -> alg
 idAT :: forall effs cs. AlgTrans effs effs '[] cs
 idAT = AlgTrans \alg -> alg
 
--- | A constraint synonym that is frequently used when composing algebra transformers. 
-class    (cs2 m, cs1 (Apply ts2 m)) => CompC ts2 cs1 cs2 m where
-instance (cs2 m, cs1 (Apply ts2 m)) => CompC ts2 cs1 cs2 m where
-
 -- | Boring constraints that will always be satisfied automatically when the parameters
 -- are substituted by concrete values. Users don't need to care about them.
 type AutoCompAT ts1 ts2 effs1 cs2 = ( forall m . Assoc ts1 ts2 m )
@@ -82,16 +78,15 @@ compAT alg1 alg2 = AlgTrans \(oalg :: Algebra effs3 m) -> getAT alg1 (getAT alg2
 -- | Every algebra transformer can be used as one that processes fewer input effects,
 -- generating more output effects, and/or with stronger input constraints.
 {-# INLINE weakenAT #-}
-weakenAT :: (Injects effs' effs, Injects oeffs oeffs', forall m. cs' m => cs m)
+weakenAT :: forall effs' oeffs' cs' effs oeffs cs ts.
+            (Injects effs' effs, Injects oeffs oeffs', forall m. cs' m => cs m)
          => AlgTrans effs  oeffs  ts cs
          -> AlgTrans effs' oeffs' ts cs'
 weakenAT at = AlgTrans \oalg x -> getAT at (oalg . injs) (injs x)
 
--- | A synonym for the conjunction of two constraints @cs1@ and @cs2@ on @m@.
-class (cs1 m, cs2 m) => AndC cs1 cs2 m where
-instance (cs1 m, cs2 m) => AndC cs1 cs2 m where
-
-type AutoCaseTrans effs1 effs2 = (Append effs1 (effs2 :\\ effs1), Injects (effs2 :\\ effs1) effs2)
+type AutoCaseTrans effs1 effs2 = 
+  ( Append effs1 (effs2 :\\ effs1)
+  , Injects (effs2 :\\ effs1) effs2 )
 
 {-# INLINE caseAT #-}
 caseAT :: forall effs1 effs2 cs1 cs2 oeffs ts. 
@@ -160,42 +155,45 @@ caseATSameC'
         -> AlgTrans (effs1 :++ effs2) oeffs ts cs
 caseATSameC' at1 at2 = AlgTrans \oalg -> heither (getAT at1 oalg) (getAT at2 oalg)
 
-
+{-
 {-# INLINE withFwds #-}
 withFwds :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( ForwardsC cs2 xeffs ts, Injects xeffs oeffs
+            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
             , AutoCaseTrans effs xeffs )
          => AlgTrans effs oeffs ts cs1
          -> AlgTrans (effs `Union` xeffs) oeffs ts (AndC cs1 cs2)
-withFwds at = caseAT at (weakenOEffs @oeffs @xeffs fwdsC)
+withFwds at = caseAT at (weakenAT @xeffs @oeffs @cs2 (F.fwdsC @xeffs))
 
 
 {-# INLINE withFwds' #-}
 withFwds' :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( ForwardsC cs2 xeffs ts, Injects xeffs oeffs
+            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
             , AutoCaseTrans' effs xeffs )
          => AlgTrans effs oeffs ts cs1
          -> AlgTrans (effs :++ xeffs) oeffs ts (AndC cs1 cs2)
 withFwds' at = caseAT' at (weakenOEffs @oeffs @xeffs fwdsC)
+-}
 
+type AutoWithFwds effs xeffs = (AutoCaseTrans effs xeffs, Injects xeffs xeffs)
 
 {-# INLINE withFwdsSameC #-}
 withFwdsSameC
          :: forall xeffs effs oeffs ts cs. 
-            ( ForwardsC cs xeffs ts, Injects xeffs oeffs
-            , AutoCaseTrans effs xeffs )
+            ( Forwards cs xeffs ts, Injects xeffs oeffs
+            , AutoWithFwds effs xeffs )
          => AlgTrans effs oeffs ts cs
          -> AlgTrans (effs `Union` xeffs) oeffs ts cs
-withFwdsSameC at = caseATSameC at (weakenOEffs @oeffs @xeffs fwdsC)
+withFwdsSameC at = caseATSameC at (weakenAT @xeffs @oeffs (fwdsC @xeffs))
 
+type AutoWithFwds' effs xeffs = (Append effs xeffs, Injects xeffs xeffs)
 
 {-# INLINE withFwdsSameC' #-}
 withFwdsSameC' :: forall xeffs effs oeffs ts cs. 
-            ( ForwardsC cs xeffs ts, Injects xeffs oeffs
-            , AutoCaseTrans' effs xeffs )
+            ( Forwards cs xeffs ts, Injects xeffs oeffs
+            , AutoWithFwds' effs xeffs )
          => AlgTrans effs oeffs ts cs
          -> AlgTrans (effs :++ xeffs) oeffs ts cs
-withFwdsSameC' at = caseATSameC' at (weakenOEffs @oeffs @xeffs fwdsC)
+withFwdsSameC' at = caseATSameC' at (weakenAT @xeffs @oeffs (fwdsC @xeffs))
 
 
 type AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 = 
@@ -213,8 +211,8 @@ type AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 =
 --    2. the output effects @oeffs1@ of @at1@ are intercepted by @effs2@ as much as possible.
 {-# INLINE fuseAT #-}
 fuseAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-          ( ForwardsC cs1 effs2 ts1
-          , ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          ( Forwards cs1 effs2 ts1
+          , Forwards cs2 (oeffs1 :\\ effs2) ts2
           , AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 )
        => AlgTrans effs1 oeffs1 ts1 cs1 
        -> AlgTrans effs2 oeffs2 ts2 cs2
@@ -226,9 +224,9 @@ fuseAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) ->
     hunion @effs1 @effs2
       (getAT at1 (weakenAlg $
         heither @(oeffs1 :\\ effs2) @effs2
-          (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
+          (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
           (getAT at2 (weakenAlg oalg))))
-      (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+      (getAT (fwds @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
 
 
 type AutoPipeAT effs2 oeffs1 oeffs2 ts1 ts2 = 
@@ -243,7 +241,7 @@ type AutoPipeAT effs2 oeffs1 oeffs2 ts1 ts2 =
 --    2. the output effects @oeffs1@ of @at1@ are intercepted by @effs2@ as much as possible.
 {-# INLINE pipeAT #-}
 pipeAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-          ( ForwardsC cs2 (oeffs1 :\\ effs2) ts2
+          ( Forwards cs2 (oeffs1 :\\ effs2) ts2
           , AutoPipeAT effs2 oeffs1 oeffs2 ts1 ts2 )
        => AlgTrans effs1 oeffs1 ts1 cs1 
        -> AlgTrans effs2 oeffs2 ts2 cs2
@@ -254,7 +252,7 @@ pipeAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
 pipeAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
   getAT at1 (weakenAlg $
     heither @(oeffs1 :\\ effs2) @effs2
-      (getAT (fwdsC @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
+      (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
       (getAT at2 (weakenAlg oalg)))
 
 
@@ -271,8 +269,8 @@ type AutoPassAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 =
 -- If an effect is in the intersection of @effs1@ and @effs2@, it is handled by @at1@.
 {-# INLINE passAT #-}
 passAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-          ( ForwardsC cs1 effs2 ts1
-          , ForwardsC cs2 oeffs1 ts2
+          ( Forwards cs1 effs2 ts1
+          , Forwards cs2 oeffs1 ts2
           , AutoPassAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 )
        => AlgTrans effs1 oeffs1 ts1 cs1 
        -> AlgTrans effs2 oeffs2 ts2 cs2
@@ -282,8 +280,8 @@ passAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
                    (CompC ts2 cs1 cs2)
 passAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
   hunion @effs1 @effs2
-    (getAT at1 @(Apply ts2 m) (getAT (fwdsC @cs2 @oeffs1 @ts2) @m (oalg . injs)))
-    (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+    (getAT at1 @(Apply ts2 m) (getAT (fwds @cs2 @oeffs1 @ts2) @m (oalg . injs)))
+    (getAT (fwds @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
 
 
 type AutoPassAT' effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 = 
@@ -298,8 +296,8 @@ type AutoPassAT' effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 =
 -- intersection of @effs1@ and @effs2@, it is handled by @at2@.
 {-# INLINE passAT' #-}
 passAT' :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-        ( ForwardsC cs1 effs2 ts1
-        , ForwardsC cs2 oeffs1 ts2
+        ( Forwards cs1 effs2 ts1
+        , Forwards cs2 oeffs1 ts2
         , AutoPassAT' effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 )
         => AlgTrans effs1 oeffs1 ts1 cs1 
         -> AlgTrans effs2 oeffs2 ts2 cs2
@@ -309,6 +307,6 @@ passAT' :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
                      (CompC ts2 cs1 cs2)
 passAT' at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) -> 
   hunion @effs2 @effs1
-      (getAT (fwdsC @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
-      (getAT at1 (getAT (fwdsC @cs2 @oeffs1 @ts2) (oalg . injs)))
+      (getAT (fwds @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
+      (getAT at1 (getAT (fwds @cs2 @oeffs1 @ts2) (oalg . injs)))
   . injs

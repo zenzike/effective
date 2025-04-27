@@ -14,14 +14,16 @@ specialised to the constraint of monads.
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_HADDOCK ignore-exports #-}
 
 module Control.Effect.Internal.Forward (Forward(..), fwds, Forwards) where
 
 import Data.Kind
+import Data.List.Kind
 import Control.Effect.Internal.Effs
+import Control.Effect.Internal.AlgTrans.Type
 import qualified Control.Effect.Internal.Forward.ForwardC as F
-import Control.Effect.Internal.AlgTrans
 
 -- | The class demonstrating that an effect @eff@ can be forwarded through a transformer @t@.
 -- This is the typeclass that the user of @effective@ should instantiate and it will be used
@@ -36,7 +38,9 @@ class Forward eff t where
       => (forall x . eff m x  -> m x)
       -> (forall x . eff (t m) x -> t m x)
 
-instance Forward effs t => F.ForwardC Monad effs t where
+instance Forward effs t => F.ForwardC effs t where
+  type FwdConstraint effs t = Monad
+
   {-# INLINE fwdC #-}
   fwdC = Control.Effect.Internal.Forward.fwd
 
@@ -51,9 +55,9 @@ instance Forward effs t => F.ForwardC Monad effs t where
 -- that is implied by the internal typeclass.
 
 type Forwards :: [Effect] -> [(Type -> Type) -> (Type -> Type)] -> Constraint
-class F.ForwardsC Monad effs ts => Forwards effs ts where
+class (F.ForwardsC effs ts, Monad `ImpliesC` (F.FwdsConstraint effs ts)) => Forwards effs ts where
   {-# INLINE fwds #-}
   fwds :: forall m. Monad m => Algebra effs m -> Algebra effs (Apply ts m)
-  fwds = getAT (F.fwdsC @Monad @effs @ts)
+  fwds = getAT (F.fwdsC @effs @ts)
 
-instance F.ForwardsC Monad effs ts => Forwards effs ts where
+instance (F.ForwardsC effs ts, Monad `ImpliesC` (F.FwdsConstraint effs ts)) => Forwards effs ts where

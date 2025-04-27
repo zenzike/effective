@@ -5,9 +5,11 @@ import Control.Effect
 import Control.Effect.CodeGen
 import Control.Effect.State.Strict
 import Control.Effect.Nondet
-import Control.Effect.Internal.Handler.LowLevel
-import Control.Effect.Internal.Handler.Type
+import Control.Effect.Family.Scoped
+import Control.Effect.Family.Algebraic
 import Control.Effect.Internal.Forward.ForwardC
+import Data.Functor.Identity
+import Control.Effect.Internal.AlgTrans
 import qualified Control.Monad.Trans.State.Strict as S
 
 import StagedGen
@@ -15,6 +17,7 @@ import Control.Effect.Except
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Class
+import Data.List.Kind
 
 {-
 Generated code: 
@@ -196,9 +199,9 @@ choiceST n = $$(down $
 
 choiceST' :: Int -> StateT Int (ListT Identity) Int
 choiceST' n = $$(down $
-  evalTr'
+  evalTr' @Gen
     (stateAT @(Up Int) 
-      `fuseAT` pushAT 
+      `fuseAT` pushAT @Identity 
       `fuseAT` asAT genAlg)
     (choiceGen [||n||] [|| choice ||]))
 
