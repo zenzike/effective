@@ -4,7 +4,6 @@ module Control.Effect.CodeGen.Up where
 import Control.Effect hiding (fwd)
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
-import Control.Effect.Internal.Forward.ForwardC
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Gen
@@ -19,8 +18,6 @@ import qualified Control.Effect.Except as Ex
 import qualified Control.Effect.State.Lazy as LS
 import qualified Control.Effect.State.Strict as SS
 import qualified Control.Effect.Reader as R
-
-import Control.Effect.Internal.Forward.ForwardC
 
 type UpOp :: (* -> *) -> Effect
 type UpOp m = Alg (UpOp_ m)
@@ -58,47 +55,40 @@ up' u k = call' (Alg (UpOp u k))
 --
 -- I am not sure which one is better.
 
-upMaybe :: Handler '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] '[] '[]
-upMaybe = interpret1 $ \(Alg (UpOp la k)) ->
+upMaybe :: AlgTransM '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] '[] 
+upMaybe = interpretAT1 $ \(Alg (UpOp la k)) ->
   do mb <- up [|| Mb.runMaybeT $$la ||] 
      genCase mb $ \case
        Nothing -> Mb.throw
        Just a  -> return (k a)
 
-upExcept :: forall e l. Handler '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] '[] '[]
-upExcept = interpret1 $ \(Alg (UpOp la k)) ->
+upExcept :: forall e l. AlgTransM '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] '[] 
+upExcept = interpretAT1 $ \(Alg (UpOp la k)) ->
   do ex <- up [|| Ex.runExceptT $$la ||] 
      genCase ex $ \case
        Left e -> Ex.throw e
        Right a  -> return (k a)
 
 upStateLazy :: forall s l.
-  Handler '[UpOp (LS.StateT s l)] 
-          '[UpOp l, LS.Put (Up s), LS.Get (Up s), CodeGen]
-          '[]
-          '[]
-upStateLazy = interpret1 $ \(Alg (UpOp la k)) ->
+  AlgTransM '[UpOp (LS.StateT s l)] '[UpOp l, LS.Put (Up s), LS.Get (Up s), CodeGen] '[]
+upStateLazy = interpretAT1 $ \(Alg (UpOp la k)) ->
   do cs <- LS.get @(Up s)
      as <- up [|| LS.runStateT $$la $$cs ||]
      (a, s) <- split as
      LS.put s
      return (k a)
 
-upStateStrict :: forall s l.
-  Handler '[UpOp (SS.StateT s l)] 
-          '[UpOp l, SS.Put (Up s), SS.Get (Up s), CodeGen]
-          '[]
-          '[]
-upStateStrict = interpret1 $ \(Alg (UpOp la k)) ->
+upState :: forall s l.
+  AlgTransM '[UpOp (SS.StateT s l)] '[UpOp l, SS.Put (Up s), SS.Get (Up s), CodeGen] '[]
+upState = interpretAT1 $ \(Alg (UpOp la k)) ->
   do cs <- SS.get @(Up s)
      as <- up [|| SS.runStateT $$la $$cs ||]
      (a, s) <- split as
      SS.put s
      return (k a)
 
-upReader :: Handler '[UpOp (R.ReaderT r l)] 
-                    '[UpOp l, R.Ask (Up r), CodeGen] '[] '[]
-upReader = interpret1 $ \(Alg (UpOp la k)) ->
+upReader :: forall r l. AlgTransM '[UpOp (R.ReaderT r l)] '[UpOp l, R.Ask (Up r), CodeGen] '[] 
+upReader = interpretAT1 $ \(Alg (UpOp la k)) ->
   do cr <- R.ask
      a <- up [|| R.runReaderT $$la $$cr ||]
      return (k a)
@@ -140,20 +130,33 @@ upPushAlg' oalg cl = PushT $ \c n -> upMN [||
     upMN :: forall x. Up (m x) -> n (Up x) 
     upMN = fwd upAlgIso oalg
 
-class (Monad n, n $~> m) => PushC m n where
+-- | A special case of `upPushAlg` for upping lists and avoiding generating
+-- the conversions between @[a]@ and @ListT Identity a@.
+upListPushAlg :: forall m n a. (Monad m, Functor n, n $~> m) 
+          => Algebra '[UpOp m] n 
+          -> Up [a] -> PushT n (Up a)
+upListPushAlg oalg cl = PushT $ \c n -> upMN 
+  [|| foldr (\a ms -> $$(down (c [||a||] (upMN [|| ms ||]) ))) $$(down n) $$cl ||]
+  where
+    upMN :: forall x. Up (m x) -> n (Up x) 
+    upMN = fwd upAlgIso oalg
+
+class    (Monad n, n $~> m) => PushC m n where
 instance (Monad n, n $~> m) => PushC m n where
 
-pushAlg :: forall m n. (Monad m, Functor n, n $~> m) 
-        => Algebra '[UpOp m] n
-        -> Algebra '[UpOp (ListT m), Empty, Choose, Once] (PushT n)
-pushAlg oalg op
-  | (Just (Alg (UpOp o k))) <- prj op = bwd upIso (upPushAlg oalg) (Alg (UpOp o k))
-  | (Just (Alg Empty))      <- prj op = empty
-  | (Just (Scp (Choose x y))) <- prj op = x <|> y
-  | (Just (Scp (Once x))) <- prj op   = P.once x
-
-pushAT :: Monad m => AlgTrans '[UpOp (ListT m), Empty, Choose, Once] '[UpOp m] '[PushT] (PushC m)
-pushAT = AlgTrans $ pushAlg
+pushAT :: Monad m => AlgTrans '[UpOp (ListT m), UpOp [], Empty, Choose, Once] '[UpOp m] '[PushT] (PushC m)
+pushAT = AlgTrans $ pushAlg where
+  pushAlg :: forall m n. (Monad m, Functor n, n $~> m) 
+          => Algebra '[UpOp m] n
+          -> Algebra '[UpOp (ListT m), UpOp [], Empty, Choose, Once] (PushT n)
+  pushAlg oalg op
+    | (Just (Alg (UpOp o k))) <- prj @(UpOp (ListT _)) op 
+         = bwd upIso (upPushAlg oalg) (Alg (UpOp o k))
+    | (Just (Alg (UpOp o k))) <- prj @(UpOp []) op
+         = bwd upIso (upListPushAlg oalg) (Alg (UpOp o k))
+    | (Just (Alg Empty))      <- prj op   = empty
+    | (Just (Scp (Choose x y))) <- prj op = x <|> y
+    | (Just (Scp (Once x))) <- prj op     = P.once x
 
 
 {-

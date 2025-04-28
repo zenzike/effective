@@ -18,6 +18,7 @@ import Control.Monad.Trans.Push
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Class
 import Data.List.Kind
+import Control.Monad (join)
 
 {-
 Generated code: 
@@ -34,10 +35,11 @@ Generated code:
 -}
 
 countdown :: StateT Int Identity ()
-countdown = $$(down $ StateT \cs -> fmap (\(s,a) -> (a,s)) $ 
-  handleM genAlg 
-    (letPut @Int |> upStateStrict @Int @Identity |> state @(Up Int) cs) 
-    (countdownGen [|| countdown ||]))
+countdown = $$(down $ evalGen 
+  (letPut @Int 
+  `fuseAT` upState @Int @Identity 
+  `fuseAT` stateAT @(Up Int)) 
+  (countdownGen [|| countdown ||]))
 
 {-
 Generated code:
@@ -52,15 +54,13 @@ Generated code:
 -}
 
 catchProgram :: Int -> ExceptT () Identity ()
-catchProgram n = $$(down $ ExceptT $ 
-  handleM genAlg 
-          (upExcept @() @Identity |> except) 
-          (catchGen [||n||] [||catchProgram||]))
+catchProgram n = $$(down $ evalGen 
+  (upExcept @() @Identity `fuseAT` exceptAT @(Up ())) 
+  (catchGen [||n||] [||catchProgram||]))
         
 
 {-
-Because of effective, the code generator catchGen can be used for generating different types
-of programs:
+The code generator catchGen can be used for generating different types of programs:
 
     StateT
       (\ s_a5aI
@@ -75,21 +75,33 @@ of programs:
 
 -}
 catchProgram2 :: Int -> StateT Int (ExceptT () Identity) ()
-catchProgram2 n = $$(down $ StateT \cs -> ExceptT $ fmap (fmap (\(s,a) -> (a,s))) $ 
-  handleM genAlg 
-    (upStateStrict @Int @(ExceptT () Identity) 
-      |> upExcept @() @Identity 
-      |> state @(Up Int) cs 
-      |> except) 
+catchProgram2 n = $$(down $ 
+    evalGen
+    ( upState @Int @(ExceptT () Identity)
+      `fuseAT` upExcept @() @Identity 
+      `fuseAT` stateAT @(Up Int) 
+      `fuseAT` exceptAT @(Up ())) 
     (catchGen [||n||] [||catchProgram||]))
 
 -- foldr (\ a_a56k ms_a56l -> (a_a56k : ms_a56l)) [] as_a4qa
 listExample :: [a] -> [a]
-listExample as = $$(downLG $ upLG [||as||])
+listExample as = $$(down $ 
+  evalGen 
+  (pushAT @Identity)
+  (up [||as||]))
+
+-- Generated code: [as] >>= id
+listExample' :: [a] -> [a]
+listExample' as = join $$(down $ 
+  evalGen 
+  (pushAT @Identity)
+  (return ([||as||])))
 
 -- foldr (\ a_a57X ms_a57Y -> ((a_a57X + 1) : ms_a57Y)) [] as_a4qu
 listExample2 :: [Int] -> [Int]
-listExample2 as = $$(downLG $ do i <- upLG [||as||]; return ([||$$i + 1||]))
+listExample2 as = $$(down . evalGen (pushAT @Identity) $
+  do i <- up [||as||]
+     return ([||$$i + 1||]))
 
 {-
     foldr
@@ -100,9 +112,9 @@ listExample2 as = $$(downLG $ do i <- upLG [||as||]; return ([||$$i + 1||]))
       [] as_a1BF
 -}
 listExample3 :: [Int] -> [Int]
-listExample3 as = $$(downLG $ 
-  do i <- upLG [||as||]
-     j <- upLG [||as||]
+listExample3 as = $$(down . evalGen (pushAT @Identity) $ 
+  do i <- up [||as||]
+     j <- up [||as||]
      return ([||$$i + $$j||]))
 
 
@@ -115,12 +127,11 @@ listExample3 as = $$(downLG $
       [] as_a5Y5
 -}
 listExample4 :: (Int -> Int) -> (Int -> Int) -> [Int] -> [Int]
-listExample4 f g as = $$(downLG $ 
-  do i <- fmap (\i -> [|| f $$i ||]) (upLG [||as||])
-     j <- fmap (\i -> [|| g $$i ||]) (upLG [||as||])
+listExample4 f g as = $$(down . evalGen (pushAT @Identity) $ 
+  do i <- fmap (\i -> [|| f $$i ||]) (up [||as||])
+     j <- fmap (\i -> [|| g $$i ||]) (up [||as||])
      return ([||$$i + $$j||]))
      
-
 
 {-
 Generated code (manually reformatted -- the indentation may be broken):
@@ -145,11 +156,14 @@ ListT (StateT (\ s_a62N -> Identity (
   in case x_a62O of (a_a63a, b_a63b) -> (a_a63a, b_a63b))))
 -}
 listExample5 :: ListT (StateT Int Identity) Int -> ListT (StateT Int Identity) Int
-listExample5 as = $$(down $ 
-  do s <- lift S.get
-     i <- upPS [||as||]
-     j <- upPS [||as||]
-     lift (S.put [|| $$i * $$j ||])
+listExample5 as = $$(down . evalGen 
+  (pushAT @(StateT Int Identity) 
+  `fuseAT` upState @Int @Identity
+  `fuseAT` stateAT @(Up Int)) $ 
+  do s <- get
+     i <- up [||as||]
+     j <- up [||as||]
+     put [|| $$i * $$j ||]
      return ([||$$s + $$i + $$j||]))
 
 
@@ -167,9 +181,8 @@ listExample5 as = $$(down $
               Nothing))
 -}
 choice :: Int -> ListT Identity Int
-choice n = $$(down $
-  evalTr genAlg (withFwdsSameC @'[CodeGen] (weakenOEffs @'[CodeGen, UpOp Identity] (pushAT @Identity)))  
-    (choiceGen [||n||] [|| choice ||]))
+choice n = $$(down . evalGen (pushAT @Identity) $
+  choiceGen [||n||] [|| choice ||])
 
 
 {-
@@ -190,19 +203,26 @@ choice n = $$(down $
 -}
 choiceST :: Int -> StateT Int (ListT Identity) Int
 choiceST n = $$(down $
-  evalTr genAlg  
-    (fuseAT (stateAT @(Up Int))
-            (withFwdsSameC @'[CodeGen] 
-              (weakenOEffs @'[CodeGen, UpOp Identity] 
-              (pushAT @Identity))))
+  evalGen (stateAT @(Up Int) `fuseAT` pushAT @Identity)
     (choiceGen [||n||] [|| choice ||]))
 
-choiceST' :: Int -> StateT Int (ListT Identity) Int
-choiceST' n = $$(down $
-  evalTr' @Gen
-    (stateAT @(Up Int) 
-      `fuseAT` pushAT @Identity 
-      `fuseAT` asAT genAlg)
-    (choiceGen [||n||] [|| choice ||]))
+{-
+    StateT
+      (\ s_a6kt
+         -> do x_a6ku <- putStrLn "Hello"
+               if (s_a6kt > 0) then
+                   do x_a6kv <- runStateT ioExample (s_a6kt - 1)
+                      case x_a6kv of (a_a6kw, b_a6kx) -> return (a_a6kw, b_a6kx)
+               else
+                   return ((), s_a6kt))
+-}
+ioExample :: StateT Int IO ()
+ioExample = $$(down $
+  evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+    (do up [|| putStrLn "Hello" ||]
+        s <- get @(Up Int)
+        b <- split [|| $$s > 0 ||]
+        if b then put [|| $$s - 1||] >> up [|| ioExample ||] 
+             else return [||()||]))
 
 main = return ()

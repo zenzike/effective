@@ -23,8 +23,7 @@ expected to be 'the canonical way' to forward the effect @effs@ along @ts@.
 module Control.Effect.Internal.Forward.ForwardC
   ( ForwardC (..)
   , ForwardsC (..)
-  , Forwards
-  , fwds
+  , Forwards (..)
   ) where
 
 import Control.Effect.Internal.AlgTrans.Type
@@ -110,7 +109,8 @@ instance (ForwardEffsC effs t, ForwardsC effs ts) => ForwardsC effs (t ': ts) wh
   fwdsC = AlgTrans $ \(alg :: Algebra effs m) -> 
     getAT (fwdEffsC @_ @t) (getAT (fwdsC @_ @ts) alg)
 
-type Forwards cs effs ts = (ForwardsC effs ts, ImpliesC cs (FwdsConstraint effs ts)) 
-
-fwds :: forall cs effs ts. Forwards cs effs ts => AlgTrans effs effs ts cs
-fwds = AlgTrans (getAT (fwdsC @effs @ts))
+class    (ForwardsC effs ts, ImpliesC cs (FwdsConstraint effs ts)) => Forwards cs effs ts where
+  fwds :: AlgTrans effs effs ts cs
+instance (ForwardsC effs ts, ImpliesC cs (FwdsConstraint effs ts)) => Forwards cs effs ts where
+  {-# INLINE fwds #-}
+  fwds = AlgTrans (getAT (fwdsC @effs @ts))

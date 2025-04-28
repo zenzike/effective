@@ -60,7 +60,7 @@ library
     Control.Effect.CodeGen.Split
     Control.Effect.CodeGen.Gen
     Control.Effect.CodeGen.GenM
-    Control.Effect.CodeGen.Handlers
+    Control.Effect.CodeGen.Eval
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump

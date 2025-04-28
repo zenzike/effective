@@ -116,7 +116,7 @@ passR at2 r1 r2 = Runner \(oalg :: Algebra _ m)  ->
     . getR r1 (getAT (fwds @cs2 @oeffs1 @ts2) (oalg . injs))
 
 {-# INLINE weakenR #-}
-weakenR :: forall cs' cs effs' effs ts fs. 
+weakenR :: forall cs' effs' cs effs ts fs. 
            (forall m. cs' m => cs m, Injects effs effs')
         => Runner effs ts fs cs
         -> Runner effs' ts fs cs'

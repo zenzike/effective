@@ -166,7 +166,7 @@ weaken
   => Handler effs  oeffs  ts fs
   -> Handler effs' oeffs' ts fs
 weaken (Handler run halg)
-  = Handler (weakenR @_ @_ @oeffs' run) (weakenEffs halg) 
+  = Handler (weakenR @_ @oeffs' run) (weakenEffs halg) 
 
 type AutoHide heffs effs oeffs = (Injects (effs :\\ heffs) effs, Injects oeffs oeffs)
 
@@ -183,18 +183,26 @@ hide h = weaken h
 type AutoBypass beffs effs oeffs = 
   ( Append effs (beffs :\\ effs)
   , Injects (beffs :\\ effs) beffs 
-  , Injects beffs beffs )
+  , Injects beffs beffs 
+  , Injects oeffs (oeffs `Union` beffs)
+  , Injects beffs (oeffs `Union` beffs) )
 
 -- | Operations from the output effect @oeffs@ of a handler can be added
 -- to the input effect if the handler can forward it.
 {-# INLINE bypass #-}
 bypass
   :: forall beffs effs oeffs ts fs
-  . ( Injects beffs oeffs, Forwards beffs ts
+  . ( Forwards beffs ts
     , AutoBypass beffs effs oeffs )
   => Handler effs oeffs ts fs
-  -> Handler (effs `Union` beffs) oeffs ts fs
-bypass (Handler run alg) = Handler run (LL.withFwdsSameC @beffs alg)
+  -> Handler (effs `Union` beffs) (oeffs `Union` beffs) ts fs
+bypass (Handler run alg) = Handler (weakenR run) (LL.withFwds @beffs alg)
+
+-- | An algebra transformer that doesn't transform the carrier can be 
+-- regarded as a handler trivially.
+fromAT :: AlgTransM effs oeffs '[] -> Handler effs oeffs '[] '[]
+fromAT at = handler (\_ -> id) (getAT at) 
+
 
 -- | The result of @interpret rephrase@ is a new @Handler effs oeffs '[] '[]@.
 -- This is created by using the supplied @rephrase :: Effs effs m x -> Prog oeffs x@
@@ -204,7 +212,14 @@ interpret
   .  ( HFunctor (Effs effs), HFunctor (Effs oeffs) )
   => (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
   -> Handler effs oeffs '[] '[]
-interpret rephrase = interpretM talg
+interpret = fromAT . interpretAT
+
+interpretAT
+  :: forall effs oeffs
+  .  ( HFunctor (Effs effs), HFunctor (Effs oeffs) )
+  => (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
+  -> AlgTransM effs oeffs '[] 
+interpretAT rephrase = AlgTrans talg
   where
     talg :: forall m . Monad m
          => (forall x. Effs oeffs m x -> m x)
@@ -219,19 +234,25 @@ interpret1
   -> Handler '[eff] oeffs '[] '[]
 interpret1 rephrase = interpret (\(Eff e) -> rephrase e)
 
+interpretAT1
+  :: forall eff oeffs
+  .  ( HFunctor eff, HFunctor (Effs oeffs) )
+  => (forall m x . eff m x -> Prog oeffs x)
+  -> AlgTransM '[eff] oeffs '[] 
+interpretAT1 rephrase = interpretAT (\(Eff e) -> rephrase e)
+
 -- | The result of @interpretM mrephrase@ is a new @Handler effs oeffs IdentityT Identity@.
 -- This is created by using the supplied @mrephrase :: (forall x . Effs oeffs m x -> m x) -> Effs effs m x -> m x@ parameter.
 -- to rephrase @effs@ into an arbitrary monad @m@.
 -- When @mrephrase@ is used, it is given an @oalg :: Effs oeffs m x -> m x@
 -- parameter that makes it possible to create a value in @m@.
 interpretM
-  :: forall effs oeffs 
-  .  HFunctor (Effs effs)
-  => (forall m . Monad m => (forall x . Effs oeffs m x -> m x)
-  -> (forall x . Effs effs m x -> m x))   -- ^ @mrephrase@
+  :: forall effs oeffs.
+     (forall m . Monad m => (forall x . Effs oeffs m x -> m x)
+                         -> (forall x . Effs effs m x -> m x))   -- ^ @mrephrase@
   -> Handler effs oeffs '[] '[]
 interpretM mrephrase
-  = handler @effs @oeffs @'[] (const id) (\oalg -> mrephrase oalg)
+  = handler @effs @oeffs @'[] (const id) mrephrase
 
 -- HERE BE DRAGONS
 {-

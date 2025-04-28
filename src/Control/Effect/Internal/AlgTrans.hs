@@ -155,45 +155,36 @@ caseATSameC'
         -> AlgTrans (effs1 :++ effs2) oeffs ts cs
 caseATSameC' at1 at2 = AlgTrans \oalg -> heither (getAT at1 oalg) (getAT at2 oalg)
 
-{-
-{-# INLINE withFwds #-}
-withFwds :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
-            , AutoCaseTrans effs xeffs )
-         => AlgTrans effs oeffs ts cs1
-         -> AlgTrans (effs `Union` xeffs) oeffs ts (AndC cs1 cs2)
-withFwds at = caseAT at (weakenAT @xeffs @oeffs @cs2 (F.fwdsC @xeffs))
+type AutoWithFwds effs oeffs xeffs = 
+  ( AutoCaseTrans effs xeffs
+  , Injects xeffs xeffs
+  , Injects oeffs (oeffs `Union` xeffs)
+  , Injects xeffs (oeffs `Union` xeffs) )
 
+{-# INLINE withFwds #-}
+withFwds
+         :: forall xeffs effs oeffs ts cs. 
+            ( Forwards cs xeffs ts
+            , AutoWithFwds effs oeffs xeffs )
+         => AlgTrans effs oeffs ts cs
+         -> AlgTrans (effs `Union` xeffs) (oeffs `Union` xeffs) ts cs
+withFwds at = caseATSameC (weakenOEffs @(oeffs `Union` xeffs)      at) 
+                          (weakenAT @xeffs @(oeffs `Union` xeffs) (fwdsC @xeffs))
+
+type AutoWithFwds' effs oeffs xeffs = 
+  ( Append effs xeffs
+  , Injects xeffs xeffs
+  , Injects oeffs (oeffs `Union` xeffs)
+  , Injects xeffs (oeffs `Union` xeffs) )
 
 {-# INLINE withFwds' #-}
-withFwds' :: forall xeffs effs oeffs ts cs1 cs2. 
-            ( Forwards cs2 xeffs ts, Injects xeffs oeffs
-            , AutoCaseTrans' effs xeffs )
-         => AlgTrans effs oeffs ts cs1
-         -> AlgTrans (effs :++ xeffs) oeffs ts (AndC cs1 cs2)
-withFwds' at = caseAT' at (weakenOEffs @oeffs @xeffs fwdsC)
--}
-
-type AutoWithFwds effs xeffs = (AutoCaseTrans effs xeffs, Injects xeffs xeffs)
-
-{-# INLINE withFwdsSameC #-}
-withFwdsSameC
-         :: forall xeffs effs oeffs ts cs. 
-            ( Forwards cs xeffs ts, Injects xeffs oeffs
-            , AutoWithFwds effs xeffs )
+withFwds' :: forall xeffs effs oeffs ts cs. 
+            ( Forwards cs xeffs ts
+            , AutoWithFwds' effs oeffs xeffs )
          => AlgTrans effs oeffs ts cs
-         -> AlgTrans (effs `Union` xeffs) oeffs ts cs
-withFwdsSameC at = caseATSameC at (weakenAT @xeffs @oeffs (fwdsC @xeffs))
-
-type AutoWithFwds' effs xeffs = (Append effs xeffs, Injects xeffs xeffs)
-
-{-# INLINE withFwdsSameC' #-}
-withFwdsSameC' :: forall xeffs effs oeffs ts cs. 
-            ( Forwards cs xeffs ts, Injects xeffs oeffs
-            , AutoWithFwds' effs xeffs )
-         => AlgTrans effs oeffs ts cs
-         -> AlgTrans (effs :++ xeffs) oeffs ts cs
-withFwdsSameC' at = caseATSameC' at (weakenAT @xeffs @oeffs (fwdsC @xeffs))
+         -> AlgTrans (effs :++ xeffs) (oeffs `Union` xeffs)ts cs
+withFwds' at = caseATSameC' (weakenOEffs @(oeffs `Union` xeffs)at)  
+                            (weakenAT @xeffs @(oeffs `Union` xeffs) (fwdsC @xeffs))
 
 
 type AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 = 

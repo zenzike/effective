@@ -17,7 +17,7 @@ specialised to the constraint of monads.
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_HADDOCK ignore-exports #-}
 
-module Control.Effect.Internal.Forward (Forward(..), fwds, Forwards) where
+module Control.Effect.Internal.Forward (Forward (..), Forwards (..)) where
 
 import Data.Kind
 import Data.List.Kind
@@ -55,9 +55,10 @@ instance Forward effs t => F.ForwardC effs t where
 -- that is implied by the internal typeclass.
 
 type Forwards :: [Effect] -> [(Type -> Type) -> (Type -> Type)] -> Constraint
-class (F.ForwardsC effs ts, Monad `ImpliesC` (F.FwdsConstraint effs ts)) => Forwards effs ts where
-  {-# INLINE fwds #-}
+
+class (F.Forwards Monad effs ts) => Forwards effs ts where
   fwds :: forall m. Monad m => Algebra effs m -> Algebra effs (Apply ts m)
-  fwds = getAT (F.fwdsC @effs @ts)
 
 instance (F.ForwardsC effs ts, Monad `ImpliesC` (F.FwdsConstraint effs ts)) => Forwards effs ts where
+  {-# INLINE fwds #-}
+  fwds = getAT (F.fwdsC @effs @ts)

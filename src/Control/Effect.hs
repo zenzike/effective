@@ -44,9 +44,9 @@ module Control.Effect
   , Handler (..)
   , handler
   , handler'
-  , interpret
-  , interpret1
-  , interpretM
+  , interpret, interpretAT
+  , interpret1, interpretAT1
+  , interpretM, fromAT
   , identity
   , fuse, (|>)
   , pipe, (||>)

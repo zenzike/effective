@@ -21,30 +21,16 @@ countdownGen self =
      if b then do put [|| $$cs + 1 ||]; up self
           else return [|| () ||]
 
-
 catchGen :: forall sig m. Members '[CodeGen, UpOp m, Catch (Up ()), Throw (Up ())] sig 
-             => Up Int -> Up (Int -> m ()) -> Prog sig (Up ())
+         => Up Int -> Up (Int -> m ()) -> Prog sig (Up ())
 catchGen cN self = 
   do b <- split [|| $$cN > 0 ||]
      if b 
       then catch (up [|| $$self ($$cN - 1)||]) (\(_ :: Up ()) -> throw @(Up ()) [||()||])
       else throw @(Up ()) [|| () ||]
 
-
-type PS a = PushT (StateT (Up Int) Gen) a
-type LS a = ListT (StateT Int Identity) a
-
-upPS :: Up (LS a) -> PS (Up a)
-upPS = upPushAlg' (bwd upAlgIso upSt)
-
-genlet :: Up a -> Gen (Up a)
-genlet c = Gen (\k -> [||let x = $$c in $$(k [||x||])||])
-
-upSt :: forall x. Up (StateT Int Identity x) -> StateT (Up Int) Gen (Up x)
-upSt m = StateT $ \cs -> (do r <- genlet [|| runIdentity (runStateT $$m $$cs) ||]; genSplit r)
-
 choiceGen :: forall sig m. Members '[CodeGen, UpOp m, Choose, Empty] sig 
-             => Up Int -> Up (Int -> m Int) -> Prog sig (Up Int)
+          => Up Int -> Up (Int -> m Int) -> Prog sig (Up Int)
 choiceGen cN self = 
   do b <- split [|| $$cN > 0 ||]
      if b 
