@@ -225,4 +225,22 @@ ioExample = $$(down $
         if b then put [|| $$s - 1||] >> up [|| ioExample ||] 
              else return [||()||]))
 
+{-
+    StateT
+      (\ s_a6u3
+         -> do x_a6u4 <- putStrLn "Hello"
+               if (s_a6u3 > 0) then
+                   runStateT ioExample (s_a6u3 - 1)
+               else
+                   runStateT (return ()) s_a6u3)
+-}
+ioExample2 :: StateT Int IO ()
+ioExample2 = $$(downJoin $
+  evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+    (do up [|| putStrLn "Hello" ||]
+        s <- get @(Up Int)
+        b <- split [|| $$s > 0 ||]
+        if b then put [|| $$s - 1||] >> return [|| ioExample ||] 
+             else return [||return ()||]))
+
 main = return ()

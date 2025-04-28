@@ -25,6 +25,47 @@ import Control.Monad.Trans.Push
 class n $~> m where
   down :: n (Up x) -> Up (m x)
 
+-- | This class provides a function `downJoin` that is a special case of `down` and 
+-- is used for generating better code for tail recursion. When using the @CodeGen@
+-- effect to generate a tail-recursive program, for example, 
+-- @
+--   ioExample :: StateT Int IO ()
+--   ioExample = $$(down $
+--      evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+--        (do up [|| putStrLn "Hello" ||]
+--            s <- get @(Up Int)
+--            b <- split [|| $$s > 0 ||]
+--            if b then put [|| $$s - 1||] >> up [|| ioExample ||] 
+--                 else return [||()||]))
+-- @
+-- The final `up`-operation for the tail-recursive call @up [|| ioExample ||]@ generates
+-- an unneeded case split of the result of the recursive call, making the generated
+-- code no longer tail-recursive. We solve this problem by replacing @up [|| ioExample ||]@
+-- with @return [|| ioExample ||]@ in the meta-program and using instead the function
+-- @`downJoin` :: n (Up (m x)) -> Up (m x)@. So the example above becomes
+--
+-- @
+--   ioExample2 :: StateT Int IO ()
+--   ioExample2 = $$(downJoin $
+--     evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+--       (do up [|| putStrLn "Hello" ||]
+--           s <- get @(Up Int)
+--           b <- split [|| $$s > 0 ||]
+--           if b then put [|| $$s - 1||] >> return [|| ioExample ||] 
+--                else return [||return ()||]))
+-- @
+-- 
+-- The function @downJoin@ has a defualt implementation @downJoin p = [|| $$(down p) >>= id ||]@
+-- and it /does/ solve the problem of tail recursion, but it may be overridden to 
+-- generate more compact code.
+
+class Monad m => n $~>> m where
+  downJoin :: n (Up (m x)) -> Up (m x)
+
+-- | Default implementation of `downJoin` using `down`.
+instance {-# OVERLAPS #-} (Monad m, n $~> m) => n $~>> m where
+  downJoin p = [|| $$(down p) >>= id ||]
+
 -- * Lowering instances for some basic functors
 
 instance (->) (Up a)  $~>  (->) a where
@@ -58,11 +99,22 @@ instance YStep (Up a) (Up b)  $~>  YStep a b where
 instance Gen $~> Identity where
   down g = [|| Identity $$(runGen g) ||]
 
+instance {-# OVERLAPS #-} Gen $~>> Identity where
+  downJoin = runGen
+
 instance Monad m => GenM m $~> m where
   down = runGenM
 
+instance {-# OVERLAPS #-} Monad m => GenM m $~>> m where
+  downJoin g = unGenM g id 
+
 instance (Monad n, n $~> m) => SS.StateT (Up s) n $~> SS.StateT s m where
   down (SS.StateT g) = [|| SS.StateT \s -> $$(down (fmap down (g [||s||])))||]
+
+instance  {-# OVERLAPS #-} (Monad n, n $~>> m) => SS.StateT (Up s) n $~>> SS.StateT s m where
+  downJoin (SS.StateT g) = [|| SS.StateT \s -> $$(downJoin (fmap f (g [|| s ||]))) ||] where
+    f :: (Up (SS.StateT s m x), Up s) -> Up (m (x, s))
+    f (cm, cs) = [|| SS.runStateT $$cm $$cs ||]
 
 instance (Monad n, n $~> m) => LS.StateT (Up s) n $~> LS.StateT s m where
   down (LS.StateT g) = [|| LS.StateT \s -> $$(down (fmap down (g [||s||]))) ||]
