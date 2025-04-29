@@ -49,7 +49,7 @@ state_ :: s -> Handler [Put s, Get s] '[] '[Strict.StateT s] '[]
 state_ s = handler' (flip Strict.evalStateT s) stateAlg
 
 -- | An algebra transformer that interprets t'Get' and t'Put' using the strict t'Strict.StateT'.
-stateAT :: AlgTransM [Put s, Get s] '[] '[Strict.StateT s]
+stateAT :: AlgTrans [Put s, Get s] '[] '[Strict.StateT s] Monad
 stateAT = AlgTrans stateAlg
 
 -- | The underlying algebra of the state handler.

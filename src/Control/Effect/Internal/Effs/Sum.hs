@@ -23,7 +23,6 @@ module Control.Effect.Internal.Effs.Sum
 import Control.Effect.Internal.Effs.Sum.Type
 import Data.HFunctor
 import Data.List.Kind
-
 import GHC.Exts
 
 
@@ -39,6 +38,7 @@ inj = inj' (proxy# @(PElemIndex sig sigs))
 prj :: forall sig sigs m a . Member sig sigs => Effs sigs m a -> Maybe (sig m a)
 prj = prj' (proxy# @(PElemIndex sig sigs))
 
+infixr 6 #
 -- | @alg1 # alg2@ joins together algebras @alg1@ and @alg2@.
 {-# INLINE (#) #-}
 (#) :: forall eff1 eff2 m .

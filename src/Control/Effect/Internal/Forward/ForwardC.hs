@@ -33,6 +33,7 @@ import Data.Kind
 import Data.HFunctor
 #ifdef INDEXED
 import GHC.TypeNats
+import Data.List.Kind
 #endif
 
 -- | The class demonstrating that an effect @eff@ on every type constructor satisfying @cs@

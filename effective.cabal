@@ -25,7 +25,7 @@ source-repository head
 library
   default-language: GHC2021
   default-extensions: DataKinds CPP RecordWildCards ImpredicativeTypes LambdaCase AllowAmbiguousTypes
-  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances -fspecialise-aggressively -fexpose-all-unfoldings -ddump-simpl -ddump-to-file -Wno-star-is-type
+  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances  -ddump-simpl -ddump-to-file -Wno-star-is-type
   --cpp-options: -DINDEXED
   --cpp-options: -DPROGDIRECT
 
@@ -113,7 +113,7 @@ test-suite docs
 
 test-suite readme
   type:          exitcode-stdio-1.0
-  ghc-options:   -threaded -pgmL markdown-unlit
+  ghc-options:   -threaded -pgmL markdown-unlit -ddump-simpl  -ddump-to-file
   main-is:       README.lhs
   default-extensions: DataKinds
   default-language: GHC2021

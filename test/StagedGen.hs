@@ -18,7 +18,7 @@ countdownGen :: Members '[CodeGen, UpOp m, Put (Up Int), Get (Up Int)] sig
 countdownGen self = 
   do cs <- get @(Up Int)
      b <- split [|| $$cs > 0 ||]
-     if b then do put [|| $$cs + 1 ||]; up self
+     if b then do put [|| $$cs - 1 ||]; up self
           else return [|| () ||]
 
 catchGen :: forall sig m. Members '[CodeGen, UpOp m, Catch (Up ()), Throw (Up ())] sig 

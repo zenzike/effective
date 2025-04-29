@@ -291,6 +291,8 @@ only after `h1` has done its work on the syntax tree.
 To make use of `malg` operate with the `t1` carrier,
 -}
 
+infixr 9 `fuse`, |>
+
 {-# INLINE fuse #-}
 {-# INLINE (|>) #-}
 fuse, (|>)
@@ -330,6 +332,8 @@ fuse, (|>)
 fuse (Handler run1 malg1) (Handler run2 malg2) 
   = Handler (weakenRC (LL.fuseR malg2 run1 run2)) (weakenC (LL.fuseAT malg1 malg2))
 
+
+infixr 9 `pipe`, ||>
 
 {-# INLINE pipe #-}
 {-# INLINE (||>) #-}

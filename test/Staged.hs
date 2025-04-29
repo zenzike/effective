@@ -90,12 +90,13 @@ listExample as = $$(down $
   (pushAT @Identity)
   (up [||as||]))
 
--- Generated code: [as] >>= id
+-- Generated code: as_a4XQ
 listExample' :: [a] -> [a]
-listExample' as = join $$(down $ 
+listExample' as = $$(downJoin $ 
   evalGen 
   (pushAT @Identity)
-  (return ([||as||])))
+  (return [||as||]))
+
 
 -- foldr (\ a_a57X ms_a57Y -> ((a_a57X + 1) : ms_a57Y)) [] as_a4qu
 listExample2 :: [Int] -> [Int]
@@ -183,6 +184,19 @@ listExample5 as = $$(down . evalGen
 choice :: Int -> ListT Identity Int
 choice n = $$(down . evalGen (pushAT @Identity) $
   choiceGen [||n||] [|| choice ||])
+
+{-
+    if (n_a1sJ > 0) then
+        runIdentity
+          (foldr
+             (\ a_a4Ex ms_a4Ey -> Identity (a_a4Ex : runIdentity ms_a4Ey))
+             (Identity (n_a1sJ : [])) (choice' (n_a1sJ - 1)))
+    else
+        []
+-}
+choice' :: Int -> [Int]
+choice' n = $$(down . evalGen (pushAT @Identity) $
+  choiceGen [||n||] [|| choice' ||])
 
 
 {-

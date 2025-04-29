@@ -16,7 +16,7 @@ import Control.Monad.Trans.Resump
 import Control.Monad.Trans.CRes 
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.Push
-
+import Control.Applicative ( Alternative(empty, (<|>)) )
 
 -- | The type constructor @n@ at compile time lowers to the monad @m@ at runtime.
 -- For example, the functor (Up a ->) lowers to (a ->).
@@ -66,6 +66,9 @@ class Monad m => n $~>> m where
 instance {-# OVERLAPS #-} (Monad m, n $~> m) => n $~>> m where
   downJoin p = [|| $$(down p) >>= id ||]
 
+
+
+
 -- * Lowering instances for some basic functors
 
 instance (->) (Up a)  $~>  (->) a where
@@ -111,7 +114,7 @@ instance {-# OVERLAPS #-} Monad m => GenM m $~>> m where
 instance (Monad n, n $~> m) => SS.StateT (Up s) n $~> SS.StateT s m where
   down (SS.StateT g) = [|| SS.StateT \s -> $$(down (fmap down (g [||s||])))||]
 
-instance  {-# OVERLAPS #-} (Monad n, n $~>> m) => SS.StateT (Up s) n $~>> SS.StateT s m where
+instance (Monad n, n $~>> m) => SS.StateT (Up s) n $~>> SS.StateT s m where
   downJoin (SS.StateT g) = [|| SS.StateT \s -> $$(downJoin (fmap f (g [|| s ||]))) ||] where
     f :: (Up (SS.StateT s m x), Up s) -> Up (m (x, s))
     f (cm, cs) = [|| SS.runStateT $$cm $$cs ||]
@@ -119,14 +122,35 @@ instance  {-# OVERLAPS #-} (Monad n, n $~>> m) => SS.StateT (Up s) n $~>> SS.Sta
 instance (Monad n, n $~> m) => LS.StateT (Up s) n $~> LS.StateT s m where
   down (LS.StateT g) = [|| LS.StateT \s -> $$(down (fmap down (g [||s||]))) ||]
 
+instance (Monad n, n $~>> m) => LS.StateT (Up s) n $~>> LS.StateT s m where
+  downJoin (LS.StateT g) = [|| LS.StateT \s -> $$(downJoin (fmap f (g [|| s ||]))) ||] where
+    f :: (Up (LS.StateT s m x), Up s) -> Up (m (x, s))
+    f (cm, cs) = [|| LS.runStateT $$cm $$cs ||]
+
 instance (Monad n, n $~> m) => ReaderT (Up r) n $~> ReaderT r m where
   down (ReaderT g) = [|| ReaderT \r -> $$(down (g [||r||])) ||]
+
+instance (Monad n, n $~>> m) => ReaderT (Up r) n $~>> ReaderT r m where
+  downJoin (ReaderT g) = [|| ReaderT \r -> $$(downJoin
+    (fmap (\cm -> [|| runReaderT $$cm r ||]) (g [|| r ||]))) ||]
 
 instance (Monad n, n $~> m) => MaybeT n $~> MaybeT m where 
   down (MaybeT nMb) = [|| MaybeT $$(down (fmap down nMb))||]
 
+instance (Monad n, n $~>> m) => MaybeT n $~>> MaybeT m where
+  downJoin (MaybeT g) = [|| MaybeT $$(downJoin (fmap f g)) ||] where
+    f :: Maybe (Up (MaybeT m x)) -> Up (m (Maybe x))
+    f Nothing   = [|| return Nothing ||]
+    f (Just cm) = [|| runMaybeT $$cm ||]
+
 instance (Monad n, n $~> m) => ExceptT (Up e) n $~> ExceptT e m where
   down (ExceptT nEx) = [|| ExceptT $$(down (fmap down nEx)) ||]
+
+instance (Monad n, n $~>> m) => ExceptT (Up e) n $~>> ExceptT e m where
+  downJoin (ExceptT g) = [|| ExceptT $$(downJoin (fmap f g)) ||] where
+    f :: Either (Up e) (Up (ExceptT e m x)) -> Up (m (Either e x))
+    f (Left ce)  = [|| return (Left $$ce) ||]
+    f (Right cm) = [|| runExceptT $$cm    ||]
 
 instance (Monad n, n $~> m) => ListT n $~> ListT m where
   down g = [|| ListT $$((down . fmap (down . fmap (down . fmap down))) (runListT g)) ||]
@@ -134,11 +158,11 @@ instance (Monad n, n $~> m) => ListT n $~> ListT m where
 instance (Functor s, Monad n, n $~> m, s $~> t) => ResT s n $~> ResT t m where 
   down g = [|| ResT $$((down . fmap (down . fmap (down . fmap down))) (unResT g)) ||]
 
-instance {-#OVERLAPS#-} PushT Gen $~> [] where
+-- | @ListT Identity a@ is the same as @[a]@, but presumably most people prefer seeing the latter.
+instance PushT Gen $~> [] where
   down :: forall x. PushT Gen (Up x) -> Up [x]
   down p = runGen $ runPushT p (\ca -> fmap (\cas -> [|| ($$ca : $$cas) ||])) 
                                (return [|| [] ||])
-
 
 instance (Monad n, Monad m, n $~> m) => PushT n $~> ListT m where
   down :: forall x. (Monad n, Monad m, n $~> m) => PushT n (Up x) -> Up (ListT m x)
@@ -146,3 +170,15 @@ instance (Monad n, Monad m, n $~> m) => PushT n $~> ListT m where
                tmp = runPushT p (\ca -> fmap (\cas -> [|| Just ($$ca, ListT (return $$cas)) ||])) 
                                 (return [|| Nothing ||])
            in [|| ListT $$(down tmp) ||]
+
+instance PushT Gen $~>> [] where
+  downJoin :: PushT Gen (Up [x]) -> Up [x]
+  downJoin p = runGen $ runPushT p (\cxs -> fmap (\cys -> codeApp cxs cys ))
+                                   (return [|| [] ||])
+
+instance (Monad n, Monad m, n $~>> m ) => PushT n $~>> ListT m where
+  downJoin :: forall x. PushT n (Up (ListT m x)) -> Up (ListT m x)
+  downJoin p = let tmp :: n (Up (m (Maybe (x, ListT m x))))
+                   tmp = runPushT p (\cxs -> fmap (\cys -> [|| runListT ($$cxs <|> ListT $$cys) ||])) 
+                                    (return [|| return Nothing ||])
+               in [|| ListT $$(downJoin tmp) ||]

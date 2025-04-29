@@ -197,14 +197,15 @@ type AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 =
    , forall m . Assoc ts1 ts2 m 
    )
 
+infixr 9 `fuseAT`
+
 -- | @fuseAT at1 at2@ composes @at1@ and @at2@ in a way that uses @at2@ maximally:
 --    1. all the input effects @effs2@ of @at2@ are visible in the input effects of the final result, and
 --    2. the output effects @oeffs1@ of @at1@ are intercepted by @effs2@ as much as possible.
 {-# INLINE fuseAT #-}
 fuseAT :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs1 cs2.
-          ( Forwards cs1 effs2 ts1
-          , Forwards cs2 (oeffs1 :\\ effs2) ts2
-          , AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 )
+          AutoFuseAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 
+       => (Forwards cs1 effs2 ts1, Forwards cs2 (oeffs1 :\\ effs2) ts2)
        => AlgTrans effs1 oeffs1 ts1 cs1 
        -> AlgTrans effs2 oeffs2 ts2 cs2
        -> AlgTrans (effs1 `Union` effs2) 
@@ -219,6 +220,8 @@ fuseAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) ->
           (getAT at2 (weakenAlg oalg))))
       (getAT (fwds @cs1 @effs2 @ts1) (getAT at2 (oalg . injs)))
 
+
+infixr 9 `pipeAT`
 
 type AutoPipeAT effs2 oeffs1 oeffs2 ts1 ts2 = 
    ( Injects (oeffs1 :\\ effs2) ((oeffs1 :\\ effs2) `Union` oeffs2)
@@ -246,6 +249,7 @@ pipeAT at1 at2 = AlgTrans $ \(oalg :: Algebra _ m) ->
       (getAT (fwds @cs2 @(oeffs1 :\\ effs2) @ts2) (weakenAlg oalg))
       (getAT at2 (weakenAlg oalg)))
 
+infixr 9 `passAT`
 
 type AutoPassAT effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 = 
    ( Injects (effs2 :\\ effs1) effs2
@@ -282,6 +286,8 @@ type AutoPassAT' effs1 effs2 oeffs1 oeffs2 ts1 ts2 cs2 =
     , Injects (effs1 `Union` effs2) (effs2 `Union` effs1)
     , Append effs2 (effs1 :\\ effs2)
     , forall m . Assoc ts1 ts2 m )
+
+infixr 9 `passAT'`
 
 -- | @passAT' at1 at2@ is the same as `passAT` except that if an effect is in the 
 -- intersection of @effs1@ and @effs2@, it is handled by @at2@.

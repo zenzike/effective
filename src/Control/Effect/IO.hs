@@ -1,5 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# OPTIONS_GHC -fsimpl-tick-factor=500 #-}
 {-|
 Module      : Control.Effect.IO
 Description : Effects for input/output
@@ -9,13 +7,11 @@ Stability   : experimental
 -}
 
 {-# LANGUAGE CPP #-}
-
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE MonoLocalBinds #-}
-#if __GLASGOW_HASKELL__ <= 902
 {-# LANGUAGE TypeFamilies #-}
-#endif
 
 module Control.Effect.IO (
   -- * Syntax
@@ -87,6 +83,7 @@ type IOEffects = '[ Alg IO
 ioAlg :: Algebra IOEffects IO
 ioAlg = nativeAlg # getLineAlg # putStrLnAlg # putStrAlg # getCPUTimeAlg 
         # parAlg # jparAlg # newQSemAlg # signalQSemAlg # waitQSemAlg
+
 
 -- | Treating an IO computation as an operation of signature `Alg IO`. 
 liftIO :: Members '[Alg IO] sig => IO a -> Prog sig a
