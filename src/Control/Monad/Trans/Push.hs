@@ -6,9 +6,9 @@ import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad ( ap, liftM )
 import Control.Monad.Trans.Class
 
-newtype PushT m a = PushT { 
-  runPushT :: forall t. (a -> m (Up t) -> m (Up t)) 
-           -> m (Up t) -> m (Up t) }
+newtype PushT n a = PushT { 
+  runPushT :: forall t. (a -> n (Up t) -> n (Up t)) 
+           -> n (Up t) -> n (Up t) }
 
 instance Functor (PushT m) where
   fmap = liftM

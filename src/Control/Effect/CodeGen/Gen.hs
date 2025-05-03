@@ -11,6 +11,12 @@ newtype Gen a = Gen { unGen :: forall r. (a -> Up r) -> Up r }
 runGen :: Gen (Up a) -> Up a
 runGen g = unGen g id
 
+reset :: Gen (Up a) -> Gen (Up a)
+reset = return . runGen
+
+shift :: (forall r. (a -> Up r) -> Gen (Up r)) -> Gen a
+shift f = Gen $ runGen . f
+
 instance Functor Gen where
   fmap f (Gen m) = Gen (m . (. f))
 

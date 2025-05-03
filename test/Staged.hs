@@ -1,10 +1,11 @@
-{-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes #-}
+{-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes, LambdaCase #-}
 module Main where
 
 import Control.Effect
 import Control.Effect.CodeGen
 import Control.Effect.State.Strict
 import Control.Effect.Nondet
+import qualified Control.Effect.Maybe as Mb
 import Control.Effect.Family.Scoped
 import Control.Effect.Family.Algebraic
 import Control.Effect.Internal.Forward.ForwardC
@@ -17,6 +18,7 @@ import Control.Effect.Except
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Class
+import Control.Monad.Trans.Maybe
 import Data.List.Kind
 import Control.Monad (join)
 
@@ -256,5 +258,143 @@ ioExample2 = $$(downJoin $
         b <- split [|| $$s > 0 ||]
         if b then put [|| $$s - 1||] >> return [|| ioExample ||] 
              else return [||return ()||]))
+
+
+{-
+    StateT
+      (\ s_a6AM
+         -> MaybeT
+              (Identity
+                 (if b_a56x then
+                      let x_a6AN = 10 :: Int in
+                      let x_a6AO = (x_a6AN + x_a6AN) in Just ((), x_a6AO)
+                  else
+                      let x_a6AP = 20 :: Int in
+                      let x_a6AQ = (x_a6AP + x_a6AP) in Just ((), x_a6AQ))))
+-}
+
+joinEx :: Bool -> StateT Int (MaybeT Identity) ()
+joinEx b = $$(down $ evalGen
+  (letPut @Int `fuseAT` stateAT @(Up Int) `fuseAT` Mb.exceptAT)
+  (do genCase [|| b ||] (\case 
+        True  -> putUp [|| 10 :: Int ||]
+        False -> putUp [|| 20 :: Int ||])
+      s <- getUp @Int
+      put [|| $$s + $$s ||]
+      return [|| () ||]))
+
+{-
+    StateT (\ s_a4UP -> MaybeT (Identity 
+      (case runIdentity (runStateT (StateT
+         (\ s_a4UQ -> Identity
+            (if b_a1Bc then
+               let x_a4UR = 10 :: Int in ((), x_a4UR)
+             else
+               let x_a4US = 20 :: Int in ((), x_a4US))) ) s_a4UP)
+       of (a_a4UT, b_a4UU)
+           -> let x_a4UV = (b_a4UU + b_a4UU) in Just ((), x_a4UV))))
+-}
+
+joinEx' :: Bool -> StateT Int (MaybeT Identity) ()
+joinEx' b = $$(down $ evalGen
+  (letPut @Int `fuseAT` upState @Int @Identity `fuseAT` stateAT @(Up Int) `fuseAT` Mb.exceptAT)
+  (let act :: Up (StateT Int Identity ())
+       act = down $ evalGen (letPut @Int `fuseAT` stateAT @(Up Int)) 
+         (genCase [|| b ||] (\case 
+            True  -> do putUp [|| 10 :: Int ||]; return [||()||]
+            False -> do putUp [|| 20 :: Int ||]; return [||()||]))
+    in do up act
+          s <- getUp @Int
+          put [|| $$s + $$s ||]
+          return [|| () ||]))
+
+{-
+reset :: Gen (Up a) -> Gen (Up a)
+reset = return . runGen
+
+shift :: (forall b. (Up a -> Up b) -> Gen (Up b)) -> Gen (Up a)
+shift f = Gen $ runGen . f
+-}
+
+testShift :: Up (Identity Int)
+testShift = down $ 
+  do c <- reset (do ci <- shift (\k -> do b' <- genLet_ (k [|| 5 ||])
+                                          return (k [|| 0 ||]))
+                    return [|| $$ci + $$ci ||])
+     return ([|| $$c - 1 ||])
+
+
+
+{-
+    MaybeT
+      (Identity
+         (if b_a1C9 then
+              if c_a1Ca then
+                  let x_a4S2 = (0 + 0) in Just x_a4S2
+              else
+                  let x_a4S3 = (1 + 1) in Just x_a4S3
+          else
+              Nothing))
+-}
+testShift2 :: Bool -> Bool -> MaybeT Identity Int 
+testShift2 b c = $$(down @(MaybeT Gen) $ 
+  do b' <- lift (genSplit [||b||] )
+     i <- case b' of 
+       True -> 
+         do c' <- lift (genSplit [||c||])
+            case c' of
+              True -> return [||0||]
+              False -> return [||1||]
+       False -> MaybeT (return Nothing)
+     lift (genLet_ [|| $$i + $$i ||]))
+
+{-
+    MaybeT
+      (Identity
+         (let x_a4Ui = Nothing in
+          let
+            x_a4Uj = \ a_a4Uk -> let x_a4Ul = (a_a4Uk + a_a4Uk) in Just x_a4Ul
+          in
+            if b_a1CR then if c_a1CS then x_a4Uj 0 else x_a4Uj 1 else x_a4Ui))
+-}
+testShift3 :: Bool -> Bool -> MaybeT Identity Int 
+testShift3 b c = $$(down @(MaybeT Gen) $ 
+  do i <- mergeMb $ 
+       do b' <- lift (genSplit [||b||] )
+          case b' of 
+            True -> 
+              do c' <- lift (genSplit [||c||])
+                 case c' of
+                   True -> return [||0||]
+                   False -> return [||1||]
+            False -> MaybeT (return Nothing)
+     lift (genLet_ [|| $$i + $$i ||]))
+
+{-
+    MaybeT
+      (Identity
+         (case
+              let x_a7tg = Nothing in
+              let
+                x_a7th = \ a_a7ti -> let x_a7tj = (a_a7ti + a_a7ti) in Just x_a7tj
+              in if b_a5Ix then if c_a5Iy then x_a7th 0 else x_a7th 1 else x_a7tg
+          of
+            Nothing -> Nothing
+            Just a_a7tk -> let x_a7tl = (a_a7tk * a_a7tk) in Just x_a7tl))
+-}
+testShift4 :: Bool -> Bool -> MaybeT Identity Int 
+testShift4 b c = $$(down @(MaybeT Gen) $ 
+  do j <- resetMb (
+       do i <- mergeMb $ 
+            do b' <- lift (genSplit [||b||] )
+               case b' of 
+                 True -> 
+                   do c' <- lift (genSplit [||c||])
+                      case c' of
+                        True -> return [||0||]
+                        False -> return [||1||]
+                 False -> MaybeT (return Nothing)
+          lift (genLet_ [|| $$i + $$i ||]))
+     lift (genLet_ [|| $$j * $$j ||]))
 
 main = return ()

@@ -16,7 +16,13 @@ import Data.Iso
 import Data.HFunctor
 import Data.List.Kind
 
-letPut :: AlgTransM '[Put (Up s)] '[Put (Up s), CodeGen] '[] 
+putUp :: Member (Put (Up c)) sig => Up c -> Prog sig ()
+putUp c = put c 
+
+getUp :: Member (Get (Up c)) sig => Prog sig (Up c)
+getUp = get
+
+letPut :: forall s. AlgTransM '[Put (Up s)] '[Put (Up s), CodeGen] '[] 
 letPut = interpretAT1 (\(Alg (Put s k)) -> do s' <- genLet s; put s'; return k) 
 
 genAlg :: Algebra [CodeGen, UpOp Identity] Gen 

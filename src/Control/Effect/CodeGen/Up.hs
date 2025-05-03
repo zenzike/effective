@@ -178,10 +178,10 @@ instance Monad LG where
   lg >>= k = LG $ \c n -> runLG lg (\a as -> runLG (k a) c as) n
 
 upLG :: Up [a] -> LG (Up a)
-upLG cl = LG $ \c n -> upGen [|| 
+upLG cl = LG $ \c n -> upGen [||
   foldr (\a ms -> $$(downGen (c [||a||] (upGen [||ms||])))) 
-        $$(downGen n)   
-        $$cl  
+        $$(downGen n)
+        $$cl
   ||]
 
 downLG :: LG (Up a) -> Up [a]
