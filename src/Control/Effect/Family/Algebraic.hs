@@ -8,6 +8,7 @@ Stability   : experimental
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Control.Effect.Family.Algebraic where
 
@@ -45,6 +46,14 @@ instance Functor sig => HFunctor (Alg sig) where
   {-# INLINE hmap #-}
   hmap f (Alg op) = Alg op
 
-instance (MonadTrans t) => Forward (Alg f) t where
+-- | Algebraic operations can be lifted along any monad transformers canonically.
+-- We mark this instance as incoherent because for specific monad transformers we may
+-- have more general lifting instances. For example, we trivially have
+--
+-- > instance Forward eff IdentityT
+--
+-- And this is not strictly more speicific than @Forward (Alg f) t@ so we need the
+-- instance here to be incoherent.
+instance {-# INCOHERENT #-} MonadTrans t => Forward (Alg f) t where
   {-# INLINE fwd #-}
   fwd alg (Alg op) = lift (alg (Alg op))

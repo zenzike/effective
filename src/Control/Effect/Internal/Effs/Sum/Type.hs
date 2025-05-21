@@ -23,10 +23,8 @@ module Control.Effect.Internal.Effs.Sum.Type
 import Data.Kind ( Type )
 import Data.HFunctor
 import Data.List.Kind
-import Control.Monad
 
 import GHC.TypeLits
-import GHC.Exts
 
 -- | The type of higher-order effects.
 type Effect = (Type -> Type) -> (Type -> Type)
@@ -36,7 +34,6 @@ type Effect = (Type -> Type) -> (Type -> Type)
 type Algebra effs f =
   forall x . Effs effs f x -> f x
 
--- TODO: Eliminate HFunctor constraint with coyoneda
 -- | @Effs effs f a@ creates a union of the effect signatures in the list @effs@.
 type Effs :: [Effect] -> Effect
 data Effs sigs f a where

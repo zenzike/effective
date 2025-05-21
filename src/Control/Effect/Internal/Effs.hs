@@ -55,7 +55,7 @@ callM oalg x = join (oalg (inj x))
 -- | A variant of `call'` for which the effect is on a given monad rather than the `Prog` monad.
 {-# INLINE callM' #-}
 callM' :: forall eff effs a m . 
-      ( Monad m, Member eff effs, HFunctor eff
+      ( Member eff effs, HFunctor eff
       ) 
       => Algebra effs m -> eff m a -> m a
 callM' oalg x = oalg (inj x)

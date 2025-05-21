@@ -54,7 +54,7 @@ import Control.Effect
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 import Control.Effect.Family.Distributive
-import Control.Effect.Concurrency.Types (Par, Par_(..), JPar, JPar_(..))
+import Control.Effect.Concurrency.Type (Par, Par_(..), JPar, JPar_(..))
 
 import qualified System.CPUTime
 import qualified Control.Concurrent
@@ -250,13 +250,13 @@ type AutoHandleIO effs oeffs xeffs =
 handleIO
   :: forall xeffs effs oeffs ts fs a
   . ( Injects oeffs xeffs
-    , Forwards xeffs ts
+    , ForwardsM xeffs ts
     , Monad (Apply ts IO)
     , Injects xeffs IOEffects
     , AutoHandleIO effs oeffs xeffs )
-  => Handler effs oeffs ts fs
+  => Proxy xeffs -> Handler effs oeffs ts fs
   -> Prog (effs `Union` xeffs) a -> IO (Apply fs a)
-handleIO = handleM @effs @oeffs @xeffs (ioAlg . injs)
+handleIO _ = handleM @effs @oeffs @xeffs (ioAlg . injs)
 
 -- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. Any residual
 -- effects are then interpreted in `IO` using their standard semantics.
@@ -276,13 +276,13 @@ handleIO' = handleM' @effs @oeffs ioAlg
 -- explicitly. 
 handleIOApp :: forall xeffs effs oeffs ts fs a .
   ( Monad (Apply ts IO)
-  , Forwards xeffs ts
+  , ForwardsM xeffs ts
   , Injects oeffs xeffs
   , Append effs xeffs
   , HFunctor (Effs (effs :++ xeffs))
   , Injects xeffs IOEffects )
-  => Handler effs oeffs ts fs
+  => Proxy xeffs -> Handler effs oeffs ts fs
   -> Prog (effs :++ xeffs) a
   -> IO (Apply fs a)
 
-handleIOApp = handleMApp @effs @oeffs @xeffs (ioAlg . injs) 
+handleIOApp _ = handleMApp @effs @oeffs @xeffs (ioAlg . injs) 

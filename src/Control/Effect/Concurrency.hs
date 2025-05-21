@@ -20,7 +20,7 @@ of handlers:
 module Control.Effect.Concurrency (
   -- * Syntax
   -- | Signatures and operations are in this module.
-  module Control.Effect.Concurrency.Types,
+  module Control.Effect.Concurrency.Type,
 
   -- * Semantics
 
@@ -46,7 +46,7 @@ import Control.Effect
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 import Control.Effect.Family.Distributive
-import Control.Effect.Concurrency.Types
+import Control.Effect.Concurrency.Type
 import Control.Effect.IO (NewQSem, SignalQSem, WaitQSem, newQSem, signalQSem, waitQSem)
 import qualified Control.Effect.Reader as R
 import qualified Control.Effect.Except as E
@@ -71,11 +71,11 @@ jresumpAlg eff
   | Just (Scp (Res a p)) <- prj eff = C.res a p
 
 -- | Algebra transformer for the resumption-based handler of t`Par`, t`Act`, and t`Res`.
-resumpAT :: forall a. Action a => AlgTransM '[Act a, Par, Res a] '[] '[C.CResT a]
+resumpAT :: forall a. Action a => AlgTrans '[Act a, Par, Res a] '[] '[C.CResT a] Monad
 resumpAT = AlgTrans (\_ -> resumpAlg)
 
 -- | Algebra transformer for the resumption-based handler of t`JPar`, t`Act`, and t`Res`.
-jresumpAT :: forall a. Action a => AlgTransM '[Act a, JPar, Res a] '[] '[C.CResT a]
+jresumpAT :: forall a. Action a => AlgTrans '[Act a, JPar, Res a] '[] '[C.CResT a] Monad
 jresumpAT = AlgTrans (\_ -> jresumpAlg)
 
 -- | Resumption-based handler of concurrency. Non-deterministic branches are explored 

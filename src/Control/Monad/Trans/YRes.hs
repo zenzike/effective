@@ -16,7 +16,14 @@ data YStep a b x = YieldS a (b -> x) deriving Functor
 type YResT a b = ResT (YStep a b)
 
 yield :: Monad m => a -> (b -> YResT a b m x) -> YResT a b m x
-yield a k = ResT $ return (Right (YieldS a k))
+yield a k = resOp (YieldS a k)
+
+mapYield :: Monad m => (a -> a) -> (b -> b) -> YResT a b m x -> YResT a b m x
+mapYield f g p = ResT $ 
+  do xs <- unResT p
+     case xs of
+       Left x -> return (Left x)
+       Right (YieldS a k) -> return (Right (YieldS (f a) (mapYield f g .  k . g))) 
 
 -- | @pingpong p q@ runs the two coroutines @p@ and @q@ in the call and
 -- response way until one of them finishes. The coroutine @p@ runs first.

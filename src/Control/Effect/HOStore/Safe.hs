@@ -149,9 +149,9 @@ handleHS = runHS
 -- | Running a program with higher-order store and other effects @effs@ on @m@, 
 -- resulting in an @m@ program. 
 handleHSM :: forall effs a m. 
-          ( forall s. Forwards effs '[St.StateT s]
+          ( forall s. ForwardsM effs '[St.StateT s]
 #ifdef INDEXED
-          , KnownNat (Length effs) 
+          , Append (HSEffs ()) effs
 #endif
           , HFunctor (Effs effs)
           , Monad m
@@ -162,9 +162,9 @@ handleHSM alg p = handleMApp alg hstore p
 -- | Running a program with higher-order store and other effects @effs@, resulting
 -- in a program with effects @effs@. 
 handleHSP :: forall effs a. 
-             ( forall s. Forwards effs '[St.StateT s]
+             ( forall s. ForwardsM effs '[St.StateT s]
 #ifdef INDEXED
-             , KnownNat (Length effs) 
+             , Append (HSEffs ()) effs
 #endif
              , HFunctor (Effs effs)
              ) 

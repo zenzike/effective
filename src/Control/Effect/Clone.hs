@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, AllowAmbiguousTypes #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, AllowAmbiguousTypes, TypeFamilies #-}
 {-|
 Module      : Control.Effect.Clone
 Description : Making copies of an existing effect
@@ -38,6 +38,7 @@ newtype Clone (eff :: Effect)
               = Clone { unClone :: eff f k } deriving (Functor, HFunctor)
 
 instance Forward eff t => Forward (Clone eff) t where
+  type FwdConstraint (Clone eff) t = FwdConstraint eff t
   fwd alg (Clone op) = fwd (alg . Clone) op
 
 -- | Every handler of @effs@ gives rise to a handler of its clone.

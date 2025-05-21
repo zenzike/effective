@@ -46,7 +46,7 @@ state_ :: s -> Handler [Put s, Get s] '[] '[Lazy.StateT s] '[]
 state_ s = handler' (flip Lazy.evalStateT s) stateAlg
 
 -- | An algebra transformer that interprets t'Get' and t'Put' using the lazy t'Lazy.StateT'.
-stateAT :: AlgTransM [Put s, Get s] '[] '[Lazy.StateT s]
+stateAT :: AlgTrans [Put s, Get s] '[] '[Lazy.StateT s] Monad
 stateAT = AlgTrans stateAlg
 
 -- | The underlying algebra of the state handler.

@@ -38,35 +38,47 @@ module Control.Effect
   , (#)
   , Forward (..)
   , Forwards (..)
+  , ForwardsM (..)
+  , ForwardsC (..)
   , absurdEffs
 
-  -- * Handlers
+  -- * Handler combinators
   , Handler (..)
   , handler
   , handler'
+  , identity
+  , comp
+  , weaken
+  , hide
+  , bypass
+  , fromAT
   , interpret, interpretAT
   , interpret1, interpretAT1
-  , interpretM, fromAT
-  , identity
+  , interpretM
+  , caseHdl
+  , unionHdl
+
+  -- ** Fusion-based combinators
   , fuse, (|>)
   , pipe, (||>)
-  , hide
+  , pass
+  , generalFuse
 
   -- * Algebra transformers
   , AlgTrans (..)
-  , AlgTransM 
   , asAT
   , idAT
   , compAT
   , weakenAT
-  , fuseAT
+  , algTrans1
+  , fuseAT, fuseAT'
   , pipeAT
   , passAT
+  , generalFuseAT
 
 
   -- * Evaluation
   , eval
- -- , fold
   , handle
   , handleM
   , handleP
@@ -77,15 +89,17 @@ module Control.Effect
   , evalTr
   , evalTr'
 
-  -- * Type families
+  -- * Auxiliary types
   , Apply
-  , Assoc
+  , Proxy (..)
   ) where
 
 import Control.Effect.Internal.Prog
 import Control.Effect.Internal.Effs
 import Control.Effect.Internal.Handler
 import Control.Effect.Internal.AlgTrans
+import Control.Effect.Internal.AlgTrans.Type
 import Control.Effect.Internal.Forward
 import Data.Functor.Identity
 import Data.List.Kind
+import Data.Proxy

@@ -12,6 +12,7 @@ Stability   : experimental
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Control.Effect.Internal.Effs.Indexed
   ( module Control.Effect.Internal.Effs.Indexed.Type
@@ -83,7 +84,7 @@ openEffs effn@(Effn n op)
 -- | Constructs an operation in the union @Effs effs f a@ from a single
 -- operation @eff f a@, when @eff@ is in @effs@.
 {-# INLINE inj #-}
-inj :: forall eff effs f a . (HFunctor eff, Member eff effs) => eff f a -> Effs effs f a
+inj :: forall eff effs f a . (Member eff effs) => eff f a -> Effs effs f a
 inj = Effn n
   where
     n = fromInteger (natVal' (proxy# @(EffIndex eff effs)))
@@ -114,14 +115,31 @@ falg # galg = heither @eff1 @eff2 (falg) (galg)
 weakenEffs :: forall eff effs f a . Effs effs f a -> Effs (eff ': effs) f a
 weakenEffs = coerce @(Effs effs f a) @(Effs (eff ': effs) f a)
 
-instance Functor f => Functor (Effs effs f) where
+--instance Functor f => Functor (Effs effs f) where
+--  {-# INLINE fmap #-}
+--  fmap f (Effn n op) = Effn n (fmap f op)
+
+instance Functor (Effs '[] f) where
   {-# INLINE fmap #-}
-  fmap f (Effn n op) = Effn n (fmap f op)
+  fmap f = absurdEffs
 
-instance HFunctor (Effs effs) where
+instance (Functor f, Functor (eff f), Functor (Effs effs f), KnownNat (Length effs)) 
+  => Functor (Effs (eff ': effs) f) where
+  {-# INLINE fmap #-}
+  fmap f e = case open e of
+    Left  o -> coerce (fmap f o)
+    Right o -> inj (fmap f o)
+
+instance HFunctor (Effs '[]) where
   {-# INLINE hmap #-}
-  hmap h (Effn n op) = Effn n (hmap h op)
+  hmap h = absurdEffs
 
+instance (HFunctor eff, HFunctor (Effs effs), KnownNat (Length effs)) 
+  => HFunctor (Effs (eff ': effs)) where
+  {-# INLINE hmap #-}
+  hmap h e = case open e of
+    Left o  -> coerce (hmap h o)
+    Right o -> inj (hmap h o)
 
 
 -- | Weakens an an operation of type @Effs xeffs f a@ to one of type @Effs (xeffs :++ yeffs) f a@.
@@ -188,4 +206,8 @@ heither xalg yalg (Effn n op)
     -- m = fromInteger (fromSNat (natSing @(Length yeffs)))
     m = fromInteger (natVal' (proxy#@(Length yeffs)))
 
-type Append xs ys = (KnownNat (Length ys))
+type Append xs ys = (KnownLength (xs :++ ys), KnownNat (Length ys), KnownNat (Length xs))
+
+type family KnownLength effs :: Constraint where
+  KnownLength (eff:effs) = (KnownLength effs, KnownNat (1 + Length effs))
+  KnownLength effs = KnownNat (Length effs)

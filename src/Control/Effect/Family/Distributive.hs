@@ -59,9 +59,6 @@ instance Functor r => Functor (Distr r f) where
 instance Functor r => HFunctor (Distr r) where
   hmap h (Distr p c) = Distr (fmap h p) c
 
-instance Functor r => Forward (Distr r) IdentityT where
-  fwd oalg (Distr p c) = IdentityT (oalg (Distr (fmap runIdentityT p) c))
-
 instance Traversable r => Forward (Distr r) MaybeT where
   -- | We actually only need `sequenceA` between `r` and `Maybe`.
   fwd oalg (Distr p c) = MaybeT $ oalg (Distr (fmap runMaybeT p) c') where

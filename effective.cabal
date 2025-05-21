@@ -25,7 +25,7 @@ source-repository head
 library
   default-language: GHC2021
   default-extensions: DataKinds CPP RecordWildCards ImpredicativeTypes LambdaCase AllowAmbiguousTypes
-  ghc-options: -Wunused-foralls -Wunused-imports -fprint-potential-instances  -ddump-simpl -ddump-to-file -Wno-star-is-type
+  ghc-options: -O2 -Wunused-foralls -Wunused-imports -fprint-potential-instances  -ddump-simpl -ddump-to-file -Wno-star-is-type
   --cpp-options: -DINDEXED
   --cpp-options: -DPROGDIRECT
 
@@ -39,7 +39,7 @@ library
     Control.Effect.Maybe
     Control.Effect.Nondet
     Control.Effect.Concurrency
-    Control.Effect.Concurrency.Types
+    Control.Effect.Concurrency.Type
     Control.Effect.Yield
     Control.Effect.Reader
     Control.Effect.State
@@ -53,19 +53,26 @@ library
     Control.Effect.Clone
     Control.Effect.HOStore.Unsafe
     Control.Effect.HOStore.Safe
+
     Control.Effect.CodeGen
     Control.Effect.CodeGen.Type
     Control.Effect.CodeGen.Up
     Control.Effect.CodeGen.Down
     Control.Effect.CodeGen.Split
     Control.Effect.CodeGen.Gen
-    Control.Effect.CodeGen.GenM
     Control.Effect.CodeGen.Eval
+    Control.Effect.CodeGen.Join
+    Control.Effect.CodeGen.SoPU
+    Control.Effect.CodeGen.Nondet
+    Control.Effect.CodeGen.Concurrency
+
+
     Control.Monad.Trans.CutList.CPS
     Control.Monad.Trans.List
     Control.Monad.Trans.Resump
     Control.Monad.Trans.CRes
     Control.Monad.Trans.YRes
+    Control.Monad.Trans.ResUp
     Control.Monad.Trans.Compose
     Control.Monad.Trans.Push
     Data.CutList
@@ -85,7 +92,6 @@ library
     Control.Effect.Internal.Prog.ProgDirect
     Control.Effect.Internal.Prog
     Control.Effect.Internal.Forward
-    Control.Effect.Internal.Forward.ForwardC
     Control.Effect.Internal.Handler
     Control.Effect.Internal.Runner
     Control.Effect.Internal.AlgTrans
@@ -101,7 +107,7 @@ test-suite docs
   main-is:       Main.hs
   ghc-options:   -threaded -Wunused-foralls -Wunused-imports -fprint-potential-instances
   hs-source-dirs: docs
-  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+  build-tool-depends: markdown-unlit:markdown-unlit
   default-language: GHC2021
   default-extensions: DataKinds
   other-modules:
@@ -119,7 +125,7 @@ test-suite readme
   default-language: GHC2021
   hs-source-dirs:  .
   build-depends: base, transformers, effective, hedgehog
-  build-tool-depends: markdown-unlit:markdown-unlit>=0.6
+  build-tool-depends: markdown-unlit:markdown-unlit
 
 test-suite concur
   type:          exitcode-stdio-1.0
@@ -141,11 +147,12 @@ test-suite hostore
 
 test-suite staged
   type:          exitcode-stdio-1.0
-  ghc-options:   -ddump-simpl -ddump-splices -dsuppress-all -dno-suppress-type-signatures -ddump-to-file
+  ghc-options:   -O0 -ddump-simpl -ddump-splices -dsuppress-all -dno-suppress-type-signatures -ddump-to-file
   main-is:       Staged.hs
   default-language: GHC2021
   default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
   hs-source-dirs:  test
   build-depends: base, transformers, effective, containers, template-haskell
+
   other-modules:
     StagedGen

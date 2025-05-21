@@ -71,7 +71,7 @@ except :: Handler '[Throw e, Catch e] '[] '[ExceptT e] '[Either e]
 except = handler' runExceptT exceptAlg
 
 -- | The algebra transformer for the 'except' handler.
-exceptAT :: AlgTransM '[Throw e, Catch e] '[] '[ExceptT e] 
+exceptAT :: AlgTrans '[Throw e, Catch e] '[] '[ExceptT e] Monad
 exceptAT = AlgTrans exceptAlg
 
 exceptAlg :: Monad m
@@ -95,7 +95,7 @@ retry :: Handler '[Throw e, Catch e] '[] '[ExceptT e] '[Either e]
 retry = handler' runExceptT retryAlg
 
 -- | The algebra transformer for the 'retry' handler.
-retryAT :: AlgTransM '[Throw e, Catch e] '[] '[ExceptT e] 
+retryAT :: AlgTrans '[Throw e, Catch e] '[] '[ExceptT e] Monad
 retryAT = AlgTrans retryAlg
 
 retryAlg :: Monad m

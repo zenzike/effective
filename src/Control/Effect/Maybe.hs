@@ -71,7 +71,7 @@ except :: Handler [Throw, Catch] '[] '[MaybeT] '[Maybe]
 except = handler' runMaybeT exceptAlg
 
 -- | The algebra transformer for the 'except' handler.
-exceptAT :: AlgTransM [Throw, Catch] '[] '[MaybeT]
+exceptAT :: AlgTrans [Throw, Catch] '[] '[MaybeT] Monad
 exceptAT = AlgTrans exceptAlg
 
 -- | The algebra for the 'except' handler.
@@ -95,7 +95,7 @@ retry :: Handler [Throw, Catch] '[] '[MaybeT] '[Maybe]
 retry = handler' runMaybeT retryAlg
 
 -- | The algebra for the 'retry' handler.
-retryAT :: AlgTransM [Throw, Catch] '[] '[MaybeT]
+retryAT :: AlgTrans [Throw, Catch] '[] '[MaybeT] Monad
 retryAT = AlgTrans retryAlg
 
 retryAlg :: Monad m

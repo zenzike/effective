@@ -107,10 +107,10 @@ readerAlg eff
   | Just (Scp (Local (f :: r -> r) p)) <- prj eff =
       R.local f p
 
-readerAT :: AlgTransM '[Ask r, Local r] '[] '[R.ReaderT r]
+readerAT :: AlgTrans '[Ask r, Local r] '[] '[R.ReaderT r] Monad
 readerAT = AlgTrans (\_ -> readerAlg)
 
-readerAskAT :: AlgTransM '[Ask r] '[] '[R.ReaderT r]
+readerAskAT :: AlgTrans '[Ask r] '[] '[R.ReaderT r] Monad
 readerAskAT = weakenIEffs readerAT
 
 readerAsk :: r -> Handler '[Ask r] '[] '[R.ReaderT r] '[]

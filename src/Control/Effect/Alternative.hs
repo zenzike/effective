@@ -72,7 +72,7 @@ alternative run = handler' run alternativeAlg
 -- underlying 'Alternative' instance for @t m@ given by a transformer @t@.
 alternativeAT
   :: forall t. (forall m . Monad m => Alternative (t m))
-  => AlgTransM '[Empty, Choose] '[] '[t]
+  => AlgTrans '[Empty, Choose] '[] '[t] Monad
 alternativeAT = AlgTrans alternativeAlg
 
 alternativeAlg

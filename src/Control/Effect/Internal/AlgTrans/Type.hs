@@ -28,9 +28,6 @@ type AlgTrans
 newtype AlgTrans effs oeffs ts cs = AlgTrans {
    getAT :: forall m . cs m => Algebra oeffs m -> Algebra effs (Apply ts m) }
 
--- | Algebra transformers for monads.
-type AlgTransM effs oeffs ts = AlgTrans effs oeffs ts Monad 
-
 -- * Constraints 
 
 -- | The always true constraint.

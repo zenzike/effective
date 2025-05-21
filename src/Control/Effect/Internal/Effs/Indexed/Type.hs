@@ -16,7 +16,6 @@ Stability   : experimental
 module Control.Effect.Internal.Effs.Indexed.Type where
 
 import Data.Kind ( Type )
-import Data.HFunctor
 import Data.List.Kind
 
 import GHC.TypeLits
@@ -34,7 +33,7 @@ type Algebra effs f =
 type Effs :: [Effect] -> Effect
 data Effs effs f a where
   -- | @`Effn` n op@ places an operation @n@ away from the last element of the list.
-  Effn :: HFunctor eff => {-# UNPACK #-} !Int -> !(eff f a) -> Effs effs f a
+  Effn :: {-# UNPACK #-} !Int -> !(eff f a) -> Effs effs f a
 
 -- | @`EffIndex` eff effs@ finds the index of @eff@ in @effs@, where
 -- the last element has index @0@, and the head element has index @Length effs - 1@.

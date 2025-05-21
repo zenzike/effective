@@ -59,7 +59,7 @@ tell :: (Member (Tell w) sig, Monoid w) => w -> Prog sig ()
 tell w = call (Alg (Tell w (return ())))
 
 -- | The algebra transformer for the `writer` handler.
-writeAT :: Monoid w => AlgTransM '[Tell w] '[] '[W.WriterT w]
+writeAT :: Monoid w => AlgTrans '[Tell w] '[] '[W.WriterT w] Monad
 writeAT = AlgTrans writerAlg
 
 writerAlg
@@ -112,7 +112,7 @@ censors cipher = handler' run (getAT censorAT) where
   run :: Monad m => (forall x. ReaderT (w -> w) m x -> m x)
   run (ReaderT mx) = mx cipher
 
-censorAT :: AlgTransM '[Tell w, Censor w] '[Tell w] '[ReaderT (w -> w)]
+censorAT :: AlgTrans '[Tell w, Censor w] '[Tell w] '[ReaderT (w -> w)] Monad
 censorAT = AlgTrans alg where
   alg :: Monad m
       => (forall x. Effs '[Tell w] m x -> m x)

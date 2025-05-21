@@ -10,6 +10,8 @@ import Control.Monad
 import Control.Effect.Clone
 import Control.Effect.Yield
 
+import Data.Proxy 
+
 main :: IO ()
 main = return ()
 
@@ -65,7 +67,7 @@ prog2 =
              replicateM_ 5 (putStr "D")) 
 
 test4 :: IO ()
-test4 = handleIO @IOEffects identity prog2
+test4 = handleIO (Proxy @IOEffects) (identity @'[]) prog2
 
 tell' :: forall w sig. (Member (Clone (Tell w)) sig, Monoid w) => w -> Prog sig ()
 tell' w = cloneAlg (Tell w ())
@@ -83,10 +85,10 @@ prog4 :: Member (Alg IO) sig => Prog sig ()
 prog4 = liftIO (putChar 'x') 
 
 test6 :: IO ()
-test6 = handleIO @IOEffects identity prog4
+test6 = handleIO (Proxy @IOEffects) (identity @'[]) prog4
 
 test7 :: IO (Either String ())
-test7 = handleIO @IOEffects (ccsByQSem @ActNames |> writerIO) (prog >> putStrLn "")
+test7 = handleIO (Proxy @IOEffects) (ccsByQSem @ActNames |> writerIO) (prog >> putStrLn "")
 
 
 prog5 :: Members '[JPar, Act HS, Res HS, Tell String] sig => Prog sig (Int, Int)
@@ -97,7 +99,7 @@ test8 :: (String, ListActs HS (Int, Int))
 test8 = handle (jresump |> writer @String) prog5
 
 test9 :: IO (Either String (Int, Int))
-test9 = handleIO @IOEffects (ccsByQSem @ActNames |> writerIO) prog5
+test9 = handleIO (Proxy @IOEffects) (ccsByQSem @ActNames |> writerIO) prog5
 
 prog6 :: Members '[Yield Int Int, PutStrLn] sig => Int -> Prog sig Int
 prog6 n = do putStrLn ("Ping " ++ show n)
@@ -112,6 +114,6 @@ prog6' n
                    prog6' n'
 
 test10 :: IO (Either Int Int)
-test10 = handleIOApp @'[PutStrLn] 
-           (pingpongWith (prog6' @'[Yield Int Int, PutStrLn])) 
+test10 = handleIOApp (Proxy @'[PutStrLn])
+           (pingpongWith (prog6' @'[Yield Int Int, MapYield Int Int, PutStrLn])) 
            (prog6 0)

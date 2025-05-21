@@ -1,1 +1,4 @@
-packages: effective.cabal
+packages: 
+    effective.cabal
+
+tests: True

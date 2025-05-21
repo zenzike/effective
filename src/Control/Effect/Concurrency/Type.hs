@@ -8,7 +8,7 @@ Stability   : experimental
 This module provides some shared definitions around the effect of concurrency.
 -}
 
-module Control.Effect.Concurrency.Types where
+module Control.Effect.Concurrency.Type where
 
 import Data.Functor.Unary
 import Control.Effect.Family.Algebraic

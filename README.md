@@ -149,7 +149,8 @@ the `handleIO` function is used because `GetLine` and `PutStrLn` are operations
 that relate to `IO`.
 ```haskell ignore
 handleIO :: ( forall m . Monad m => Monad (t m), Functor f , ... )
-         => Handler effs oeffs t f
+         => Proxy xeffs 
+         -> Handler effs oeffs t f
          -> Prog (effs `Union` xeffs) a -> IO (Apply f a)
 ```
 The result is `IO (Apply f)`, where `f` is the functor given by the wrapper of the handler, and `Apply f` removes any stray `Identity` and `Compose` functors.
@@ -672,12 +673,13 @@ any `tell` operations that were in the program before censor, the `hide`
 combinator removes them from being seen:
 ```haskell
 uncensors :: forall w . Monoid w => Handler '[Censor w] '[] '[(ReaderT (w -> w)), (WriterT w)] '[]
-uncensors = hide @'[Tell w] (censors @w id |> writer_ @w)
+uncensors = hide (Proxy @'[Tell w]) (censors @w id |> writer_ @w)
 ```
 The key combinator here is `hide`:
 ```haskell ignore
 hide :: forall sigs effs oeffs f . (Injects (effs :\\ sigs) effs, Injects oeffs oeffs)
-     => Handler effs            oeffs f
+     => Proxy sigs 
+     -> Handler effs            oeffs f
      -> Handler (effs :\\ sigs) oeffs f
 ```
 This takes in a handler, returns it where any effects provided by the type parameter `sigs`

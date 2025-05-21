@@ -72,7 +72,7 @@ cutListAlg oalg op
   | Just (Alg CutFail)         <- prj op = CutListT (\cons nil zero -> zero)
   | Just (Scp (CutCall xs))    <- prj op = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
 
-cutListAT :: AlgTransM [Empty, Choose, CutFail, CutCall] '[] '[CutListT] 
+cutListAT :: AlgTrans [Empty, Choose, CutFail, CutCall] '[] '[CutListT] Monad
 cutListAT = AlgTrans cutListAlg
 
 cutList :: Handler [Empty, Choose, CutFail, CutCall] '[] '[CutListT] '[[]]
@@ -87,10 +87,11 @@ instance HFunctor CutListT where
 onceCut :: Handler '[Once] '[CutCall, CutFail, Choose] '[] '[]
 onceCut = interpretM onceCutAlg
 
-onceCutAT :: AlgTransM '[Once] '[CutCall, CutFail, Choose] '[] 
+onceCutAT :: AlgTrans '[Once] '[CutCall, CutFail, Choose] '[] Monad
 onceCutAT = AlgTrans onceCutAlg
 
-onceCutAlg :: forall oeff m . (Monad m , Members [CutCall, CutFail, Choose] oeff)
+onceCutAlg :: forall oeff m . 
+     (Monad m , HFunctor (Effs oeff), Members [CutCall, CutFail, Choose] oeff)
   => (forall x. Effs oeff m x -> m x)
   -> (forall x. Effs '[Once] m x -> m x)
 onceCutAlg oalg op

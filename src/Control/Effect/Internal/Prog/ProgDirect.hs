@@ -147,7 +147,8 @@ fold gen alg (Call op k) =
 
 -- | Attempt to project an operation of type @eff (Prog effs) (Prog effs a)@.
 {-# INLINE prjCall #-}
-prjCall :: forall eff effs a . Member eff effs => Prog effs a -> Maybe (eff (Prog effs) (Prog effs a))
+prjCall :: forall eff effs a . (HFunctor eff, HFunctor (Effs effs)) =>
+  Member eff effs => Prog effs a -> Maybe (eff (Prog effs) (Prog effs a))
 prjCall (Call op k) = prj (fmap k $ op)
 prjCall _           = Nothing
 

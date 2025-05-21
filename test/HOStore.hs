@@ -1,4 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes, CPP #-}
+{-# LANGUAGE AllowAmbiguousTypes, MonoLocalBinds, CPP #-}
 module Main where
 
 import Prelude hiding (or)
@@ -10,9 +10,6 @@ import Control.Effect.Nondet
 import Data.List.Kind
 import Data.Functor.Identity
 import Data.HFunctor
-#ifdef INDEXED
-import GHC.TypeNats
-#endif
 
 prog1 :: Progs '[New, Get, Put] Int
 prog1 = do iRef <- new @Int 1
@@ -83,11 +80,7 @@ prog2 = do iRef <- Safe.new @Int @w 1
 test5 :: [Int]
 test5 = handle nondet (Safe.handleHSP prog2') where
   prog2' :: forall w sig. 
-         ( Members '[Empty, Choose] sig
-#ifdef INDEXED
-         , GHC.TypeNats.KnownNat (Length sig)
-#endif   
-         ) 
+         ( Members '[Empty, Choose] sig, Append (Safe.HSEffs ()) sig )
          => Prog (Safe.HSEffs w :++ sig) Int
   prog2' = prog2 @w
 
