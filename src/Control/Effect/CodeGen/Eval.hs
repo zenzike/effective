@@ -1,9 +1,12 @@
 {-|
 Module      : Control.Effect.CodeGen.Eval
-Description : Evaluating meta-programs into object-level code. 
+Description : Evaluating meta-programs into object-level code
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
+
+This module contains functions for evaluating meta-programs into object-level 
+programs. The function `stage` is probably the most useful one.
 -}
 
 {-# LANGUAGE TemplateHaskell, MonoLocalBinds, MagicHash #-}
@@ -58,7 +61,7 @@ evalGen :: forall effs oeffs ts cs a.
         -> Prog (effs `Union` GenEffects) a -> Apply ts Gen a
 evalGen at = evalTr genAlg (withFwds (Proxy @GenEffects) (weakenC @((~) Gen) at))
 
--- | Stage a meta-level program into an object-level monadic computation.
+-- | Stage a meta-level program into an object-level monadic computation via `Gen`.
 stage :: forall m effs oeffs ts cs a. 
          ( cs Gen
          , Monad (Apply ts Gen)
@@ -87,15 +90,14 @@ evalGenM :: forall m effs oeffs ts cs a.
          -> Prog (effs `Union` GenMEffects m) a -> Apply ts (GenM m) a
 evalGenM at = evalTr genMAlg (withFwds (Proxy @(GenMEffects m)) (weakenC @((~) (GenM m)) at))
 
--- | Evaluate a program with an algebra transformer, with `GenM m` at the bottom
--- of monad transformer stack.
+-- | Stage a meta-level program into an object-level monadic computation via `GenM`.
 stageM :: forall m m' effs oeffs ts cs a. 
             ( cs (GenM m), Monad m
             , Monad (Apply ts (GenM m))
             , ForwardsC ((~) (GenM m)) (GenMEffects m) ts
             , Injects (oeffs `Union` GenMEffects m) (GenMEffects m)
             , Apply ts (GenM m) $~> m' 
-            , EvalGenM# effs oeffs m)
+            , EvalGenM# effs oeffs m )
          => Proxy m
          -> AlgTrans effs oeffs ts cs
          -> Prog (effs `Union` GenMEffects m) (Up a) 

@@ -4,6 +4,9 @@ Description : The code-generation monad(s)
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
+
+This module contains the code-generation monads `Gen`/`GenM` and some basic operations 
+for code generation, such as generating let-bindings.
 -}
 
 {-# LANGUAGE TemplateHaskell #-}

@@ -14,6 +14,8 @@ datatypes to object-level datatypes.
 module Control.Effect.CodeGen.Down where
 
 import Control.Effect
+import Control.Effect.Family.Algebraic
+import Control.Effect.Family.Scoped
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Gen
 
@@ -63,6 +65,12 @@ instance Either (Up e)  $~>  Either e where
 instance [] $~> [] where
   down []     = [|| [] ||]
   down (a:as) = [|| $$a : $$(down as) ||]
+
+instance (ms $~> os) => Alg ms n $~> Alg os m where
+  down (Alg metaop) = [|| Alg $$(down @ms @os  metaop) ||]
+
+instance (Functor ms, ms $~> os, n $~> m) => Scp ms n $~> Scp os m where
+  down (Scp metaop) = [|| Scp $$(down @ms @os (fmap (down @n @m) metaop)) ||]
 
 instance CStep (Up a)  $~>  CStep a where
   down FailS = [|| FailS ||]

@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, LambdaCase, UndecidableInstances, TypeFamilies #-}
-{-# LANGUAGE ViewPatterns, PatternSynonyms, QuantifiedConstraints, LiberalTypeSynonyms #-}
+{-# LANGUAGE ViewPatterns, PatternSynonyms, QuantifiedConstraints #-}
 module Control.Effect.CodeGen.Up where
 
 import Control.Effect
@@ -26,10 +26,29 @@ import qualified Control.Effect.Reader as R
 import Control.Monad.Trans.Resump
 import Control.Monad.Trans.Class
 
+-- * Reflecting object-level programs to the meta level
+
+-- | For an object-level monad @m@ and a meta-level monad @n@, a function
+-- @forall x. Up (m x) -> n (Up x)@ is called an @m@-up operation on @n@.
+-- Such an operation serves the purpose of \'reflecting\' object-level program
+-- back into meta level. This is needed when we want to generate object-level
+-- programs that calls other object-level programs. 
+-- For example, suppose we want to generate the following function @q@:
+--
+-- > p :: StateT Int Identity Int
+-- > p = do put 0; q; get
+--
+-- where @q :: StateT Int Identity Int@ is some other program (possibly also
+-- generated from a meta-program). When writing the /meta-program/ that generates
+-- @p@, we need a way to call the object-level @q@, and this is where an 
+-- up-operation is needed.
+
 type UpOp :: (* -> *) -> Effect
 type UpOp m = Alg (UpOp_ m)
 
 data UpOp_ (m :: * -> *) (x :: *) where
+  -- | Using left-Kan extension, functions @forall x. Up (m x) -> n (Up x)@
+  -- are in bijection with @forall x. exists. (Up (m a), Up a -> x) -> n x@.
   UpOp_   :: Up (m a) -> (Up a -> x) -> UpOp_ m x
 
   -- | The constructor @UpOpId c@ means the same thing as @UpOp_ c id@ and
@@ -43,10 +62,13 @@ data UpOp_ (m :: * -> *) (x :: *) where
   -- and the pattern synonym `UpOp` below can be used to deal with @UpOpId@ transparently.
   UpOpId  :: Up (m a) -> UpOp_ m (Up a)
 
+-- | Turn `UpOpId` into an ordinary `UpOp_`.
 upView :: UpOp_ m x -> UpOp_ m x
 upView (UpOpId o) = (UpOp_ o id)
 upView x = x
 
+-- | Using the pattern @UpOp@ we can treat the datatype t`UpOp_` as having 
+-- one constructor @UpOp :: Up (m a) -> (Up a -> x) -> UpOp_ m x@.
 pattern UpOp :: Up (m a) -> (Up a -> x) -> UpOp_ m x
 pattern UpOp c k <- (upView -> UpOp_ c k) where 
   UpOp c k = UpOp_ c k
@@ -67,21 +89,34 @@ upIso = Iso fwd bwd where
 upAlgIso :: forall n m. Functor n => Iso (Algebra '[UpOp m] n)  (forall x. Up (m x) -> n (Up x))
 upAlgIso = trans singAlgIso upIso 
 
-{-# INLINE up #-}
-up :: forall sig m a . (Member (UpOp m) sig) => Up (m a) -> Prog sig (Up a) 
+-- | Syntactic up-operations on (meta-)programs.
+up :: Member (UpOp m) sig => Up (m a) -> Prog sig (Up a) 
 up = Iso.fwd upIso call'
 
-{-# INLINE up' #-}
+-- | Syntactic up-operations on (meta-)programs with an additional continuation
+-- argument @Up a -> x@.
 up' :: Member (UpOp m) sig => Up (m a) -> (Up a -> x) -> Prog sig x 
 up' u k = call' (Alg (UpOp u k))
 
-upM :: forall m sig n a . (Member (UpOp m) sig, Functor n) 
+-- | Up-operations on a monad @n@.
+upM :: forall m sig n a. (Member (UpOp m) sig, Functor n) 
     => Algebra sig n -> Up (m a) -> n (Up a) 
 upM alg = Iso.fwd upIso (callM' alg)
 
+-- | Up-operations on a monad @n@ with an additional continuation argument.
 upM' :: Member (UpOp m) sig => Algebra sig n -> Up (m a) -> (Up a -> x) -> n x 
 upM' alg u k = callM' alg (Alg (UpOp u k))
 
+-- * Algebra transformers for the up-operation
+--
+-- The following are algebra transformers for the up-operation on various monad transformers.
+-- The transformers for `MaybeT`, `EitherT`, `ReaderT`, `WriterT`, `StateT` are quite
+-- simple: object-level monadic programs are turned into meta-level by generating case
+-- splits (aka \'the trick\'  in meta-programming).
+-- The up-operations for `ListT` and `ResT` are much trickier, because we can't generate
+-- infinitely many case splits.
+
+-- | To up @MaybeT l@, we need to be able to up @l@, throwing exceptions, and generate case splits.
 upMaybe :: AlgTrans '[UpOp (Mb.MaybeT l)] '[UpOp l, Mb.Throw, CodeGen] '[] Monad
 upMaybe = interpretAT1 $ \(Alg (UpOp la k)) ->
   do mb <- up [|| Mb.runMaybeT $$la ||] 
@@ -89,6 +124,7 @@ upMaybe = interpretAT1 $ \(Alg (UpOp la k)) ->
        Nothing -> Mb.throw
        Just a  -> return (k a)
 
+-- | To up @ExceptT l@, we need to be able to up @l@, throwing exceptions, and generate case splits.
 upExcept :: forall e l. AlgTrans '[UpOp (Ex.ExceptT e l)] '[UpOp l, Ex.Throw (Up e), CodeGen] '[] Monad
 upExcept = interpretAT1 $ \(Alg (UpOp la k)) ->
   do ex <- up [|| Ex.runExceptT $$la ||] 
@@ -96,6 +132,7 @@ upExcept = interpretAT1 $ \(Alg (UpOp la k)) ->
        Left e -> Ex.throw e
        Right a  -> return (k a)
 
+-- | To up @State s l@, we need to be able to up @l@, mutate @Up s@, and generate case splits.
 upStateLazy :: forall s l.
   AlgTrans '[UpOp (LS.StateT s l)] '[UpOp l, LS.Put (Up s), LS.Get (Up s), CodeGen] '[] Monad
 upStateLazy = interpretAT1 $ \(Alg (UpOp la k)) ->
@@ -105,6 +142,7 @@ upStateLazy = interpretAT1 $ \(Alg (UpOp la k)) ->
      LS.put s
      return (k a)
 
+-- | To up @State s l@, we need to be able to up @l@, mutate @Up s@, and generate case splits.
 upState :: forall s l.
   AlgTrans '[UpOp (SS.StateT s l)] '[UpOp l, SS.Put (Up s), SS.Get (Up s), CodeGen] '[] Monad
 upState = interpretAT1 $ \(Alg (UpOp la k)) ->
@@ -114,26 +152,49 @@ upState = interpretAT1 $ \(Alg (UpOp la k)) ->
      SS.put s
      return (k a)
 
+-- | To up @Reader r l@, we need to be able to up @l@, ask @Up r@, and generate case splits.
 upReader :: forall r l. AlgTrans '[UpOp (R.ReaderT r l)] '[UpOp l, R.Ask (Up r), CodeGen] '[] Monad
 upReader = interpretAT1 $ \(Alg (UpOp la k)) ->
   do cr <- R.ask
      a <- up [|| R.runReaderT $$la $$cr ||]
      return (k a)
 
-{-
--- The following is wrong because it generates infinitely branches of pattern matching.
--- The right thing to do is to use PushT as the compile-time version of ListT.
+-- ** Up-operations for recursively defined monad transformers 
+--
+-- Following the pattern for the monad transformers above, it might be tempting to write the
+-- following up-operation for @ListT@, but this is wrong because it generates infinitely branches 
+-- of pattern matching.
+-- 
+-- > upNdet :: AlgTrans '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, CodeGen] '[] Monad
+-- > upNdet = interpretAT1 $ 
+-- >   let go (Alg (UpOp la k)) =
+-- >          do a <- up [|| ND.runListT $$la ||]
+-- >             genCase a $ \case
+-- >               Nothing -> ND.stop
+-- >               (Just am) -> do (ca, cm) <- split am
+-- >                               return (k ca) ND.<|> go (Alg (UpOp cm k))
+-- >   in go
+--
+-- Since at the meta level we can't never know how many choices there are in an object-level 
+-- @ListT@. It seems that we are never able to up an object-level @ListT@ to an meta-level 
+-- @ListT@. 
+--
+-- However, we can solve this problem by observing that we don't actually need to know at 
+-- the meta level how many nondeterministic choices there are. All we care about is that 
+-- we can eventually generate some @ListT@ code. Therefore we replace @ListT@ with the following
+-- t`PushT` () at the meta-level:
+-- 
+-- > newtype PushT n a = PushT 
+-- >   { runPushT :: forall t. (a -> n (Up t) -> n (Up t)) -> n (Up t) -> n (Up t) }
+-- >
+--
+-- which is the Church-encoding of `ListT` with the final answer type restricted to be code. 
+-- This `PushT` supports non-deterministic operations just like regular Church-encoded `ListT`
+-- but it also supports @up@ and @down@ with @ListT@.
 
-upNdet :: Handler '[UpOp (ND.ListT l)] '[UpOp l, ND.Choose, ND.Empty, CodeGen] '[] '[]
-upNdet = interpret1 $ 
-  let go (Alg (UpOp la k)) =
-         do a <- up [|| ND.runListT $$la ||]
-            genCase a $ \case
-              Nothing -> ND.stop
-              (Just am) -> do (ca, cm) <- split am
-                              return (k ca) ND.<|> go (Alg (UpOp cm k))
-  in go
--}
+-- | Given a piece of code of type @ListT m a@, we reflect it back to a meta-level @PushT@ 
+-- by generating a fold of the given @ListT@ and using the two continuation arguments of
+-- the @PushT@ in the corresponding two arguments for the fold.
 
 upPushAlg :: forall m n a. (Monad m, Functor n, n $~> m) 
           => Algebra '[UpOp m] n 
@@ -163,14 +224,24 @@ upListPushGenAlg :: forall a. Up [a] -> PushT Gen (Up a)
 upListPushGenAlg cl = PushT $ \c n -> return
   [|| foldr (\a ms -> $$(runGen (c [||a||] (return [|| ms ||]) ))) $$(runGen n) $$cl ||]
   
+-- | Algebra transformer for upping @ListT m a@ and @[a]@. Note that this algebra transformer
+-- has `PushT` in its transformer stack, which is different from other algebra transformers
+-- of up such as `upState` and `upMaybe`, whose transformer arguments are empty.
+-- Therefore the way to use `upPush` is slightly different from the way to use `upStateT`:
+-- we write @upState `fuseAT` stateT@ but @upPush `appendAT` pushAT@ 
+-- (or directly `Control.Effect.CodeGen.Nondet.pushWithUpAT`).
 upPush :: forall m. Monad m => AlgTrans '[UpOp (ListT m), UpOp []] '[UpOp m] '[PushT] (MonadDown m)
 upPush = AlgTrans $ \oalg -> \case
   (prj -> Just (Alg (UpOp o k))) -> bwd upIso (upPushAlg oalg) (Alg (UpOp o k))
   (prj -> Just (Alg (UpOp o k))) -> bwd upIso (upListPushAlg oalg) (Alg (UpOp o k))
 
+-- | The up-operation for the resumption monad transformer. The situation is similar to 
+-- that of `ListT` and `PushT`. The meta-level correspondent of the resumption monad `ResT`
+-- has to be `ResUpT` a restricted Church-encoded version of the resumption monad. 
+-- Moreover, we also need a meta-level version @l@ of the object-level step functor @s@.
 upResAlg :: forall m n s l a. 
-            ( Monad n, Monad m, Functor s, Functor l, n $~> m,
-              forall x. Split (s x) (l (Up x)) )
+            ( Monad n, Monad m, n $~> m,
+              Functor s, Functor l, forall x. Split (s x) (l (Up x)) )
          => Algebra '[UpOp m, CodeGen] n 
          -> Up (ResT s m a) -> ResUpT l n (Up a)
 upResAlg oalg cr = ResUpT $ \k1 k2 -> upMN 
@@ -184,22 +255,23 @@ upResAlg oalg cr = ResUpT $ \k1 k2 -> upMN
     upSL :: forall x. Up (s x) -> n (l (Up x))
     upSL = liftGenA oalg . genSplit
 
+-- | Algebra transformer for upping @ResT s m a@.
 upRes :: forall m s l. (Monad m, Functor s, Functor l, forall x. Split (s x) (l (Up x)))
       => AlgTrans '[UpOp (ResT s m)] '[UpOp m, CodeGen] '[ResUpT l] (MonadDown m)
 upRes = algTrans1 (\oalg -> bwd upIso (upResAlg oalg))
 
-
 -- * Resetting code generation
 
 -- | @`down` :: n (Up x) -> Up (m x)@ is not an operation but a co-operation for @n@,
--- so we can't have syntactic down-operations in effectful programs, but we can
+-- so we can't have syntactic down-operations in effectful meta-programs, but we can
 -- have the following `reset` operation that is handled to `up . down` by `resetAT`.
 -- This effectively merges different branches of code generation and thus is useful 
 -- for keeping code size under control.
--- The module "Control.Effect.CodeGen.Merge" serves for the same purpose but generates
+-- The module "Control.Effect.CodeGen.Join" serves for the same purpose but generates
 -- more compact code (at the cost of being much more complex); see Section 3.5 of Andras'
 -- paper (where the operation is called @join@).
 
+-- | Signature functor for the reset operation
 data Reset (f :: * -> *) x where
   Reset :: forall y x f. f (Up y) -> (Up y -> x)  -> Reset f x
 
@@ -209,10 +281,12 @@ instance Functor (Reset f) where
 instance HFunctor Reset where
   hmap f (Reset o k) = Reset (f o) k 
 
+-- | Reset code generation.
 reset :: forall x sig. Member Reset sig 
       => Prog sig (Up x) -> Prog sig (Up x)
 reset p = call' (Reset p id)
 
+-- | Resetting is interpreted as @up@ followed by @down@.
 resetAT :: forall m. AlgTrans '[Reset] '[UpOp m] '[] (MonadDown m)
 resetAT = algTrans1 $ \(oalg :: Algebra '[UpOp m] n) (Reset p k) -> 
   upM' oalg (down @n @m p) k
@@ -223,30 +297,67 @@ resetAT' = algTrans1 $ \(oalg :: Algebra '[UpOp m, CodeGen] n) (Reset p k) ->
   do c <- genLetM oalg (down @n @m p) 
      upM' oalg c k
 
--- * Free Up monad transformer
+-- * FreeUp monad transformer
+--
+-- We have seen above that upping `ListT` and `ResT` is quite non-trivial and there is
+-- in fact a simpler solution. Note that t`UpOp` is an /algebraic/ operation, so we
+-- freely adjoin it with any monads using the resumption monad transformer.
+-- This gives us the `FreeUpT m` monad transformer below. For every monad @n@, the 
+-- monad @FreeUpT m n@ supports the operation @UpOp m@, and as usual every algebra 
+-- operation on @n@ can be forwarded to @FreeUpT m n@. 
+--
+-- However, the downside of this approach is that the scoped operations on @n@
+-- can never be meaningfully forwarded to @FreeUpT m n@, because elements of
+-- @FreeUpT m n@ are interleaved @n@-computations and @m@-code, and scoped
+-- operations on @n@ at the meta-level of course don't know how to deal with 
+-- object-level @m@-code. 
+-- An imperfect fix is that if we have the code of an object-level scoped operation
+-- @sig (m x) -> m x@, we can define a meta-level operation of type
+--
+-- > sig (FreeUp m (Up x)) -> FreeUp m (Up x)
+--
+-- by first downing the arguments to the object level and invoke the object-level 
+-- scoped operation, and then up result back. This is not ideal because we have missed
+-- the opportunity of optimising scoped operation by staging, and also at the meta-level
+-- we don't have really scoped operations @sig (FreeUp m n x) -> FreeUp m n x@ but 
+-- only operations @sig (FreeUp m (Up x)) -> FreeUp m (Up x)@.
 
--- | @FreeUpT m n@ is the monad of interleaving the monad @n@ with object-level @m@-operations.
-type FreeUpT m = ResT (UpOp_ m)
+-- | @FreeUpT m n@ is the monad of interleaving the monad @n@ with object-level @m@-programs.
+newtype FreeUpT m n a = FreeUpT { unFreeUpT :: ResT (UpOp_ m) n a }
+  deriving (Functor, Monad, Applicative)
+
+instance (Functor n, Monad m, n $~>> m) => FreeUpT m n $~>> m where
+  downTail (FreeUpT (ResT n)) = downTail $ n <&> \case
+    Left (Left a)    -> Left a
+    Left (Right b)   -> Right b
+    Right (UpOp c k) -> Right [|| do a <- $$c; $$(downTail (FreeUpT (k [|| a ||]))) ||]
 
 instance (Functor n, Monad m, n $~>> m) => FreeUpT m n $~> m where
-  down (ResT n) = downTail n' where
-    n' = n <&> \case
-           Left a           -> Left a
-           Right (UpOp c k) -> Right [|| do a <- $$c; $$(down (k [|| a ||])) ||]
+  down = downTail . fmap Left
 
+-- | Algebra of the up-operation on @FreeUpT m@.
 upFreeAlg :: Monad n => Up (m x) -> FreeUpT m n (Up x)
-upFreeAlg m = ResT (return (Right (UpOp m return))) 
+upFreeAlg m = FreeUpT $ ResT (return (Right (UpOp m return))) 
 
+-- | Algebra transformer for the up-operation on @FreeUpT@.
 upFree :: forall m. AlgTrans '[UpOp m] '[] '[FreeUpT m] Monad
 upFree = algTrans1 $ \_ -> Iso.bwd upIso upFreeAlg
 
-freeUpScp :: forall m n metasig objsig. 
-             (Monad n, FreeUpT m n $~> m, Functor metasig, metasig $~> objsig) 
-          => (forall x. Up (objsig (m x) -> m x))
-          -> (forall x. metasig (FreeUpT m n (Up x)) -> FreeUpT m n (Up x))
-freeUpScp objalg o =
-  let objop = down @metasig @objsig (fmap (down @(FreeUpT m n) @m) o) 
+-- | Operations on @FreeUpT m n@ obtained from object-level operations on @m@.
+freeUpOpAlg :: forall m n meff oeff. 
+               (Monad n, meff (FreeUpT m n) $~> oeff m) 
+            => (forall x. Up (oeff m x -> m x))
+            -> (forall x. meff (FreeUpT m n) (Up x) -> FreeUpT m n (Up x))
+freeUpOpAlg objalg op = 
+  let objop = down @(meff (FreeUpT m n)) @(oeff m) op
   in upFreeAlg [|| $$objalg $$objop ||]
+
+-- | `freeUpOpAlg` specialised for scoped operations.
+freeUpScpAlg :: forall m n metasig objsig. 
+                (Monad n, FreeUpT m n $~> m, Functor metasig, metasig $~> objsig) 
+             => (forall x. Up (Scp objsig m x -> m x))
+             -> (forall x. Scp metasig (FreeUpT m n) (Up x) -> FreeUpT m n (Up x))
+freeUpScpAlg objalg op = freeUpOpAlg objalg op
 
 -- * Caching the last Up-operations at tail positions
 
@@ -292,6 +403,12 @@ upCache = algTrans1 $ \oalg -> \case
   Alg (UpOp_ p k) -> CacheT (upM oalg p >>= return . Mis . k)
 
 instance (Functor n, Monad m, n $~>> m) => CacheT m n $~> m where
-  down (CacheT n) = downTail $
-    n <&> \case Mis a    -> Left a
-                Hit c _  -> Right c
+  down (CacheT n) = downTail $ n <&> \case
+    Mis a    -> Left a
+    Hit c _  -> Right c
+
+instance (Functor n, Monad n, Monad m, n $~>> m) => CacheT m n $~>> m where
+  downTail (CacheT n) = downTail $ n <&> \case 
+    Mis (Left a)  -> Left a
+    Mis (Right b) -> Right b
+    -- Hit is impossible here

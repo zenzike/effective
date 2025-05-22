@@ -89,21 +89,21 @@ catchProgram2 n = $$(stage
 -- foldr (\ a_a56k ms_a56l -> (a_a56k : ms_a56l)) [] as_a4qa
 listExample :: [a] -> [a]
 listExample as = $$(stage 
-  (pushUpAT @Identity)
+  (pushWithUpAT @Identity)
   (up [||as||]))
 
 -- Generated code: as_a4XQ
 listExample' :: [a] -> [a]
 listExample' as = $$(downJoin $ 
   evalGen 
-  (pushUpAT @Identity)
+  (pushWithUpAT @Identity)
   (return [||as||]))
 
 
 -- foldr (\ a_a57X ms_a57Y -> ((a_a57X + 1) : ms_a57Y)) [] as_a4qu
 listExample2 :: [Int] -> [Int]
 listExample2 as = $$(stage
-  (pushUpAT @Identity) 
+  (pushWithUpAT @Identity) 
   do i <- up [||as||]
      return ([||$$i + 1||]))
 
@@ -116,7 +116,7 @@ listExample2 as = $$(stage
       [] as_a1BF
 -}
 listExample3 :: [Int] -> [Int]
-listExample3 as = $$(stage (pushUpAT @Identity) $ 
+listExample3 as = $$(stage (pushWithUpAT @Identity) $ 
   do i <- up [||as||]
      j <- up [||as||]
      return ([||$$i + $$j||]))
@@ -131,37 +131,67 @@ listExample3 as = $$(stage (pushUpAT @Identity) $
       [] as_a5Y5
 -}
 listExample4 :: (Int -> Int) -> (Int -> Int) -> [Int] -> [Int]
-listExample4 f g as = $$(stage (pushUpAT @Identity) $ 
+listExample4 f g as = $$(stage (pushWithUpAT @Identity) $ 
   do i <- fmap (\i -> [|| f $$i ||]) (up [||as||])
      j <- fmap (\i -> [|| g $$i ||]) (up [||as||])
      return ([||$$i + $$j||]))
      
 
 {-
-Generated code (manually reformatted -- the indentation may be broken):
+ListT (StateT (\ s_afv1
+        -> case runIdentity (runStateT
+                    (let cons_afv3 a_afv4 ms_afv5
+                         = StateT
+                             (\ s_afv6 -> runStateT
+                                     (let cons_afv8 a_afv9 ms_afva
+                                          = StateT
+                                              (\ s_afvb
+                                                 -> case
+                                                        runIdentity
+                                                          (runStateT ms_afva (a_afv4 * a_afv9))
+                                                    of
+                                                      (a_afvc, b_afvd)
+                                                        -> Identity
+                                                             (runListT
+                                                                (return
+                                                                   ((s_afv1 + a_afv4) + a_afv9)
+                                                                   <|> ListT a_afvc), 
+                                                              b_afvd))
+                                        nil_afv7 = StateT (\ s_afve -> runStateT ms_afv5 s_afve)
+                                      in foldListT cons_afv8 nil_afv7 as_aa1R)
+                                     s_afv6)
+                       nil_afv2 = StateT (\ s_afvf -> Identity (return Nothing, s_afvf))
+                     in foldListT cons_afv3 nil_afv2 as_aa1R)
+                    s_afv1)
+           of
+             (a_afvg, b_afvh) -> runStateT a_afvg b_afvh))
 
-ListT (StateT (\ s_a62N -> Identity (
-  let x_a62O = runIdentity (runStateT (
-    let cons_a62Q = \ a_a62R ms_a62S ->
-        StateT (\ s_a62T -> Identity
-          (let x_a62U = runIdentity (runStateT 
-            (let cons_a62W = \ a_a62X ms_a62Y -> StateT (\ s_a62Z -> 
-                Identity (let x_a630 = runIdentity (runStateT ms_a62Y (a_a62R * a_a62X))
-                          in case x_a630 of
-                            (a_a631, b_a632) -> (Just (((s_a62N + a_a62R) + a_a62X), ListT (return a_a631)), b_a632)))
-                  nil_a62V = StateT (\ s_a633 -> Identity 
-                    (let x_a634 = runIdentity (runStateT ms_a62S s_a633)
-                    in case x_a634 of 
-                      (a_a635, b_a636) -> (a_a635, b_a636)))
-            in foldListT cons_a62W nil_a62V as_a5jb) s_a62T)
-          in case x_a62U of (a_a637, b_a638) -> (a_a637, b_a638)))
-          nil_a62P = StateT (\ s_a639 -> Identity (Nothing, s_a639))
-      in foldListT cons_a62Q nil_a62P as_a5jb) s_a62N)
-  in case x_a62O of (a_a63a, b_a63b) -> (a_a63a, b_a63b))))
+
+ListT (StateT (\ s_a9g9 ->
+  let x_a9ga =
+    let cons_a9gc a_a9gd ms_a9ge
+          = StateT (\ s_a9gf
+                -> let x_a9gg
+                        = let cons_a9gi a_a9gj ms_a9gk
+                              = StateT (\ s_a9gl
+                                    -> case runIdentity (runStateT ms_a9gk (a_a9gd * a_a9gj))
+                                        of (a_a9gm, b_a9gn) -> Identity
+                                                (runListT
+                                                    (return ((s_a9g9 + a_a9gd) + a_a9gj) <|> ListT a_a9gm), 
+                                                  b_a9gn))
+                            nil_a9gh = StateT (\ s_a9go -> runStateT ms_a9ge s_a9go)
+                          in foldListT cons_a9gi nil_a9gh as_a25U
+                    in runStateT x_a9gg s_a9gf)
+        nil_a9gb = StateT (\ s_a9gp -> Identity (return Nothing, s_a9gp))
+     in foldListT cons_a9gc nil_a9gb as_a25U
+  in case runIdentity (runStateT x_a9ga s_a9g9) of
+     (a_a9gq, b_a9gr) -> runStateT a_a9gq b_a9gr))
 -}
 listExample5 :: ListT (StateT Int Identity) Int -> ListT (StateT Int Identity) Int
 listExample5 as = $$(stage 
-  (pushUpAT @(StateT Int Identity) 
+  (upCache @(ListT (StateT Int Identity))
+  `fuseAT` pushWithUpAT @(StateT Int Identity) 
+  `fuseAT` upCache @(StateT Int Identity)
   `fuseAT` upState @Int @Identity
   `fuseAT` stateAT @(Up Int)) $ 
   do s <- get
@@ -185,7 +215,7 @@ listExample5 as = $$(stage
               Nothing))
 -}
 choice :: Int -> ListT Identity Int
-choice n = $$(stage (pushUpAT @Identity) $
+choice n = $$(stage (pushWithUpAT @Identity) $
   choiceGen [||n||] [|| choice ||])
 
 {-
@@ -198,7 +228,7 @@ choice n = $$(stage (pushUpAT @Identity) $
         []
 -}
 choice' :: Int -> [Int]
-choice' n = $$(stage (pushUpAT @Identity) $
+choice' n = $$(stage (pushWithUpAT @Identity) $
   choiceGen [||n||] [|| choice' ||])
 
 
@@ -220,7 +250,7 @@ choice' n = $$(stage (pushUpAT @Identity) $
 -}
 choiceST :: Int -> StateT Int (ListT Identity) Int
 choiceST n = $$(stage
-  (stateAT @(Up Int) `fuseAT` pushUpAT @Identity)
+  (stateAT @(Up Int) `fuseAT` pushWithUpAT @Identity)
   (choiceGen [||n||] [|| choice ||]))
 
 {-
@@ -485,7 +515,7 @@ joinEx3 b = $$(down $ evalTr'
   (letPut @Int 
   `fuseAT'` stateAT @(Up Int)
   `fuseAT'` caseATSameC' (joinPush @(MaybeT Identity)) 
-                         (weakenOEffs pushUpAT)
+                         (weakenOEffs pushWithUpAT)
   `fuseAT'` upMaybe @Identity
   `fuseAT'` (hideAT @'[Mb.Catch] Mb.exceptAT)
   `fuseAT'` asAT genAlg)
@@ -519,7 +549,7 @@ joinEx4 b = $$(down $ evalTr'
   (letPut @Int 
   `fuseAT'` stateAT @(Up Int)
   `fuseAT'` caseATSameC' (joinPush @(MaybeT Identity)) 
-                         (weakenOEffs pushUpAT)
+                         (weakenOEffs pushWithUpAT)
   `fuseAT'` upCache @(MaybeT Identity)
   `fuseAT'` upMaybe @Identity
   `fuseAT'` (hideAT @'[Mb.Catch] Mb.exceptAT)
