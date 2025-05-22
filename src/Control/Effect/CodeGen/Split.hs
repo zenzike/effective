@@ -1,3 +1,15 @@
+{-|
+Module      : Control.Effect.CodeGen.Split
+Description : Generate case splits of object-level values
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+
+This module contains a typeclass `Split a b` with a member function  
+@`genSplit :: Up a -> Gen b`@ for generating a case split of the object
+level @a@-value and resulting in a @b@-value at meta-level in the 
+code-generation monad.
+-}
 {-# LANGUAGE FunctionalDependencies, BlockArguments, TemplateHaskell #-}
 module Control.Effect.CodeGen.Split where
 
@@ -13,14 +25,26 @@ import Control.Effect
 class Split a b | a -> b, b -> a where
   genSplit :: Up a -> Gen b
 
+-- | Split operation for meta-programs.
 split :: (Member CodeGen sig, Split a b) => Up a -> Prog sig b 
 split = liftGen . genSplit
 
+-- | With the extension LambdaCase, a useful pattern in meta-programs is
+--
+-- > genCase a $ \case
+-- >   P1 -> ...
+-- >   P2 -> ...
+-- 
+-- where @a :: Up a@ is a piece of code that splittable.
 genCase :: (Member CodeGen sig, Split a b) => Up a -> (b -> Prog sig c) -> Prog sig c
 genCase ua k = split ua >>= k 
 
 instance Split Bool Bool where 
   genSplit cb = Gen \k -> [|| if $$cb then $$(k True) else $$(k False) ||]
+
+-- | Meta-level if-then-else.
+genIf :: (Member CodeGen sig) => Up Bool -> Prog sig c -> Prog sig c -> Prog sig c
+genIf uc t e = genCase uc (\b -> if b then t else e)
 
 instance Split (a,b) (Up a, Up b) where
   genSplit cab = Gen \k -> [|| case $$cab of (a, b) -> $$(k ([||a||], [||b||])) ||]

@@ -1,10 +1,19 @@
+{-|
+Module      : Control.Effect.CodeGen.Up
+Description : Reflecting object-level programs to the meta level.
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+-}
 {-# LANGUAGE TemplateHaskell, LambdaCase, UndecidableInstances, TypeFamilies #-}
 {-# LANGUAGE ViewPatterns, PatternSynonyms, QuantifiedConstraints #-}
 module Control.Effect.CodeGen.Up where
 
 import Control.Effect
+import Control.Effect.Internal.AlgTrans.Type
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
+import Control.Effect.Family.Distributive
 import Control.Effect.CodeGen.Type
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Gen
@@ -42,7 +51,6 @@ import Control.Monad.Trans.Class
 -- generated from a meta-program). When writing the /meta-program/ that generates
 -- @p@, we need a way to call the object-level @q@, and this is where an 
 -- up-operation is needed.
-
 type UpOp :: (* -> *) -> Effect
 type UpOp m = Alg (UpOp_ m)
 
@@ -324,7 +332,7 @@ resetAT' = algTrans1 $ \(oalg :: Algebra '[UpOp m, CodeGen] n) (Reset p k) ->
 
 -- | @FreeUpT m n@ is the monad of interleaving the monad @n@ with object-level @m@-programs.
 newtype FreeUpT m n a = FreeUpT { unFreeUpT :: ResT (UpOp_ m) n a }
-  deriving (Functor, Monad, Applicative)
+  deriving (Functor, Monad, Applicative, MonadTrans)
 
 instance (Functor n, Monad m, n $~>> m) => FreeUpT m n $~>> m where
   downTail (FreeUpT (ResT n)) = downTail $ n <&> \case
@@ -360,13 +368,44 @@ freeUpScpAlg :: forall m n metasig objsig.
 freeUpScpAlg objalg op = freeUpOpAlg objalg op
 
 -- * Caching the last Up-operations at tail positions
+--
+-- As discussed in the documentation for `($~>>)`, we want to avoid generating unnecessary
+-- eta-expansion caused by @down . up@ at tail positions. The class `($~>>)` provided the
+-- function @`downTail` :: n (Either (Up x) (Up (m x))) -> Up (m x)@ to achieve this
+-- but with just this we need to manually modify our meta-program to change tail @up m@
+-- to @return (Right m)@ and all other ordinary returns to @return . Left@. 
+--
+-- This is of course not ideal, and here we solve this problem by introducing an algebra
+-- transformer `upCache` that automatically caches the up-operations at tail positions
+-- and invokes @downTail@ automatically. In this way, the meta-programs don't need to be
+-- modified at all while obtaining the desired generated code.
 
+-- | The monad @CacheT m n@ is basically the same as @n a@, except that @CacheT m n@ may
+-- internally remember that some computations come from upping a piece of @m@-code (so that
+-- later downing @CacheT m n@ can directly use that piece of code). 
+newtype CacheT m n a = CacheT { unCacheT :: n (CacheS m n a) }
+
+-- | The constructor `Hit` means that it is a computation @n (Up a)@ coming from upping
+-- a piece of code @Up (m a)@. The reason that we store both @Up (m a)@ and @n (Up a)@
+-- is that we are only interested in caching up-operations in tail positions, so when an 
+-- an up-operation is no longer at the tail position after a @(>>=)@, we want to turn 
+-- it back into a normal @n@-computation.
 data CacheS m n a where
   Hit :: Up (m a) -> n (Up a) -> CacheS m n (Up a)
   Mis :: a -> CacheS m n a
 
-newtype CacheT m n a = CacheT { unCacheT :: n (CacheS m n a) }
+-- | The up-operation on @CacheT m n@ remembers the original @m@-program. 
+-- Note that we are only interested in remembering `UpOpId`. If there is a
+-- continuation after the up, even if a pure continuation, it's better 
+-- to do a real up.
+upCache :: forall m . AlgTrans '[UpOp m] '[UpOp m] '[CacheT m] Monad
+upCache = algTrans1 $ \oalg -> \case
+  Alg (UpOpId p)  -> CacheT (return (Hit p (upM oalg p)))
+  Alg (UpOp_ p k) -> CacheT (upM oalg p >>= return . Mis . k)
 
+-- | We can convert between `CacheT m n a` and `n a` by forgetting the cached up-operations.
+-- This is of course not really an isomorphism but here we borrow `Iso` to organise the code
+-- more cleanly.
 cacheConversion :: forall m n a. Monad n => Iso (CacheT m n a) (n a)
 cacheConversion = Iso forget embed where
   forget :: CacheT m n a -> n a
@@ -386,21 +425,28 @@ instance Monad n => Applicative (CacheT m n) where
 
 instance Monad n => Monad (CacheT m n) where
   return = pure 
-  CacheT n >>= k = CacheT $ 
+
+  -- | We are only interested in caching up-operations at tail positions, so after
+  -- a bind `Hit` becomes `Mis`.
+  CacheT n >>= k = CacheT $
     n >>= \case
       Mis a     -> unCacheT (k a)
-      Hit _ n'  -> n' >>= unCacheT . k 
+      Hit _ n'  -> n' >>= unCacheT . k
 
 instance MonadTrans (CacheT m) where
   lift = Iso.bwd cacheConversion
 
 instance Functor sig => Forward (Scp sig) (CacheT m) where
   fwd alg op = Iso.bwd cacheConversion (alg (hmap (Iso.fwd cacheConversion) op)) 
+  -- Note that the following is wrong
+  --
+  -- > fwd alg (Scp op) = CacheT (alg (Scp (fmap unCacheT op)))
+  --
+  -- because the scoped operation is only applied to the @n@ part while semantically
+  -- it should apply to both the @n@-part and also the cached computation. 
 
-upCache :: forall m . AlgTrans '[UpOp m] '[UpOp m] '[CacheT m] Monad
-upCache = algTrans1 $ \oalg -> \case
-  Alg (UpOpId p)  -> CacheT (return (Hit p (upM oalg p)))
-  Alg (UpOp_ p k) -> CacheT (upM oalg p >>= return . Mis . k)
+instance Functor sig => Forward (Distr sig) (CacheT m) where
+  fwd alg op = Iso.bwd cacheConversion (alg (hmap (Iso.fwd cacheConversion) op)) 
 
 instance (Functor n, Monad m, n $~>> m) => CacheT m n $~> m where
   down (CacheT n) = downTail $ n <&> \case
