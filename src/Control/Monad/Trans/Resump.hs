@@ -17,10 +17,10 @@ and @s@-computations. The datatype @ResT s m@ has universal properties:
   @m@ and the @Free s@ in the category of monads, evidenced by `elimRes` below.
 
   3. In the Kleisli category @Kl(m)@ of the monad @m@, the object @ResT s m a@ carries
-  an initial algebra for the functor @x ↦ a + F_m (s (U_m x))@, where 
+  a /weak/ initial algebra for the functor @x ↦ a + F_m (s (U_m x))@, where 
   @F_m ⊣ U_m : Kl(m) -> Type@ is the Kleisli adjunction for the monad @m@. This
   is evidenced by `foldRes` below. (More generally, for every functor @s@ over
-  @Type@, the datatype @μ x. m (s x)@ carries an initial algebra for the functor
+  @Type@, the datatype @μ x. m (s x)@ carries a weak initial algebra for the functor
   @F_m . s . U_m : Kl(m) -> Kl(m)@ over the Kleisli category.)
 -}
 module Control.Monad.Trans.Resump (
@@ -95,7 +95,7 @@ elimRes l r res =
 -- which sends every object @x@ to @a + s (m x)@ and every arrow @f : x -> m y@
 -- to @return . (either id (fmap @s ((>>=) f))) : a + (s (m x)) -> m (a + s (m y))@.
 --
--- The datatype @ResT (s m a)@ carries an initial algebra of this functor.
+-- The datatype @ResT (s m a)@ carries a weak initial algebra of this functor.
 
 -- | The algebra of @ResT s m a@ in the Kleisli category said above.
 resAlg :: (Functor s, Monad m) => Either a (s (m (ResT s m a))) -> m (ResT s m a)
@@ -103,7 +103,16 @@ resAlg (Left a)  = return (return a)
 resAlg (Right b) = (return . resOp . fmap (ResT . join . fmap unResT)) b
 
 -- | The fold in the Kleisli category evidencing the initiality of @resAlg@.
-foldRes :: (Functor s, Monad m) => (a -> m t) -> (s (m t) -> m t) -> ResT s m a -> m t
+-- The resulting morphism @ResT s m a -> m t@ is an algebra homomorphism in the Kleisli
+-- category but it may not be the unique one. In particular, 
+--
+-- > foldRes (resAlg . Left) (resAlg . Right) :: ResT s m a -> m (ResT s m a)
+--
+-- is not the identity homomorphism in @Kl(m)@. To see this, we notice that 
+-- the morphism above  \'forces\' the outermost layer of @m@ of the supplied
+-- @ResT s m a@, while the identity homomorphism is just a 
+-- @return :: ResT s m a -> m (ResT s m a)@.
+foldRes :: (Functor s, Monad m) => (a -> m t) -> (s (m t) -> m t) -> (ResT s m a -> m t)
 foldRes ret salg r = 
   do e <- unResT r
      case e of
