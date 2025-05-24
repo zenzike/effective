@@ -28,7 +28,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.List
 import Control.Monad.Trans.Resump
-import Control.Monad.Trans.ResUp
+import Control.Monad.Trans.ResumpUp
 import Control.Monad.Trans.CRes 
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.Push

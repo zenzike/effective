@@ -20,7 +20,7 @@ import Control.Effect.CodeGen.Gen
 import Control.Effect.CodeGen.Down
 import Control.Monad.Trans.Push as P
 import Control.Monad.Trans.List
-import Control.Monad.Trans.ResUp
+import Control.Monad.Trans.ResumpUp
 
 import Data.Iso as Iso
 import Data.HFunctor

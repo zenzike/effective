@@ -27,7 +27,7 @@ import qualified Control.Monad.Trans.State.Lazy as L
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Push
-import Control.Monad.Trans.ResUp
+import Control.Monad.Trans.ResumpUp
 
 data JoinFlow (f :: * -> *) x where
   JoinFlow :: forall y x f. IsSOP y => f y -> (y -> x)  -> JoinFlow f x

@@ -1,3 +1,14 @@
+{-|
+Module      : Control.Monad.Trans.YRes
+Description : Resumption monad transformer for yield-based coroutine
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+
+This module contains a special case of the resumption monad from "Control.Monad.Trans.CRes"
+with the step functor being @x ↦  a × (b -> x)@ for types @a@ and @b@. This
+is used for modelling yield-based coroutines.
+-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}

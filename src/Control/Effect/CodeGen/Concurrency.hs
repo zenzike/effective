@@ -40,7 +40,7 @@ import Control.Effect.Nondet
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.CRes
 import Control.Monad.Trans.YRes
-import Control.Monad.Trans.ResUp as RUp
+import Control.Monad.Trans.ResumpUp as RUp
 
 import Data.HFunctor
 import Data.Iso
@@ -95,5 +95,5 @@ yResUpAT :: forall m a b . (Monad m)
                       (MonadDown m)
 yResUpAT = AlgTrans $ \oalg -> \case
   (prj -> Just (Alg (UpOp o k)))       -> bwd upIso (upResAlg oalg) (Alg (UpOp o k))
-  (prj -> Just (Alg (Yield a p)))      -> yieldUp a (return . p)
-  (prj -> Just (Scp (MapYield f g p))) -> mapYieldUp f g p
+  (prj -> Just (Alg (Yield a p)))      -> RUp.yield a (return . p)
+  (prj -> Just (Scp (MapYield f g p))) -> RUp.mapYield f g p

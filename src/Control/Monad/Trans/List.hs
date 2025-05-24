@@ -1,3 +1,12 @@
+{-|
+Module      : Control.Monad.Trans.List
+Description : List monad transformer
+License     : BSD-3-Clause
+Maintainer  : Nicolas Wu, Zhixuan Yang
+Stability   : stable
+
+This module contains the list monad transformer for modelling search-based nondeterminism.
+-}
 module Control.Monad.Trans.List where
 
 import Data.HFunctor ( HFunctor(..) )
@@ -6,9 +15,12 @@ import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
 import Control.Monad.Trans.Class ( MonadTrans(..) )
 
+-- | An element of @ListT m a@ is an interleaving of @m@-actions and @a@-values, ending
+-- with a nil represented by @Left@. 
 newtype ListT m a = ListT { runListT :: m (Maybe (a, ListT m a)) }
   deriving Functor
 
+-- | Exhaust all the @a@-values in a @ListT@ and perform the @m@-actions along the way. 
 {-# INLINE runListT' #-}
 runListT' :: Monad m => ListT m a -> m [a]
 runListT' (ListT mmxs) =
@@ -22,7 +34,7 @@ instance HFunctor ListT where
   hmap :: (Functor f, Functor g) => (forall x1. f x1 -> g x1) -> ListT f x -> ListT g x
   hmap h (ListT mx) = ListT (fmap (fmap (fmap (hmap h))) (h mx))
 
-{-# INLINE foldListT #-}
+-- | Fold a `ListT` like `foldr`.
 foldListT :: Monad m => (a -> m b -> m b) -> m b -> ListT m a -> m b
 foldListT f k tmxs = go tmxs where
   go (ListT mxs) = mxs >>= maybe k (\(x,xs) -> f x (go xs))

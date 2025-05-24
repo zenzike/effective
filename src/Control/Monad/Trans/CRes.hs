@@ -1,3 +1,14 @@
+{-|
+Module      : Control.Monad.Trans.CRes
+Description : Resumption monad transformer for concurrency
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+
+This module contains a special case of the resumption monad from "Control.Monad.Trans.CRes"
+with the step functor being @x ↦ 1 + (x × x) + (a × x)@ for a type @a@ of actions. This
+is used for modelling concurrency.
+-}
 module Control.Monad.Trans.CRes (
   module Control.Monad.Trans.CRes,
   module Control.Monad.Trans.Resump
@@ -113,18 +124,23 @@ instance Monad m => MonadPlus (CResT a m) where
 (<|>:) :: Monad m => CResT a m x -> CResT a m x -> m (Either x (CStep a (CResT a m x)))
 x <|>: y = unResT (x <|> y)
 
+-- Perform an action @a@ and then continue as the given process.
 prefix :: Monad m => a -> CResT a m x -> CResT a m x
 prefix a m = ResT $ prefix' a m
 
+-- Perform an action @a@ and then continue as the given process.
 prefix' :: Monad m => a -> CResT a m x -> m (Either x (CStep a (CResT a m x)))
 prefix' a m = return (Right (ActS a m))
 
+-- A failed nondeterministic branch.
 fail :: Monad m => CResT a m x
 fail = ResT fail'
 
+-- A failed nondeterministic branch.
 fail' :: Monad m => m (Either x (CStep a (CResT a m x)))
 fail' = return (Right FailS)
 
+-- Finish a process with the given @a@.
 done' :: Monad m => a -> m (Either a b)
 done' x = return (Left x)
 

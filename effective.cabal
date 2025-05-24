@@ -72,7 +72,7 @@ library
     Control.Monad.Trans.Resump
     Control.Monad.Trans.CRes
     Control.Monad.Trans.YRes
-    Control.Monad.Trans.ResUp
+    Control.Monad.Trans.ResumpUp
     Control.Monad.Trans.Compose
     Control.Monad.Trans.Push
     Data.CutList
