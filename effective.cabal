@@ -61,7 +61,7 @@ library
     Control.Effect.CodeGen.Split
     Control.Effect.CodeGen.Gen
     Control.Effect.CodeGen.Eval
-    Control.Effect.CodeGen.Join
+    Control.Effect.CodeGen.JoinFlow
     Control.Effect.CodeGen.SoPU
     Control.Effect.CodeGen.Nondet
     Control.Effect.CodeGen.Concurrency

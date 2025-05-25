@@ -2,7 +2,7 @@
 Module      : Control.Effect.CodeGen.SoPU
 Description : Sum of products of Up-types
 License     : MIT
-Maintainer  : András Kovács
+Author      : András Kovács
 Stability   : experimental
 
 This file is András Kovács's implementation for sum of products of Up-types,

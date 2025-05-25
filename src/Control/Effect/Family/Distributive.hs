@@ -23,6 +23,7 @@ studied in theoretical computer science (distributive laws between
 around the powerset functor and probabilistic distribution monad are especially
 important in the study of (nondeterministic/probabilistic) automata theory.)
 -}
+{-# LANGUAGE  TypeFamilies  #-}
 
 module Control.Effect.Family.Distributive where
 
@@ -30,12 +31,14 @@ import Data.Kind ( Type )
 import Data.HFunctor
 import Data.Iso
 import Control.Effect
+import Control.Effect.Internal.AlgTrans.Type
 
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Identity
 
+-- | Signature (higher-order) functor for distributive operations.
 data Distr (r :: Type -> Type) (f :: Type -> Type) a where
   Distr :: r (f b) -> (r b -> a) -> Distr r f a
 
@@ -44,7 +47,6 @@ data Distr (r :: Type -> Type) (f :: Type -> Type) a where
 -- and produces an @f@-computation of @a@. These operations are in bijection
 -- with distributive laws `forall a. r (f a) -> f (r a)`, exhibited by the
 -- functions @distrOp@ and @opDistr@.
-
 distrIso :: forall f r. Functor f => Iso (forall a. Distr r f a -> f a) (forall a. r (f a) -> f (r a))
 distrIso = Iso fwd bwd where
   fwd :: (forall a. Distr r f a -> f a) -> (forall a. r (f a) -> f (r a))
@@ -58,6 +60,10 @@ instance Functor r => Functor (Distr r f) where
 
 instance Functor r => HFunctor (Distr r) where
   hmap h (Distr p c) = Distr (fmap h p) c
+
+instance Functor r => Forward (Distr r) IdentityT where
+  type FwdConstraint (Distr r) IdentityT = TruthC
+  fwd oalg (Distr p c) = IdentityT $ oalg (Distr (fmap runIdentityT p) c)
 
 instance Traversable r => Forward (Distr r) MaybeT where
   -- | We actually only need `sequenceA` between `r` and `Maybe`.

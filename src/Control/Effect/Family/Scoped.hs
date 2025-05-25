@@ -4,8 +4,22 @@ Description : The scoped effect family
 License     : BSD-3-Clause
 Maintainer  : Nicolas Wu
 Stability   : experimental
--}
 
+A scoped operation of signature @sig :: Type -> Type@ on a monad @m@ is a
+function @s :: forall x. sig (m x) -> m x@. Unlike \'algebraic operations\'
+defined in "Control.Effect.Family.Algebraic", scoped operations don't need
+to satisfy the equation:
+
+> s x >>= k  ==  s (fmap (>>= k) x)
+
+so the operation @s@ intuitively delimits a boundary between its argument
+@x@ and the rest of the computation @k@. The effect of @s@ is applied only
+to its \'scope\' @x@. Important examples are scoped operations include
+
+1. exception catching @catch p q@,
+2. semi-deterministic operator @once@ in logic programming,
+3. parallel composition @p || q@ in concurrency.
+-}
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MonoLocalBinds #-}
@@ -29,28 +43,22 @@ import Control.Monad.Trans.List
 import Control.Monad.Trans.Resump
 import Control.Monad.Trans.Identity
 
--- A scoped operation has the following type:
---
--- > newtype Scp (sig :: Type -> Type)
--- >             (f :: Type -> Type)
--- >             k
--- >             = Scp (sig (f k))
---
--- We can optimise the constructor by using a Coyoneda representation so that
--- instead the constructor becomes:
---
--- > forall x y . Scp !(sig x) !(x -> f y) !(y -> k)
---
--- But this creates 2 additional fields, and `hmap` is not often used.
--- Benchmarks reveal that applying coyoneda only to the data yields
--- marginally less allocation and time.
-
 -- | The family of scoped operations. Forwarding scoped operations through a
 -- transformer must be given explicitly using the `Forward` class.
 newtype Scp (sig :: Type -> Type)
          (f :: Type -> Type)
          k
          = Scp (sig (f k))
+{-
+We can optimise the constructor @Scp@ by using a Coyoneda representation so that
+instead the constructor becomes:
+
+> forall x y . Scp !(sig x) !(x -> f y) !(y -> k)
+
+But this creates 2 additional fields, and `hmap` is not often used.
+Benchmarks reveal that applying coyoneda only to the data yields
+marginally less allocation and time.
+-}
 
 instance (Functor sig, Functor f) => Functor (Scp sig f) where
   {-# INLINE fmap #-}

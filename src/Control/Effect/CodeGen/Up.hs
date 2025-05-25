@@ -4,6 +4,21 @@ Description : Reflecting object-level programs to the meta level.
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
+
+For an object-level monad @m@ and a meta-level monad @n@, a function
+@forall x. Up (m x) -> n (Up x)@ is called an @m@-up operation on @n@.
+Such an operation serves the purpose of \'reflecting\' object-level program
+back into meta level. This is needed when we want to generate object-level
+programs that calls other object-level programs. 
+For example, suppose we want to generate the following function @q@:
+
+> p :: StateT Int Identity Int
+> p = do put 0; q; get
+
+where @q :: StateT Int Identity Int@ is some other program (possibly also
+generated from a meta-program). When writing the /meta-program/ that generates
+@p@, we need a way to call the object-level @q@, and this is where an 
+up-operation is needed.
 -}
 {-# LANGUAGE TemplateHaskell, LambdaCase, UndecidableInstances, TypeFamilies #-}
 {-# LANGUAGE ViewPatterns, PatternSynonyms, QuantifiedConstraints #-}
@@ -37,23 +52,14 @@ import Control.Monad.Trans.Class
 
 -- * Reflecting object-level programs to the meta level
 
--- | For an object-level monad @m@ and a meta-level monad @n@, a function
--- @forall x. Up (m x) -> n (Up x)@ is called an @m@-up operation on @n@.
--- Such an operation serves the purpose of \'reflecting\' object-level program
--- back into meta level. This is needed when we want to generate object-level
--- programs that calls other object-level programs. 
--- For example, suppose we want to generate the following function @q@:
---
--- > p :: StateT Int Identity Int
--- > p = do put 0; q; get
---
--- where @q :: StateT Int Identity Int@ is some other program (possibly also
--- generated from a meta-program). When writing the /meta-program/ that generates
--- @p@, we need a way to call the object-level @q@, and this is where an 
--- up-operation is needed.
+-- | An up-operation @Up (m a) -> n (Up a)@ on a monad @n@ is the same as 
+-- a function @forall x. exists. (Up (m a), Up a -> x) -> n x@, witnessed by `upIso`
+-- below. The type of the domain of this function doesn't mention @n@ at all, so this
+-- is an algebraic operation on @n@.
 type UpOp :: (* -> *) -> Effect
 type UpOp m = Alg (UpOp_ m)
 
+-- | The (first-order) signature functor for the (algebraic) operation @up@.
 data UpOp_ (m :: * -> *) (x :: *) where
   -- | Using left-Kan extension, functions @forall x. Up (m x) -> n (Up x)@
   -- are in bijection with @forall x. exists. (Up (m a), Up a -> x) -> n x@.
@@ -276,8 +282,7 @@ upRes = algTrans1 (\oalg -> bwd upIso (upResAlg oalg))
 -- This effectively merges different branches of code generation and thus is useful 
 -- for keeping code size under control.
 -- The module "Control.Effect.CodeGen.Join" serves for the same purpose but generates
--- more compact code (at the cost of being much more complex); see Section 3.5 of Andras'
--- paper (where the operation is called @join@).
+-- more compact code (at the cost of being much more complex).
 
 -- | Signature functor for the reset operation
 data Reset (f :: * -> *) x where
