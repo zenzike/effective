@@ -7,6 +7,7 @@ effects. This library incorporates support for:
 
 * Algebraic, scoped, and other higher-order effects.
 * Modular effect handlers.
+* Staged effectful programming via Template Haskell.
 
 
 README
