@@ -52,7 +52,7 @@ The `lookup` operation is created by the user simply by writing:
 ```haskell ignore
 data Lookup_ key val k = Lookup_ key (val -> k)
   deriving Functor
-$(makeAlg ''Lookup)
+$(makeAlg ''Lookup_)
 ```
 This has the effect of creating the following code:
 ```haskell
