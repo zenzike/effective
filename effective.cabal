@@ -33,6 +33,7 @@ library
   import: common
 
   exposed-modules:
+    Control.Effect.Plugin
     Control.Effect
 
     Control.Effect.Alternative
@@ -114,6 +115,7 @@ library
     ghc-prim           >= 0.8    && < 0.14,
     logict             >= 0.8.2  && < 0.9,
     template-haskell   >= 2.18   && < 2.24,
+    ghc
 
 test-suite readme
   type:          exitcode-stdio-1.0
@@ -158,7 +160,6 @@ test-suite hostore
 
 test-suite staged
   type:          exitcode-stdio-1.0
-  ghc-options:
   main-is:       Staged.hs
   default-language: GHC2021
   default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
@@ -173,3 +174,19 @@ test-suite staged
   other-modules:
     StagedGen
 
+test-suite plugin
+  type:          exitcode-stdio-1.0
+  ghc-options:   -fplugin Control.Effect.Plugin
+  main-is:       PluginTest.hs
+  default-language: GHC2021
+  default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
+  hs-source-dirs:  test
+  build-depends:
+    base               >= 4.16 && < 4.22,
+    effective,
+    containers         >= 0.6  && < 0.9,
+    template-haskell   >= 2.18 && < 2.24,
+    transformers       >= 0.4  && < 0.7,
+
+  other-modules:
+    StagedGen

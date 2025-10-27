@@ -29,8 +29,6 @@ module Control.Effect
   -- * Operations
   , Member(..)
   , Members(..)
-  , prj
-  , inj
   , Injects( injs )
   , Append (..)
 
