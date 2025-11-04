@@ -81,7 +81,7 @@ joinFlow p = call (JoinFlow p id)
 -- | @joinFlow@ on a monad @m@.
 joinFlowM :: forall x sig m. Member JoinFlow sig
           => IsSOP x => Algebra sig m -> m x -> m x
-joinFlowM alg p = callM' alg (JoinFlow p id)
+joinFlowM alg p = callM alg (JoinFlow p id)
 
 -- | Join operation on the monad `Gen`.
 joinGenAlg :: Algebra '[JoinFlow] Gen

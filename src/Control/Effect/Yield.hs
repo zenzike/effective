@@ -15,26 +15,16 @@ import GHC.TypeNats
 import Data.List.Kind
 #endif
 
-type Yield a b = Alg (Yield_ a b)
-data Yield_ a b x = Yield a (b -> x) deriving Functor
+$(makeGen [e| yield :: forall a b. a -> b |])
 
-type MapYield a b = Scp (MapYield_ a b)
-data MapYield_ a b x = MapYield (a -> a) (b -> b) x deriving Functor
+$(makeScp [e| mapYield :: forall a b. (a -> a) -> (b -> b) -> 1 |])
 
 instance Unary (MapYield_ a b) where
-  get (MapYield a b x) = x
-
-{-# INLINE yield #-}
-yield :: Member (Yield a b) sig => a -> Prog sig b
-yield a = call (Alg (Yield a id))
-
-mapYield :: Member (MapYield a b) sig => (a -> a) -> (b -> b) -> Prog sig x -> Prog sig x
-mapYield f g p = call (Scp (MapYield f g p))
+  get (MapYield_ a b x) = x
 
 yieldAlg :: Monad m => Algebra '[Yield a b, MapYield a b] (YResT a b m)
-yieldAlg eff
-  | Just (Alg (Yield a k)) <- prj eff = Y.yield a (fmap return k)
-  | Just (Scp (MapYield f g k)) <- prj eff = Y.mapYield f g k
+yieldAlg (Yield a k)      = Y.yield a (fmap return k)
+yieldAlg (MapYield f g k) = Y.mapYield f g k
 
 yieldAT :: AlgTrans '[Yield a b, MapYield a b] '[] '[YResT a b] Monad
 yieldAT = AlgTrans (\_ -> yieldAlg)

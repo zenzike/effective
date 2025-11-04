@@ -35,15 +35,13 @@ newtype Runner oeffs ts a b cs = Runner {
   getR :: forall m . cs m => Algebra oeffs m -> Apply ts m a -> m b }
 
 
-{-# INLINE run #-}
-run :: forall oeffs ts a b cs m .
-       cs m
-    => Runner oeffs ts a b cs
-    -> Algebra oeffs m
-    -> Apply ts m a -> m b
-run r oalg t = getR r oalg t
-
 -- * Building runners
+
+-- | Runners that don't need any output effects.
+{-# INLINE runner' #-}
+runner' :: (forall m x . cs m => Apply ts m a -> m b)
+        -> Runner oeffs ts a b cs
+runner' run = Runner (\(_ :: Algebra _ m) -> run @m)
 
 {-# INLINE idRunner #-}
 idRunner :: forall effs cs a.

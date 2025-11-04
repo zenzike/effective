@@ -30,28 +30,7 @@ pattern Nondet :: Member Nondet effs => k -> k -> Effs effs m k
 pattern Nondet x y <- (prj -> Just (Alg (Choose_ x y)))
   where Nondet x y = inj (Alg (Choose_ x y))
 
--- | Underlying signature for delimiting the scope of nondeterminism to `once`
-data Once_ k where
-  Once_ :: k -> Once_ k
-  deriving Functor
-
-$(makeScp ''Once_)
-{-
--- | Signature for delimiting the scope of nondeterminism to `once`
-type Once = Scp Once_
-
-pattern Once :: Member Once effs => m k -> Effs effs m k
-pattern Once p <- (prj -> Just (Scp (Once_ p)))
-
--- | `once` restricts a computation to return at most one result.
-once :: Member Once sig => Prog sig a -> Prog sig a
-once p = call (Scp (Once_ p))
-
--- | Execute a computation within a t`Once` scope using a monadic handler.
-onceM :: (Monad m, Member Once sig)
-  => (forall a . Effs sig m a -> m a) -> m a -> m a
-onceM alg p = (alg . inj) (Scp (Once_ p))
--}
+$(makeScp [e| once :: 1 |])
 
 -- | `select` nondeterministically selects an element from a list.
 -- If the list is empty, the computation fails.
@@ -65,8 +44,4 @@ selects []      =  empty
 selects (x:xs)  =  return (x, xs)  <|> do  (y, ys) <- selects xs
                                            return (y, x:ys)
 
-data Search_ k where
-  Search_ :: k -> Search_ k
-  deriving Functor
-
-$(makeScp ''Search_)
+$(makeScp [e| search :: 1 |])

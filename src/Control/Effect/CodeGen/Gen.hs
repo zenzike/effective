@@ -123,17 +123,17 @@ genLetRec = liftGen . genLetRec_
 
 -- | Perform code generation on a monad @m@.
 liftGenA :: Member CodeGen sig => Algebra sig m -> Gen a -> m a
-liftGenA alg o = callM' alg (Alg o)
+liftGenA alg o = callM alg (Alg o)
 
 -- | Generate a let-binding on a monad @m@.
 genLetM :: forall sig m a . Member CodeGen sig
         => Algebra sig m -> Up a -> m (Up a)
-genLetM alg = callM' alg . Alg .  genLet_
+genLetM alg = callM alg . Alg .  genLet_
 
 -- | Generate a recursive let-binding on a monad @m@.
 genLetRecM :: forall sig n a . Member CodeGen sig
            => Algebra sig n -> (Up a -> Up a) -> n (Up a)
-genLetRecM alg = callM' alg . Alg .  genLetRec_
+genLetRecM alg = callM alg . Alg .  genLetRec_
 
 -- | The effect of generating code of type @m a@.
 type CodeGenM m = Alg (GenM m)

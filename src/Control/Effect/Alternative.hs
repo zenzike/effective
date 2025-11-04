@@ -6,13 +6,10 @@ Maintainer  : Nicolas Wu
 Stability   : experimental
 -}
 
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE GADTs #-}
 
 module Control.Effect.Alternative (
   -- * Syntax
@@ -26,12 +23,15 @@ module Control.Effect.Alternative (
   -- > empty >>= k = empty
   --
   -- '<|>' is a scoped operation.
-  empty,
-  (<|>),
+  Ap.empty, emptyP,
+  (<|>), chooseP, chooseM,
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,1,0)
+  emptyN, chooseN,
+#endif
 
   -- ** Signatures
-  Empty, Empty_(..),
-  Choose, Choose_(..),
+  Empty, Empty_(..), pattern Empty,
+  Choose, Choose_(..), pattern Choose,
 
   -- * Semantics
   -- ** Handlers
@@ -47,6 +47,12 @@ import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 
 import Control.Applicative
+import Control.Applicative qualified as Ap
+
+
+$(makeAlg [e| empty :: 0 |])
+
+$(makeScp [e| choose :: 2 |])
 
 -- | Instance for 'Alternative' that uses 'Empty' and 'Choose'.
 instance (Member Empty sigs, Member Choose sigs)
@@ -60,29 +66,6 @@ instance (Member Empty sigs, Member Choose sigs)
 -- | Syntax for a choice of alternatives. This is a scoped operation.
   (<|>) :: (Member Choose sigs) => Prog sigs a -> Prog sigs a -> Prog sigs a
   xs <|> ys = call (Scp (Choose_ xs ys))
-
--- | Signature for empty alternatives.
-type Empty = Alg Empty_
--- | Underlying signature for empty alternatives.
-data Empty_ a where
-  Empty_ :: Empty_ a
-  deriving Functor
-
-pattern Empty :: Member Empty effs => Effs effs m k
-pattern Empty <- (prj -> Just (Alg Empty_))
-  where Empty = inj (Alg Empty_)
-
--- | Signature for choice of alternatives.
-type Choose = Scp Choose_
--- type Choose = Alg Choose_
--- | Underlying signature for choice of alternatives.
-data Choose_ a where
-  Choose_ :: a -> a -> Choose_ a
-  deriving Functor
-
-pattern Choose :: Member Choose effs => m k -> m k -> Effs effs m k
-pattern Choose x y <- (prj -> Just (Scp (Choose_ x y )))
-  where Choose x y = inj (Scp (Choose_ x y))
 
 -- | The 'alternative' handler makes use of an 'Alternative' functor @f@
 -- as well as a transformer @t@ that produces an 'Alternative' functor @t m@.
@@ -115,24 +98,20 @@ alternativeAlg
   :: forall oeffs t . (forall m . Monad m => Alternative (t m))
   => forall m. Monad m
   => Algebra oeffs m -> Algebra [Empty, Choose] (t m)
-alternativeAlg oalg eff
-  | (Just (Alg Empty_))          <- prj eff = empty
-  | (Just (Scp (Choose_ xs ys))) <- prj eff = xs <|> ys
+alternativeAlg oalg Empty          = Ap.empty
+alternativeAlg oalg (Choose xs ys) = xs <|> ys
 
 emptyAlgT :: forall t. (forall m . Monad m => Alternative (t m))
   => AlgTrans '[Empty] '[] '[t] Monad
 -- emptyAlgT = AlgTrans (const emptyAlg)
-emptyAlgT = algTrans1 (\oalg ((Alg Empty_)) -> empty)
+emptyAlgT = algTrans1 (\oalg ((Alg Empty_)) -> Ap.empty)
 
 emptyAlg :: Alternative (t m) => Algebra '[Empty] (t m)
-emptyAlg (Eff (Alg (Empty_))) = empty
+emptyAlg (Eff (Alg (Empty_))) = Ap.empty
 
 chooseAlgT :: forall t. (forall m . Monad m => Alternative (t m))
   => AlgTrans '[Choose] '[] '[t] Monad
--- chooseAlgT = AlgTrans (\oalg (Eff (Scp (Choose xs ys))) -> xs <|> ys)
--- chooseAlgT = AlgTrans (\oalg (prj -> Just (Scp (Choose xs ys))) -> xs <|> ys)
 chooseAlgT = algTrans1 (\oalg ((Scp (Choose_ xs ys))) -> xs <|> ys)
 
 chooseAlg :: Alternative (t m) => Algebra '[Choose] (t m)
 chooseAlg (Eff (Scp (Choose_ xs ys))) = xs <|> ys
-

@@ -1,4 +1,4 @@
-{-
+{-|
 Module      : Control.Effect.CodeGen.SoPU
 Description : Sum of products of Up-types
 License     : MIT

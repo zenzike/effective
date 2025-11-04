@@ -1259,12 +1259,7 @@ import Control.Effect.State
 import Control.Effect.Maybe
 import Control.Effect.Writer hiding (uncensors)
 
-import Control.Monad.Trans.Identity
-import Control.Monad.Trans.Compose
-import Control.Monad.Trans.State.Strict (StateT)
-import Control.Monad.Trans.Reader (ReaderT)
-
-import Control.Effect.Reader (asker, Ask, ask)
+import Control.Effect.Reader (ReaderT, asker, Ask, ask)
 
 import Data.List (insert)
 import Data.List.Kind hiding (Lookup)

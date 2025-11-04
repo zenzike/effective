@@ -24,7 +24,7 @@ module Control.Effect.Internal.Effs
   , Effect
   , Effs (Effs, Eff)
   , Algebra
-  , callM, callM'
+  , callM, callJM, callKM
   , singAlgIso
   , Injects (..)
   , Append
@@ -48,18 +48,23 @@ import Control.Effect.Internal.Effs.Sum
 import Control.Monad
 import Data.Iso
 
--- | A variant of `call` for which the effect is on a given monad rather than the `Prog` monad.
-{-# INLINE callM #-}
-callM :: forall eff effs a m . (Monad m, Member eff effs)
-      => Algebra effs m -> eff m (m a) -> m a
-callM oalg x = join (oalg (inj x))
-
 -- | A variant of `call'` for which the effect is on a given monad rather than the `Prog` monad.
-{-# INLINE callM' #-}
-callM' :: forall eff effs a m .
-       Member eff effs
+{-# INLINE callM #-}
+callM :: forall eff effs a m . Member eff effs
       => Algebra effs m -> eff m a -> m a
-callM' oalg x = oalg (inj x)
+callM oalg x = oalg (inj x)
+
+-- | A variant of `callJ` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callJM #-}
+callJM :: forall eff effs a m . (Monad m, Member eff effs)
+      => Algebra effs m -> eff m (m a) -> m a
+callJM oalg x = join (oalg (inj x))
+
+-- | A variant of `callK'` for which the effect is on a given monad rather than the `Prog` monad.
+{-# INLINE callKM #-}
+callKM :: forall eff effs a b m . (Monad m, Member eff effs)
+      => Algebra effs m -> eff m a -> (a -> m b) -> m b
+callKM oalg x k = oalg (inj x) >>= k
 
 -- | An obvious isomorphism between two representations of an algebra for a single effect @eff@.
 {-# INLINE singAlgIso #-}

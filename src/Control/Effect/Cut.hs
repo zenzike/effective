@@ -9,9 +9,6 @@ This module provides an effect for nondeterminism with a cut operation.
 The cut operation allows for pruning the search space in nondeterministic computations.
 -}
 
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-
 module Control.Effect.Cut where
 
 import Prelude hiding (or)
@@ -40,35 +37,14 @@ which can then be interpreted using a `CutList`.
 
 -- | Signature for t`CutFail`, which fails and cuts all following nondeterministic
 -- siblings.
-type CutFail = Alg CutFail_
--- | Underlying signature for t`CutFail`.
-data CutFail_ a where
-  CutFail :: CutFail_ a
-  deriving Functor
-
--- | Fail the computation using the t`CutFail` effect.
-cutFail :: Member CutFail sig => Prog sig a
-cutFail = call (Alg CutFail)
+$(makeAlg [e| cutFail :: 0 |])
 
 -- | The t`CutCall` effect represents a scoped computation with a cut boundary.
-type CutCall = Scp CutCall_
--- | Underyling signature for t`CutCall`.
-data CutCall_ a where
-  CutCall :: a -> CutCall_ a
-  deriving Functor
+$(makeScp [e| cutCall :: 1 |])
 
 -- | Perform a cut operation, pruning the search space.
 cut :: (Members [Empty, Choose, CutFail] sig) => Prog sig ()
 cut = skip <|> cutFail
-
--- | Execute a computation within a t`CutCall` scope.
-cutCall :: Member CutCall sig => Prog sig a -> Prog sig a
-cutCall p = call (Scp (CutCall p))
-
--- | Execute a computation within a t`CutCall` scope using a monadic handler.
-cutCallM :: (Monad m, Member CutCall sig)
-  => (forall a . Effs sig m a -> m a) -> m a -> m a
-cutCallM alg p = (alg . inj) (Scp (CutCall p))
 
 -- | A no-op computation that does nothing.
 skip :: Monad m => m ()
@@ -79,11 +55,10 @@ skip = return ()
 cutListAlg
   :: Monad m => (forall x. oeff m x -> m x)
   -> forall x. Effs [Empty, Choose, CutFail, CutCall] (CutListT m) x -> CutListT m x
-cutListAlg oalg op
-  | Just (Alg Empty_)           <- prj op = empty
-  | Just (Scp (Choose_ xs ys))  <- prj op = xs <|> ys
-  | Just (Alg CutFail)          <- prj op = CutListT (\cons nil zero -> zero)
-  | Just (Scp (CutCall xs))     <- prj op = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
+cutListAlg oalg Empty          = empty
+cutListAlg oalg (Choose xs ys) = xs <|> ys
+cutListAlg oalg CutFail        = CutListT (\cons nil zero -> zero)
+cutListAlg oalg (CutCall xs)   = CutListT (\cons nil zero -> runCutListT xs cons nil nil)
 
 cutListAT :: AlgTrans [Empty, Choose, CutFail, CutCall] '[] '[CutListT] Monad
 cutListAT = AlgTrans cutListAlg
@@ -105,11 +80,10 @@ onceCutAlg :: forall m .
      Monad m
   => (forall x. Effs '[CutCall, CutFail, Empty, Choose] m x -> m x)
   -> (forall x. Effs '[Once] m x -> m x)
-onceCutAlg oalg op
-  | Just (Scp (Once_ p)) <- prj op
-  = cutCallM oalg (do x <- p
-                      eval oalg (do cut
-                                    return x))
+onceCutAlg oalg (Once p) = cutCallM oalg $
+  do x <- p
+     eval oalg cut
+     return x
 
 -- | A combined handler for t`Once`, t`Empty`, t`Choose`, t`CutFail`, and t`CutCall` effects.
 onceNondet :: Handler '[Once, Empty, Choose, CutFail, CutCall] '[] '[CutListT] a [a]

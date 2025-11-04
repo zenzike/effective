@@ -14,17 +14,16 @@ Stability   : experimental
 module Control.Effect.State.Type where
 
 import Control.Effect
-import Control.Effect.Family.Algebraic
-import Control.Effect.Internal.TH
 
--- | Underlying signature for putting a value into the state.
+$(makeGen [e| put :: forall s. s -> () |])
+
+-- The Template-Haskell splicing above generates the following code.
+{-
+-- | First-order signature
 data Put_ s k where
   Put_ :: s -> k -> Put_ s k
   deriving Functor
 
-$(makeAlg ''Put_)
-
-{-
 -- | Signature for putting a value into the state.
 type Put s = Alg (Put_ s)
 
@@ -36,17 +35,24 @@ pattern Put s k <- (prj -> Just (Alg (Put_ s k)))
 {-# INLINE put #-}
 put :: Member (Put s) sig => s -> Prog sig ()
 put s = call (Alg (Put_ s ()))
+
+{-# INLINE putP #-}
+putP :: Member (WithName n (Put s)) sig => Proxy n -> s -> Prog sig ()
+putP p s = callP p (Alg (Put_ s ()))
+
+{-# INLINE putN #-}
+putN :: forall n -> Member (WithName n (Put s)) sig => s -> Prog sig ()
+putN p s = callN p (Alg (Put_ s ()))
 -}
 
+$(makeGen [e| get :: forall s. s |])
+
+{-
 -- | Underlying signature for getting a value from the state.
 newtype Get_ s k where
   Get_ :: (s -> k) -> Get_ s k
   deriving Functor
 
-$(makeAlg ''Get_)
-
-
-{-
 -- | Signature for getting a value from the state.
 type Get s = Alg (Get_ s)
 
@@ -58,4 +64,12 @@ pattern Get k <- (prj -> Just (Alg (Get_ k)))
 {-# INLINE get #-}
 get :: Member (Get s) sig => Prog sig s
 get = call (Alg (Get_ id))
+
+{-# INLINE getP #-}
+getP :: Member (WithName n (Get s)) sig => Proxy n -> Prog sig s
+getP p = callP p (Alg (Get_ id))
+
+{-# INLINE getN #-}
+getN :: forall n -> Member (WithName n (Get s)) sig => Prog sig s
+getN p = callN p (Alg (Get_ id))
 -}

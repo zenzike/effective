@@ -6,7 +6,8 @@ description:         Effect handlers library for algebraic, scoped, and other ef
 license:             BSD-3-Clause
 license-file:        LICENSE
 author:              Nicolas Wu
-maintainer:          n.wu@imperial.ac.uk
+maintainer:          Nicolas Wu   <n.wu@imperial.ac.uk>
+                     Zhixuan Yang <zhixuan.yang@protonmail.com>
 -- copyright:
 category:            Control
 build-type:          Simple
@@ -22,7 +23,10 @@ source-repository head
 common common
   default-language: GHC2021
   default-extensions:
-    DataKinds
+    DataKinds, CPP, ViewPatterns, PatternSynonyms, TemplateHaskell
+  if impl(ghc >=9.10.1)
+    default-extensions: RequiredTypeArguments
+
 
   ghc-options:
   --cpp-options: -DINDEXED
@@ -33,6 +37,7 @@ library
   import: common
 
   exposed-modules:
+    Control.Effect.Plugin
     Control.Effect
 
     Control.Effect.Alternative
@@ -56,7 +61,7 @@ library
     Control.Effect.Family.Algebraic
     Control.Effect.Family.Scoped
     Control.Effect.Family.Distributive
-    Control.Effect.Clone
+    Control.Effect.WithName
     Control.Effect.HStore.Unsafe
     Control.Effect.HStore.Safe
 
@@ -114,6 +119,7 @@ library
     ghc-prim           >= 0.8    && < 0.14,
     logict             >= 0.8.2  && < 0.9,
     template-haskell   >= 2.18   && < 2.24,
+    ghc
 
 test-suite readme
   type:          exitcode-stdio-1.0
@@ -126,9 +132,25 @@ test-suite readme
     base               >= 4.16 && < 4.22,
     effective,
     hedgehog           >= 1.5  && < 1.6,
-    transformers       >= 0.4  && < 0.7,
-    containers         >= 0.6    && < 0.9,
   build-tool-depends: markdown-unlit:markdown-unlit
+
+test-suite docs
+  import:        common
+  type:          exitcode-stdio-1.0
+  ghc-options:   -threaded -pgmL markdown-unlit
+  main-is:       Main.hs
+  default-language: GHC2021
+  hs-source-dirs:  docs
+  build-depends:
+    base               >= 4.16 && < 4.22,
+    effective,
+    hedgehog           >= 1.5  && < 1.6,
+  build-tool-depends: markdown-unlit:markdown-unlit
+  other-modules:
+    Error,
+    Nondet,
+    Parser,
+    State,
 
 test-suite concur
   type:          exitcode-stdio-1.0
@@ -140,8 +162,6 @@ test-suite concur
   build-depends:
     base               >= 4.16 && < 4.22,
     effective,
-    containers         >= 0.6  && < 0.9,
-    transformers       >= 0.4  && < 0.7,
 
 test-suite hostore
   type:          exitcode-stdio-1.0
@@ -153,12 +173,9 @@ test-suite hostore
   build-depends:
     base               >= 4.16 && < 4.22,
     effective,
-    containers         >= 0.6  && < 0.9,
-    transformers       >= 0.4  && < 0.7,
 
 test-suite staged
   type:          exitcode-stdio-1.0
-  ghc-options:
   main-is:       Staged.hs
   default-language: GHC2021
   default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
@@ -166,14 +183,44 @@ test-suite staged
   build-depends:
     base               >= 4.16 && < 4.22,
     effective,
-    containers         >= 0.6  && < 0.9,
     template-haskell   >= 2.18 && < 2.24,
     transformers       >= 0.4  && < 0.7,
 
   other-modules:
     StagedGen
 
+test-suite plugin
+  type:          exitcode-stdio-1.0
+  ghc-options:   -fplugin Control.Effect.Plugin
+  main-is:       PluginTest.hs
+  default-language: GHC2021
+  default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
+  hs-source-dirs:  test
+  build-depends:
+    base               >= 4.16 && < 4.22,
+    effective,
+    template-haskell   >= 2.18 && < 2.24,
+    transformers       >= 0.4  && < 0.7,
+
+  other-modules:
+    StagedGen
+
+test-suite misc
+  import: common
+  type:          exitcode-stdio-1.0
+  main-is:       Misc.hs
+  default-language: GHC2021
+  default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
+  hs-source-dirs:  test
+  -- ghc-options: -ddump-splices
+  build-depends:
+    base               >= 4.16 && < 4.22,
+    effective,
+    hedgehog           >= 1.5  && < 1.6,
+    template-haskell   >= 2.18 && < 2.24,
+
 test-suite eval
+  import:        common
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded
   main-is:       Eval.hs
@@ -183,5 +230,4 @@ test-suite eval
   build-depends:
     base               >= 4.16 && < 4.22,
     effective,
-    containers         >= 0.6  && < 0.9,
     transformers       >= 0.4  && < 0.7,

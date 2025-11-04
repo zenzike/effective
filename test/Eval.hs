@@ -7,9 +7,7 @@ import Control.Effect.Maybe
 import Control.Monad.Trans.Cont
 import Data.Functor.Identity
 
-data Var_ k = Var_ String (Int -> k)
-  deriving Functor
-$(makeAlg ''Var_)
+$(makeGen [e| var :: String -> Int |])
 
 {-
 type Var = Alg Var_
@@ -38,7 +36,7 @@ exprAT :: [(String, Int)] -> AlgTrans '[Var, Add] '[Throw] '[ContT Int] Monad
 exprAT env = AlgTrans $ \oalg op ->
   case op of
     Var str k -> case lookup str env of
-      Nothing -> ContT $ \k -> callM' oalg (Alg Throw)
+      Nothing -> ContT $ \k -> callM oalg (Alg Throw_)
       Just v  -> return (k v)
     Add x y  -> ContT $ \k -> do x' <- k x; y' <- k y; return (x' + y')
 

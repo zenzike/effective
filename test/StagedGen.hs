@@ -9,15 +9,13 @@ import Control.Effect.State.Strict
 import Control.Effect.Reader
 import Control.Effect.Except
 import qualified Control.Effect.Maybe as Mb
+import Control.Effect.Maybe (MaybeT(..))
 import Control.Effect.Alternative
 import Control.Monad.Trans.Push
-import "effective" Control.Monad.Trans.List
 import Control.Effect.Yield
 import Data.Functor.Identity
 import Data.Iso
 import Control.Monad (ap)
-
-import Control.Monad.Trans.Maybe
 
 
 {-

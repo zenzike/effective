@@ -6,7 +6,7 @@ Maintainer  : Nicolas Wu
 Stability   : experimental
 -}
 
-{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Control.Effect.State.Lazy
   ( -- * Syntax
@@ -15,8 +15,8 @@ module Control.Effect.State.Lazy
     get,
 
     -- ** Signatures
-    Put, Put_ (..),
-    Get, Get_ (..),
+    Put, Put_ (..), pattern Put,
+    Get, Get_ (..), pattern Get,
 
     -- * Semantics
     -- ** Handlers
@@ -38,43 +38,18 @@ import qualified Control.Monad.Trans.State.Lazy as Lazy
 -- | The `state` handler deals with stateful operations and
 -- returns the final state @s@.
 state :: s -> Handler [Put s, Get s] '[] '[Lazy.StateT s] a (s, a)
-state s = handler' (stateRun s) stateAlg
-
--- | An alternative definition of `state` using a runner and handler.
-state' :: s -> Handler [Put s, Get s] '[] '[Lazy.StateT s] a (s, a)
-state' s = stateAT #: runner (stateRun s)
+state s = Handler (stateRun s) stateAT
 
 -- | The `state_` handler deals with stateful operations and silenty
 -- discards the final state.
 state_ :: s -> Handler [Put s, Get s] '[] '[Lazy.StateT s] a a
-state_ s = handler' (flip Lazy.evalStateT s) stateAlg
+state_ s = Handler (runner' $ flip Lazy.evalStateT s) stateAT
 
 -- | An algebra transformer that interprets t'Get' and t'Put' using the lazy t'Lazy.StateT'.
 stateAT :: AlgTrans [Put s, Get s] '[] '[Lazy.StateT s] Monad
-stateAT = AlgTrans stateAlg
+stateAT = algTrans' $ \case
+  Put s p -> do Lazy.put s; return p
+  Get   p -> do s <- Lazy.get; return (p s)
 
--- | The underlying algebra of the state handler.
-stateAlg
-  :: forall s oeffs m . Monad m
-  => Algebra oeffs m
-  -> Algebra [Put s, Get s] (Lazy.StateT s m)
-stateAlg _ op
-  | Just (Alg (Put_ s p)) <- prj op =
-      do Lazy.put s
-         return p
-  | Just (Alg (Get_ p)) <- prj op =
-      do s <- Lazy.get
-         return (p s)
-
--- | An alternative version of the algebra using pattern synonyms.
-stateAlg'
-  :: forall s oeffs m . Monad m
-  => Algebra oeffs m
-  -> Algebra [Put s, Get s] (Lazy.StateT s m)
-stateAlg' _ (Put s p) = do Lazy.put s
-                           return p
-stateAlg' _ (Get p) = do s <- Lazy.get
-                         return (p s)
-
-stateRun :: Functor f => s -> Lazy.StateT s f b -> f (s, b)
-stateRun s = fmap (\ ~(x, y) -> (y, x)) . flip Lazy.runStateT s
+stateRun :: s -> Runner '[] '[Lazy.StateT s] a (s, a) Monad
+stateRun s = runner' $ fmap (\ ~(x, y) -> (y, x)) . flip Lazy.runStateT s

@@ -125,6 +125,13 @@ algTrans1 :: forall eff oeffs ts cs
 algTrans1 at = AlgTrans \(oalg :: Algebra oeffs m) (o :: Effs '[eff] (Apply ts m) x) ->
    case prj @eff o of Just o' -> at oalg o'
 
+-- | Algebra transformer that doesn't need an output effect.
+{-# INLINE algTrans' #-}
+algTrans' :: forall effs oeffs ts cs
+          . (forall m . cs m => Algebra effs (Apply ts m))
+          -> AlgTrans effs oeffs ts cs
+algTrans' alg = AlgTrans (\(_ :: Algebra oeffs m) -> alg @m)
+
 -- | Replace the carrier constraint of an algebra transformer with a strong one.
 {-# INLINE weakenC #-}
 weakenC :: forall cs' cs effs oeffs ts.

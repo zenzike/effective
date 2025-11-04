@@ -7,7 +7,7 @@ import Control.Effect.Writer
 import Control.Effect.Concurrency
 import Control.Effect.Family.Algebraic
 import Control.Monad
-import Control.Effect.Clone
+import Control.Effect.WithName
 import Control.Effect.Yield
 
 import Data.Proxy
@@ -75,23 +75,23 @@ prog2 =
 test4 :: IO ()
 test4 = handleIO' (Proxy @IOPar) ioPar (identity @'[]) prog2
 
-tell' :: forall w sig. (Member (Clone (Tell w)) sig, Monoid w) => w -> Prog sig ()
-tell' w = cloneAlg (Tell_ w ())
+tell' :: forall w sig. (Member ("t2" :@ (Tell w)) sig, Monoid w) => w -> Prog sig ()
+tell' w = callPAlg (Proxy @"t2") (Tell_ w ())
 
-prog3 :: Members '[Par, Act HS, Res HS, Tell String, Clone (Tell String)] sig => Prog sig ()
+prog3 :: Members '[Par, Act HS, Res HS, Tell String, "t2" :@ (Tell String)] sig => Prog sig ()
 prog3 = resHS (par (do tell "A"; handshake; tell' "C")
                    (do tell "B"; shakehand; tell' "D"))
 
 -- The cloned `tell` operations are handled before `par` so they behave
 -- like thread-local writers while the original `tell`s are global.
 test5 :: (String, ListActs HS (String, ()))
-test5 = handle (cloneHdl writer |> resump |> writer) prog3
+test5 = handle (renameEffs (Proxy @"t2") writer |> resump |> writer) prog3
 
 prog4 :: Member (Alg IO) sig => Prog sig ()
 prog4 = io (putChar 'x')
 
 test6 :: IO ()
-test6 = handleIO identity prog4
+test6 = handleIO (identity @'[]) prog4
 
 test7 :: IO (Either String ())
 test7 = handleIO' (Proxy @IOPar) ioPar (ccsByQSem @ActNames |> writerIO) (prog >> io (putStrLn ""))
