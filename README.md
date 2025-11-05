@@ -204,31 +204,19 @@ The signature of the handler tells us how it behaves:
   In `ticker` there is only one transformer `StateT Int`. The transformer
   list is applied to a monad `m` using `Apply`, so that
   `'Apply [t3, t2, t1] m a = t3 (t2 (t1 m a))`.
-* **Wrappers**: The wrappers are used to wrap the final computation when the handler
-  is applied.
-  When `ticker` is used to handle a program of type `Prog effs a`,
-  the output will be the wrapper `((,) s)` applied to the value of the program
-  `a`, which is simply `(s, a)`.
-  The wrapper list is applied to a value of type `a` using `Apply`,
-  so that the wrapper, so that
-  `Apply [f3, f2, f1] a = f3 (f2 (f1 a))`.
+* **Input/output types**: The input/output types are the types of the return values
+  of an effectful program before/after applying the handler. When `ticker` is used
+  to handle a program of type `Prog effs a`, the output will be the type `(Int, a)`.
 
-A handler is applied to a program using a `handle` function. In `exampleEchoTick`,
-the `handleIO` function is used because `GetLine` and `PutStrLn` are operations
-that relate to `IO`.
+A handler is applied to a program using the `handle` function or its variants.
+In `exampleEchoTick`, the `handleIO` function is used because `GetLine` and `PutStrLn`
+are operations that relate to `IO`.
 ```haskell ignore
 handleIO
-  :: ( Injects xeffs IOEffects , Injects oeffs IOEffects ...)
-  => Proxy xeffs -> Handler effs oeffs ts fs
-  -> Prog (effs `Union` xeffs) a -> IO (Apply fs a)
+  :: (...)
+  => Handler effs '[Alg IO] ts a b
+  -> Prog effs a -> IO b
 ```
-The @xeffs@ type argument is the operations on the `IO`-monad that the program
-needs to use, which must be explicitly given using a proxy argument (it is never
-inferable without the proxy argument because `Union` is a non-injective type
-family).
-The result is `IO (Apply fs a)`, where `fs` is the wrapper functors of the handler.
-This becomes important for handlers like `unticker`, so that the result
-of `handleIO unticker p` when `p :: Prog [Tick] a` is a value of type `IO a`.
 So far, we have been working with examples of _impure_ effects that ultimately
 rely on `IO`. Another important class of effects is the class of _pure_ effects,
 which we will look at next.
