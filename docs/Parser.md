@@ -9,8 +9,6 @@ import Control.Effect.Cut
 import Control.Effect.Nondet
 import Control.Effect.State
 
-import Control.Monad.Trans.List
-
 import Hedgehog
 
 import Prelude hiding (or)

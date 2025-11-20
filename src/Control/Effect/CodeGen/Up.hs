@@ -116,11 +116,11 @@ up' u k = call (Alg (UpOp u k))
 -- | Up-operations on a monad @n@.
 upM :: forall m sig n a. (Member (UpOp m) sig, Functor n)
     => Algebra sig n -> Up (m a) -> n (Up a)
-upM alg = Iso.fwd upIso (callM' alg)
+upM alg = Iso.fwd upIso (callM alg)
 
 -- | Up-operations on a monad @n@ with an additional continuation argument.
 upM' :: Member (UpOp m) sig => Algebra sig n -> Up (m a) -> (Up a -> x) -> n x
-upM' alg u k = callM' alg (Alg (UpOp u k))
+upM' alg u k = callM alg (Alg (UpOp u k))
 
 -- * Algebra transformers for the up-operation
 --

@@ -22,7 +22,6 @@ the arguments to the object level and invoke the object-level algebra, and then 
 the result back to the meta level. This is of course very unsatisfactory but currently
 I don't know how to do better.
 -}
-{-# LANGUAGE TemplateHaskell, UndecidableInstances, BlockArguments, MonoLocalBinds, ViewPatterns #-}
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -37,7 +36,7 @@ import Control.Effect.CodeGen.Gen
 import Control.Effect.CodeGen.Up
 import Control.Effect.CodeGen.Down
 import Control.Effect.Yield
-import Control.Effect.Concurrency.Type (Action (..), Act (..), Act_(..))
+import Control.Effect.Concurrency.Type hiding (par)
 import Control.Effect.Nondet
 
 import Control.Monad.Trans.Class
@@ -85,11 +84,11 @@ cResUpAT :: forall m a . (Action a, Monad m)
                      '[CResUpT (Up a)]
                       (MonadDown m)
 cResUpAT = AlgTrans $ \oalg -> \case
-  (prj -> Just (Alg (UpOp o k)))            -> bwd upIso (upResAlg oalg) (Alg (UpOp o k))
-  (prj -> Just (Alg Empty_))                -> empty
-  (prj -> Just (Scp (Choose_ x y)))         -> x <|> y
-  (prj -> Just (ParUp p q k))               -> fmap k (parResUp oalg p q)
-  (prj -> Just (Alg (Act (a :: (Up a)) p))) -> RUp.prefix a (return p)
+  (prj -> Just (Alg (UpOp o k)))     -> bwd upIso (upResAlg oalg) (Alg (UpOp o k))
+  (prj -> Just (Alg Empty_))         -> empty
+  (prj -> Just (Scp (Choose_ x y)))  -> x <|> y
+  (prj -> Just (ParUp p q k))        -> fmap k (parResUp oalg p q)
+  (Act (a :: (Up a)) p)              -> RUp.prefix a (return p)
 
 -- | Algebra transformer for the resumption monad transformer for yielding.
 yResUpAT :: forall m a b . (Monad m)
@@ -98,6 +97,6 @@ yResUpAT :: forall m a b . (Monad m)
                      '[YResUpT (Up a) (Up b)]
                       (MonadDown m)
 yResUpAT = AlgTrans $ \oalg -> \case
-  (prj -> Just (Alg (UpOp o k)))       -> bwd upIso (upResAlg oalg) (Alg (UpOp o k))
-  (prj -> Just (Alg (Yield a p)))      -> RUp.yield a (return . p)
-  (prj -> Just (Scp (MapYield f g p))) -> RUp.mapYield f g p
+  (prj -> Just (Alg (UpOp o k)))        -> bwd upIso (upResAlg oalg) (Alg (UpOp o k))
+  (prj -> Just (Alg (Yield_ a p)))      -> RUp.yield a (return . p)
+  (prj -> Just (Scp (MapYield_ f g p))) -> RUp.mapYield f g p

@@ -16,13 +16,14 @@ including choice and failure.
 module Control.Effect.Nondet.List
   ( Choose
   , Empty
-  , nondet
+  , nondet, nondetAT
   , nondet'
   , Once
   , Once_ (..)
   , once
   , list
   , backtrack
+  , backtrack'
   , backtrackAlg
   , backtrackOnceAlg
   ) where
@@ -92,10 +93,10 @@ nondetAlg' :: Monad m => Algebra '[Nondet]  (ListT m)
 nondetAlg' eff | Just (Alg (Choose_ x y)) <- prj eff = pure x <|> pure y
 
 onceAlg' :: Monad m => Algebra '[Once]  (ListT m)
-onceAlg' eff | Just (Scp (Once_ xs)) <- prj eff =
-  ListT $ do mx <- runListT xs
-             case mx of Nothing       -> return Nothing
-                        Just (x, mxs) -> return Nothing
+onceAlg' (Once xs) = ListT $ do
+  mx <- runListT xs
+  case mx of Nothing       -> return Nothing
+             Just (x, mxs) -> return (Just (x, empty))
 
 
 
@@ -110,14 +111,13 @@ backtrack' = handler' runListT' backtrackAlg
 backtrackAlg
   :: Monad m => (forall x. oeff m x -> m x)
   -> (forall x. Effs [Empty, Nondet, Once] (ListT m) x -> ListT m x)
-backtrackAlg oalg op
-  | Just (Alg Empty_)            <- prj op = empty
-  | Just (Alg (Choose_ xs ys))  <- prj op = pure xs <|> pure ys
-  | Just (Scp (Once_ p))         <- prj op =
-    ListT $ do mx <- runListT p
-               case mx of
-                 Nothing       -> return Nothing
-                 Just (x, mxs) -> return (Just (x, empty))
+backtrackAlg oalg Empty = empty
+backtrackAlg oalg (Nondet xs ys) = pure xs <|> pure ys
+backtrackAlg oalg (Once p) = ListT $ do
+  mx <- runListT p
+  case mx of
+    Nothing       -> return Nothing
+    Just (x, mxs) -> return (Just (x, empty))
 
 
 

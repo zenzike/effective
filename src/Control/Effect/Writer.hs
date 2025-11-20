@@ -6,22 +6,30 @@ Maintainer  : Nicolas Wu
 Stability   : experimental
 -}
 
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Control.Effect.Writer (
   -- * Syntax
   -- ** Operations
+
+-- | The @`tell` w@ operation outputs @w@.
   tell,
+  tellP,
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,1,0)
+  tellN,
+#endif
+
+-- | The @`censor` f p@ operation executes program @p@ with output censored
+-- by @f@.
   censor,
+  censorP,
+  censorM,
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,1,0)
+  censorN,
+#endif
 
   -- ** Signatures
-  pattern Tell,
-  Tell, Tell_(..),
-  Censor, Censor_(..),
+  Tell, Tell_(..), pattern Tell,
+  Censor, Censor_(..), pattern Censor,
 
   -- * Semantics
   -- ** Handlers
@@ -52,26 +60,8 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.Reader
 import qualified Control.Monad.Trans.Writer as W
 
--- | Underlying signature for `tell`.
-data Tell_ w k where
-  Tell_ :: w -> k -> Tell_ w k
-  deriving Functor
-
-$(makeAlg ''Tell_)
-
-{-
--- | Signature for `tell`.
-type Tell w = Alg (Tell_ w)
-
-pattern Tell :: (Member (Tell w) sig, Monoid w) => w -> k -> Effs sig m k
-pattern Tell w k <- (prj -> Just (Alg (Tell_ w k)))
-  where Tell w k = inj (Alg (Tell_ w k))
-
--- | @`tell` w@ produces the output @w@.
-{-# INLINE tell #-}
-tell :: (Member (Tell w) sig, Monoid w) => w -> Prog sig ()
-tell w = call (Alg (Tell_ w ()))
--}
+-- | The operation of writing an element of type @w@.
+$(makeGen [e| tell :: forall w. w -> () |])
 
 -- | The algebra transformer for the `writer` handler.
 writerAT :: Monoid w => AlgTrans '[Tell w] '[] '[W.WriterT w] Monad
@@ -105,21 +95,10 @@ writerIO = interpret $
   \(Tell w k) -> do io (putStr w)
                     return k
 
--- | Signature for 'censor'.
-type Censor w = Scp (Censor_ w)
--- | Underlying signature for 'censor'.
-data Censor_ w k where
-  Censor :: (w -> w) -> k -> Censor_ w k
-  deriving Functor
+$(makeScp [e| censor :: forall w. (w -> w) -> 1 |])
 
 instance U.Unary (Censor_ w) where
-  get (Censor c x) = x
-
--- | The @`censor` f p@ operation executes program @p@ with output censored
--- by @f@.
-{-# INLINE censor #-}
-censor :: Member (Censor w) sig => (w -> w) -> Prog sig a -> Prog sig a
-censor cipher p = call (Scp (Censor cipher p))
+  get (Censor_ c x) = x
 
 -- | The @`censors` f@ handler applies an initial function @f@ to the
 -- any output produced by `tell`. If a @`censor` f' p@ operation is encountered,
@@ -135,19 +114,13 @@ censorAT = AlgTrans alg where
   alg :: Monad m
       => (forall x. Effs '[Tell w] m x -> m x)
       -> (forall x. Effs '[Tell w, Censor w] (ReaderT (w -> w) m) x -> ReaderT (w -> w) m x)
-  alg oalg eff
-    | Just (Alg (Tell_ w k)) <- prj eff =
-        do cipher <- ask
-           lift (oalg (Eff (Alg (Tell_ (cipher w) k))))
-    | Just (Scp (Censor (cipher' :: w -> w) k)) <- prj eff =
-        do cipher <- ask
-           lift (runReaderT k (cipher . cipher'))
+  alg oalg (Tell w k) = do
+    cipher <- ask
+    lift (oalg (Eff (Alg (Tell_ (cipher w) k))))
+  alg oalg (Censor (cipher' :: w -> w) k) = do
+    cipher <- ask
+    lift (runReaderT k (cipher . cipher'))
 
 -- | The `uncensors` handler removes any occurrences of `censor`.
 uncensors :: forall w a . Handler '[Censor w] '[] '[] a a
-uncensors = handler' id alg where
-  alg :: Monad m
-      => (forall x. Effs '[] m x -> m x)
-      -> (forall x. Effs '[Censor w] m x -> m x)
-  alg oalg (Eff (Scp (Censor (_ :: w -> w) k))) = k
-
+uncensors = handler' id (\_ (Censor (_ :: w -> w) k) -> k) where

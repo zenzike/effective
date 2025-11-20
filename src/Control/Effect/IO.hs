@@ -17,6 +17,8 @@ Stability   : experimental
 module Control.Effect.IO (
   -- * Syntax
   -- ** Operations
+  Alg (..),
+  IO,
   io,
 
   -- * Semantics
@@ -49,23 +51,24 @@ io op = call (Alg op)
 evalIO :: Prog '[Alg IO] a -> IO a
 evalIO = eval ioAlg
 
--- | @`handleIO` h p@ evaluates @p@ using the handler @h@. Any residual
--- effects are then interpreted in `IO` using their standard semantics, but
--- IO effects are not forwarded along the handler.
+-- | @`handleIO` h p@ evaluates @p@ using the handler @h@. The handler is
+-- allowed to emit the operation @Alg IO@ and the program can used @Alg IO@ too.
 handleIO
-  :: forall effs ts a b
+  :: forall effs oeffs ts a b
   . ( Monad (Apply ts IO)
-    , HFunctor (Effs effs) )
-  => Handler effs '[Alg IO] ts a b
-  -> Prog effs a -> IO b
-handleIO = handleM' @effs ioAlg
+    , ForwardsM '[Alg IO] ts
+    , Injects oeffs '[Alg IO]
+    , HandleM# effs '[Alg IO] )
+  => Handler effs oeffs ts a b
+  -> Prog (effs `Union` '[Alg IO]) a -> IO b
+handleIO = handleM @effs ioAlg
 
 type HandleIO# effs oeffs xeffs =
   ( Injects (xeffs :\\ effs) xeffs
   , Append effs (xeffs :\\ effs)
   , HFunctor (Effs (effs `Union` xeffs)))
 
--- | @`handleIO` h p@ evaluates @p@ using the handler @h@. The handler may
+-- | @`handleIO'` h p@ evaluates @p@ using the handler @h@. The handler may
 -- output some effects that are a subset of the IO effects and additionally
 -- the program may also use a subset @xeffs@ of the IO effects (which must
 -- be forwardable through the monad transformer @ts@).

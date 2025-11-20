@@ -24,30 +24,14 @@ module Control.Effect.Internal.Effs.Sum
   , hunion
   , hcons
   , Injects (..)
-  , Member' (..)
   , Member
   , Members
-  , PElemIndex
-  , Peano (..)
   )
   where
 
 import Control.Effect.Internal.Effs.Sum.Type
 import Data.List.Kind
 import GHC.Exts
-
-
--- | Constructs an operation in the union @Effs sigs f a@ from a single
--- operation @sig f a@, when @sig@ is in @sigs@.
-{-# INLINE inj #-}
-inj :: forall sig sigs f a . Member sig sigs => sig f a -> Effs sigs f a
-inj = inj' (proxy# @(PElemIndex sig sigs))
-
--- | Attempts to project an operation of type @eff f a@ from a the union @Effs effs f a@,
--- when @eff@ is in @effs@.
-{-# INLINE prj #-}
-prj :: forall sig sigs m a . Member sig sigs => Effs sigs m a -> Maybe (sig m a)
-prj = prj' (proxy# @(PElemIndex sig sigs))
 
 infixr 6 #
 -- | @alg1 # alg2@ joins together algebras @alg1@ and @alg2@.
@@ -166,48 +150,36 @@ instance (Member x xys, Injects xs xys)
   injs (Effs x) = injs x
 
 -- | @Member' sig sigs n@ holds when @sig@ is contained in @sigs@ at index @n@.
-class Member' sig sigs (n :: Peano) where
-  inj' :: Proxy# n -> sig f a -> Effs sigs f a
-  prj' :: Proxy# n -> Effs sigs f a -> Maybe (sig f a)
+class Member sig sigs where
+  -- | Constructs an operation in the union @Effs sigs f a@ from a single
+  -- operation @sig f a@, when @sig@ is in @sigs@.
+  inj :: sig f a -> Effs sigs f a
 
+  -- | Attempts to project an operation of type @eff f a@ from a the union @Effs effs f a@,
+  -- when @eff@ is in @effs@.
+  prj :: Effs sigs f a -> Maybe (sig f a)
 
-instance (sigs' ~ (sig ': sigs)) => Member' sig sigs' Zero where
-  {-# INLINE inj' #-}
-  inj' :: (sigs' ~ (sig : sigs)) => Proxy# Zero -> sig f a -> Effs sigs' f a
-  inj' _ x = Eff x
+instance {-# OVERLAPPING #-} Member sig (sig ': sigs) where
+  {-# INLINE inj #-}
+  inj :: sig f a -> Effs (sig ': sigs) f a
+  inj x = Eff x
 
-  {-# INLINE prj' #-}
-  prj' :: (sigs' ~ (sig : sigs)) => Proxy# Zero -> Effs sigs' f a -> Maybe (sig f a)
-  prj' _ (Eff x) = Just x
-  prj' _ _       = Nothing
+  {-# INLINE prj #-}
+  prj :: Effs (sig : sigs) f a -> Maybe (sig f a)
+  prj (Eff x) = Just x
+  prj _       = Nothing
 
-instance (sigs' ~ (sig' ': sigs), Member' sig sigs n) => Member' sig sigs' (Succ n) where
-  {-# INLINE inj' #-}
-  inj' _ x = Effs . inj' (proxy# @n) $ x
+instance (Member sig sigs) => Member sig (sig' : sigs) where
+  {-# INLINE inj #-}
+  inj x = Effs . inj $ x
 
-  {-# INLINE prj' #-}
-  prj' _ (Eff _)  = Nothing
-  prj' _ (Effs x) = prj' (proxy# @n) x
+  {-# INLINE prj #-}
+  prj (Eff _)  = Nothing
+  prj (Effs x) = prj x
 
--- | @Member sig sigs@ holds when @sig@ is contained in @sigs@.
-type Member :: Effect -> [Effect] -> Constraint
-type Member sig sigs = Member' sig sigs (PElemIndex sig sigs)
 
 -- | @Member sigs sigs'@ holds when every @sig@ which is a 'Member' of in @sigs@
 -- is also a 'Member' of @sigs'@.
 type family Members (xsigs :: [Effect]) (xysigs :: [Effect]) :: Constraint where
   Members '[] xysigs       = ()
   Members (xsig ': xsigs) xysigs = (Member xsig xysigs, Members xsigs xysigs)
-
--- | @`ElemIndex x xs@ finds the index of an element @x@ in the type
--- level list @xs@. Indexing starts at @0@ at the head of the list.
-type family PElemIndex (x :: a) (xs :: [a]) :: Peano where
-  PElemIndex x (x ': xs) = Zero
-  PElemIndex x (_ ': xs) = Succ (PElemIndex x xs)
-
--- | The type of Peano numbers.
-data Peano where
-  -- | @Zero@, the first Peano number
-  Zero :: Peano
-  -- | @Succ n@, is the Peano number after @n@
-  Succ :: Peano -> Peano

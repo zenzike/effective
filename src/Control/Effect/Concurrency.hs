@@ -16,7 +16,6 @@ of handlers:
      process efficiently (using the native concurrency API from
      "Control.Concurrent" of GHC).
 -}
-{-# LANGUAGE DataKinds #-}
 module Control.Effect.Concurrency (
   -- * Syntax
   -- | Signatures and operations are in this module.
@@ -64,17 +63,15 @@ import Data.HFunctor
 
 -- | Algebra for the resumption-based handler of t`Par`, t`Act`, and t`Res`.
 resumpAlg :: (Action a, Monad m) => Algebra '[Act a, Par, Res a] (C.CResT a m)
-resumpAlg eff
-  | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
-  | Just (Scp (Par l r)) <- prj eff = C.par l r
-  | Just (Scp (Res a p)) <- prj eff = C.res a p
+resumpAlg (Act a p) = prefix a (return p)
+resumpAlg (Par l r) = C.par l r
+resumpAlg (Res a p) = C.res a p
 
 -- | Algebra for the resumption-based handler of t`JPar`, t`Act`, and t`Res`.
 jresumpAlg :: (Action a, Monad m) => Algebra '[Act a, JPar, Res a] (C.CResT a m)
-jresumpAlg eff
-  | Just (Alg (Act a p)) <- prj eff = prefix a (return p)
-  | Just (Distr (JPar l r) c) <- prj eff = fmap (\(x, y) -> c (JPar x y)) (C.jpar l r)
-  | Just (Scp (Res a p)) <- prj eff = C.res a p
+jresumpAlg (Act a p)    = prefix a (return p)
+jresumpAlg (JPar l r c) = fmap (\(x, y) -> c (JPar_ x y)) (C.jpar l r)
+jresumpAlg (Res a p)    = C.res a p
 
 -- | Algebra transformer for the resumption-based handler of t`Par`, t`Act`, and t`Res`.
 resumpAT :: forall a. Action a => AlgTrans '[Act a, Par, Res a] '[] '[C.CResT a] Monad
@@ -137,45 +134,40 @@ ccsByQSem = (interpretM alg ||> R.reader M.empty) ||> E.except where
                              , E.Throw String, Alg IO
                              ] m
                  -> Algebra '[Act (CCSAction n), Res (CCSAction n)] m
-  alg oalg op
-    | Just (Alg (Act (Action n) p))   <- prj op =
-        eval oalg $ do m <- R.ask @(QSemMap n)
-                       case M.lookup n m of
-                         Just (s1, s2) -> do io (QSem.waitQSem s1); io (QSem.signalQSem s2)
-                         Nothing  -> E.throw "Channel used before creation!"
-                       return p
-    | Just (Alg (Act (CoAction n) p)) <- prj op =
-        eval oalg $ do m <- R.ask @(QSemMap n)
-                       case M.lookup n m of
-                         Just (s1, s2) -> do io (QSem.signalQSem s1); io (QSem.waitQSem s2)
-                         Nothing  -> E.throw "Channel used before creation!"
-                       return p
-    | Just (Scp (Res a p)) <- prj op =
-        do (m, s1, s2) <- eval oalg $
-              do m <- R.ask @(QSemMap n)
-                 s1 <- io (QSem.newQSem 0)
-                 s2 <- io (QSem.newQSem 0)
-                 return (m, s1, s2)
-           let m' = M.insert (getActionName a) (s1, s2) m
-           callM' oalg (Scp (R.Local (const m') p))
+  alg oalg (Act (Action n) p) = eval oalg $ do
+    m <- R.ask @(QSemMap n)
+    case M.lookup n m of
+      Just (s1, s2) -> do io (QSem.waitQSem s1); io (QSem.signalQSem s2)
+      Nothing  -> E.throw "Channel used before creation!"
+    return p
+  alg oalg (Act (CoAction n) p) = eval oalg $ do
+    m <- R.ask @(QSemMap n)
+    case M.lookup n m of
+      Just (s1, s2) -> do io (QSem.signalQSem s1); io (QSem.waitQSem s2)
+      Nothing  -> E.throw "Channel used before creation!"
+    return p
+  alg oalg (Res a p) = do
+    (m, s1, s2) <- eval oalg $ do
+       m <- R.ask @(QSemMap n)
+       s1 <- io (QSem.newQSem 0)
+       s2 <- io (QSem.newQSem 0)
+       return (m, s1, s2)
+    let m' = M.insert (getActionName a) (s1, s2) m
+    R.localM oalg (const m') p
 
 -- | Interprets t`Control.Effect.Concurrency.Par` using the native concurrency API.
 -- from `Control.Concurrent`.
 parIOAlg :: Algebra '[Par] IO
-parIOAlg eff
-  | Just (Scp (Par l r)) <- prj eff =
-      do Control.Concurrent.forkIO (fmap (const ()) r)
-         l
+parIOAlg (Par l r) = Control.Concurrent.forkIO (fmap (const ()) r) >> l
 
 -- | Interprets t`Control.Effect.Concurrency.JPar` using the native concurrency API.
 -- from "Control.Concurrent". The result from the child thread is passed back to the
 -- main thread using @MVar@.
 jparIOAlg :: Algebra '[JPar] IO
-jparIOAlg eff
-  | Just (Distr (JPar l r) c) <- prj eff =
-      do m <- MVar.newEmptyMVar
-         Control.Concurrent.forkIO $
-           do y <- r; MVar.putMVar m y
-         x <- l
-         y' <- MVar.takeMVar m
-         return (c (JPar x y'))
+jparIOAlg (JPar l r c) = do
+  m <- MVar.newEmptyMVar
+  Control.Concurrent.forkIO $
+    do y <- r; MVar.putMVar m y
+  x <- l
+  y' <- MVar.takeMVar m
+  return (c (JPar_ x y'))

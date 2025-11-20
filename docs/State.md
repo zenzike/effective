@@ -15,8 +15,6 @@ import Control.Effect
 import Control.Effect.State
 import Control.Effect.Maybe
 import Control.Monad (replicateM_)
-import Control.Monad.Trans.State.Strict (StateT)
-import Control.Monad.Trans.Maybe
 
 import Control.Effect.Reader
 
@@ -52,7 +50,8 @@ globalState
   :: s -> Handler '[Throw, Catch, Put s, Get s]
                   '[]
                   '[MaybeT, (StateT s)]
-                  '[((,) s), Maybe]
+                  a
+                  (s, Maybe a)
 globalState s = except `fuse` state s
 
 -- This is global state because the `Int` is decremented
@@ -67,7 +66,8 @@ localState
   :: s -> Handler '[Put s, Get s, Throw, Catch]
                   '[]
                   '[(StateT s), MaybeT]
-                  '[Maybe, ((,) s)]
+                  a
+                  (Maybe (s, a))
 localState s = state s `fuse` except
 
 -- With local state, the state is reset to its value
@@ -131,7 +131,7 @@ example_Retry1 = property $
 getAsk :: (Int, Int) ! [Get Int, Local Int, Ask Int]
 getAsk = local (+ (100 :: Int)) (do x <- get ; y <- ask ; return (x , y) )
 
-getToAsk :: Handler '[Get Int] '[Ask Int] '[] '[]
+getToAsk :: Handler '[Get Int] '[Ask Int] '[] a a
 getToAsk= interpret $
     \(Get k) -> do y <- ask @Int
                    return (k (y))

@@ -35,9 +35,10 @@ Generated code:
 
 countdown :: StateT Int Identity ()
 countdown = $$(stage
-  (letPut @Int
-  `fuseAT` upState @Int @Identity
-  `fuseAT` stateAT @(Up Int))
+  (letPut -- @Int
+  `fuseAT` upState -- @Int @Identity
+  `fuseAT` stateAT -- @(Up Int) 
+  )
   (countdownGen [|| countdown ||]))
 
 {-
@@ -54,7 +55,9 @@ Generated code:
 
 catchProgram :: Int -> ExceptT () Identity ()
 catchProgram n = $$(stage
-  (upExcept @() @Identity `fuseAT` exceptAT @(Up ()))
+  (upExcept -- @() -- @Identity 
+  `fuseAT` exceptAT -- @(Up ())
+  )
   (catchGen [||n||] [||catchProgram||]))
 
 
@@ -76,9 +79,10 @@ The code generator catchGen can be used for generating different types of progra
 catchProgram2 :: Int -> StateT Int (ExceptT () Identity) ()
 catchProgram2 n = $$(stage
     ( upState @Int @(ExceptT () Identity)
-      `fuseAT` upExcept @() @Identity
-      `fuseAT` stateAT @(Up Int)
-      `fuseAT` exceptAT @(Up ()))
+      `fuseAT` upExcept -- @() @Identity
+      `fuseAT` stateAT -- @(Up Int)
+      `fuseAT` exceptAT -- @(Up ())
+    )
     (catchGen [||n||] [||catchProgram||]))
 
 -- foldr (\ a_a56k ms_a56l -> (a_a56k : ms_a56l)) [] as_a4qa
@@ -184,11 +188,12 @@ ListT (StateT (\ s_a9g9 ->
 -}
 listExample5 :: ListT (StateT Int Identity) Int -> ListT (StateT Int Identity) Int
 listExample5 as = $$(stage
-  (upCache @(ListT (StateT Int Identity))
-  `fuseAT` pushWithUpAT @(StateT Int Identity)
+  (upCache  -- @(ListT (StateT Int Identity))
+  `fuseAT` pushWithUpAT -- @(StateT Int Identity)
   `fuseAT` upCache @(StateT Int Identity)
   `fuseAT` upState @Int @Identity
-  `fuseAT` stateAT @(Up Int)) $
+  `fuseAT` stateAT -- @(Up Int)
+  ) $
   do s <- get
      i <- up [||as||]
      j <- up [||as||]
@@ -210,7 +215,7 @@ listExample5 as = $$(stage
               Nothing))
 -}
 choice :: Int -> ListT Identity Int
-choice n = $$(stage (pushWithUpAT @Identity) $
+choice n = $$(stage (pushWithUpAT {- @Identity -}) $
   choiceGen [||n||] [|| choice ||])
 
 {-
@@ -223,7 +228,7 @@ choice n = $$(stage (pushWithUpAT @Identity) $
         []
 -}
 choice' :: Int -> [Int]
-choice' n = $$(stage (pushWithUpAT @Identity) $
+choice' n = $$(stage (pushWithUpAT {- @Identity -}) $
   choiceGen [||n||] [|| choice' ||])
 
 
@@ -245,7 +250,9 @@ choice' n = $$(stage (pushWithUpAT @Identity) $
 -}
 choiceST :: Int -> StateT Int (ListT Identity) Int
 choiceST n = $$(stage
-  (stateAT @(Up Int) `fuseAT` pushWithUpAT @Identity)
+  (stateAT -- @(Up Int) 
+   `fuseAT` pushWithUpAT -- @Identity
+  )
   (choiceGen [||n||] [|| choice ||]))
 
 {-
@@ -260,7 +267,8 @@ choiceST n = $$(stage
 -}
 ioExample :: StateT Int IO ()
 ioExample = $$(stageM (Proxy @IO)
-  (upState @Int @IO `fuseAT` stateAT @(Up Int))
+  (upState -- @Int @IO
+   `fuseAT` stateAT @(Up Int))
   (ioProg [|| ioExample ||]))
 
 {-

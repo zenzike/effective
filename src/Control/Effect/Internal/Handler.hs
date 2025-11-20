@@ -76,20 +76,10 @@ handler'
   -> Handler effs oeffs ts a b
 handler' run alg = Handler (Runner (\_ -> run)) (AlgTrans (\oalg -> alg oalg))
 
-
-
-
-
 runner
   :: forall ts a b. (forall m . Monad m => Apply ts m a -> m b)
   -> Handler '[] '[] ts a b
 runner run = Handler (Runner (\_ -> run)) (AlgTrans (const absurdEffs))
-
--- (#:) :: forall effs oeffs effs' ts fs . (Append effs (effs' :\\ effs), Injects (effs' :\\ effs) effs') =>
---        (forall m . Monad m => Algebra effs (Apply ts m))
---       -> Handler effs' oeffs ts fs -> Handler (effs `Union` effs') oeffs ts fs
--- algs #: Handler hrun halg = Handler hrun (AlgTrans (\(oalg :: Algebra oeffs m)
---   -> hunion @effs @effs' (algs @m) (getAT halg @m oalg)))
 
 infixr #:
 
@@ -97,7 +87,6 @@ infixr #:
       => AlgTrans effs oeffs ts Monad
       -> Handler effs' oeffs' ts a b -> Handler (effs `Union` effs') (oeffs `Union` oeffs') ts a b
 algs #: Handler hrun halg = Handler (weakenREffs hrun) (weakenC (algs `unionAT` halg))
-
 
 -- | The identity handler that doesn't transform the effects.
 {-# INLINE identity #-}
@@ -432,7 +421,7 @@ handle :: forall effs ts fs a b .
   -> Prog effs a                  -- ^ Program @p@ with effects @effs@
   -> b
 handle (Handler run halg)
-  = runIdentity . LL.run run absurdEffs . eval (getAT halg (absurdEffs @Identity))
+  = runIdentity . LL.getR run absurdEffs . eval (getAT halg (absurdEffs @Identity))
 
 type HandleM# effs xeffs =
   ( Injects (xeffs :\\ effs) xeffs

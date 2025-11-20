@@ -6,19 +6,26 @@ Maintainer  : Nicolas Wu
 Stability   : experimental
 -}
 
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Control.Effect.Maybe (
   -- * Syntax
   -- ** Operations
+
+  -- | Throwing an exception.
   throw,
+  throwP,
+  -- | @catch p h@ catches the exceptions thrown by @p@ and handles them with @h@.
   catch,
+  catchP,
+  catchM,
+#if MIN_VERSION_GLASGOW_HASKELL(9,10,1,0)
+  throwN, catchN,
+#endif
 
   -- ** Signatures
-  Throw, Throw_(..),
-  Catch, Catch_(..),
+  Throw, Throw_(..), pattern Throw,
+  Catch, Catch_(..), pattern Catch,
 
   -- * Semantics
   -- ** Handlers
@@ -39,78 +46,43 @@ import Control.Effect.Family.Scoped
 
 import Control.Monad.Trans.Maybe
 
--- | Signature for throwing exceptions.
-type Throw = Alg Throw_
--- | Underlying signature for throwing exceptions.
-data Throw_ k where
-  Throw :: Throw_ k
-  deriving Functor
+$(makeAlg [e| throw :: 0 |])
 
--- | Syntax for throwing exceptions. This operation is algebraic:
---
--- > throw >>= k = throw
-{-# INLINE throw #-}
-throw :: Member Throw sig => Prog sig a
-throw = call (Alg Throw)
-
--- | Internal signature for catching exceptions of type @e@.
-type Catch = Scp Catch_
--- | Underlying signature for catching exceptions of type @e@.
-data Catch_ k where
-  Catch :: k -> k -> Catch_ k
-  deriving Functor
-
--- | Syntax for catching exceptions. This operation is scoped.
-catch :: Member Catch sig => Prog sig a -> Prog sig a -> Prog sig a
-catch p q = call (Scp (Catch p q))
+$(makeScp [e| catch :: 2 |])
 
 
 -- | The 'except' handler will interpret @catch p q@ by first trying @p@.
 -- If it fails, then @q@ is executed.
 except :: Handler [Throw, Catch] '[] '[MaybeT] a (Maybe a)
-except = handler' runMaybeT exceptAlg
+except = Handler (runner' runMaybeT) exceptAT
 
 -- | The algebra transformer for the 'except' handler.
 exceptAT :: AlgTrans [Throw, Catch] '[] '[MaybeT] Monad
-exceptAT = AlgTrans exceptAlg
-
--- | The algebra for the 'except' handler.
-exceptAlg :: Monad m
-  => (forall x. oeff m x -> m x)
-  -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
-exceptAlg _ eff
-  | Just (Alg Throw) <- prj eff
-      = MaybeT (return Nothing)
-  | Just (Scp (Catch p q)) <- prj eff
-      = MaybeT $ do mx <- runMaybeT p
-                    case mx of
-                      Nothing -> runMaybeT q
-                      Just x  -> return (Just x)
+exceptAT = AlgTrans $ \oalg op -> case op of
+    Throw -> MaybeT (return Nothing)
+    (Catch p q) -> MaybeT $ do
+       mx <- runMaybeT p
+       case mx of
+         Nothing -> runMaybeT q
+         Just x  -> return (Just x)
 
 -- | The 'retry' handler will interpet @catch p q@  by first trying @p@.
 -- If it fails, then @q@ is executed as a recovering clause.
 -- If the recovery fails then the computation is failed overall.
 -- If the recovery succeeds, then @catch p q@ is attempted again.
 retry :: Handler [Throw, Catch] '[] '[MaybeT] a (Maybe a)
-retry = handler' runMaybeT retryAlg
+retry = Handler (runner' runMaybeT) retryAT
 
 -- | The algebra for the 'retry' handler.
 retryAT :: AlgTrans [Throw, Catch] '[] '[MaybeT] Monad
-retryAT = AlgTrans retryAlg
-
-retryAlg :: Monad m
-  => (forall x. Effs oeff m x -> m x)
-  -> (forall x. Effs [Throw, Catch] (MaybeT m) x -> MaybeT m x)
-retryAlg _ eff
-  | Just (Alg Throw) <- prj eff
-      = MaybeT (return Nothing)
-  | Just (Scp (Catch p q)) <- prj eff = MaybeT $ loop p q
-      where
-        loop p q =
-          do mx <- runMaybeT p
-             case mx of
-               Nothing -> do my <- runMaybeT q
-                             case my of
-                               Nothing -> return Nothing
-                               Just y  -> loop p q
-               Just x  -> return (Just x)
+retryAT = algTrans' $ \case
+  Throw       -> MaybeT (return Nothing)
+  (Catch p q) -> MaybeT $ loop p q where
+    loop p q =
+      do mx <- runMaybeT p
+         case mx of
+           Nothing -> do my <- runMaybeT q
+                         case my of
+                           Nothing -> return Nothing
+                           Just y  -> loop p q
+           Just x  -> return (Just x)
