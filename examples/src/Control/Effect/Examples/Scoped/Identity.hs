@@ -27,19 +27,24 @@ where
 import Control.Effect hiding (Identity, identity)
 import Control.Effect.Family.Scoped
 
+-- | Underlying signature for the identity scoped effect.
 newtype Identity_ k where
   Identity :: k -> Identity_ k
   deriving (Functor)
 
+-- | Signature for the identity scoped effect.
 type Identity = Scp Identity_
 
+-- | Syntax for running a program using the identity effect.
 {-# INLINE identity #-}
 identity :: forall sig a. (Member Identity sig) => Prog sig a -> Prog sig a
 identity p = call (Scp (Identity p))
 
+-- | A handler which just runs the program wrapped in 'identity'.
 runIdentity :: Handler '[Identity] '[] '[] a a
 runIdentity = handler' id identityAlg
 
+-- | The algebra transformer for the 'runIdentity' handler.
 identityAT :: AlgTrans '[Identity] '[] '[] Monad
 identityAT = AlgTrans identityAlg
 
