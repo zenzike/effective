@@ -1,0 +1,25 @@
+cabal-version: 3.0
+name: effective-examples
+version: 0.1.0.0
+license: BSD-3-Clause
+license-file: LICENSE
+author: Daniel Trowbridge
+maintainer: n.wu@imperial.ac.uk
+
+common common
+  default-language: GHC2021
+  default-extensions:
+    DataKinds
+
+library
+  import: common
+  exposed-modules:
+    Control.Effect.Examples
+    Control.Effect.Examples.Scoped.Identity
+
+  hs-source-dirs:
+    src
+
+  build-depends:
+    base >=4.16 && <4.22,
+    effective,
