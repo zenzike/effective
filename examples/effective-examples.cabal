@@ -23,3 +23,24 @@ library
   build-depends:
     base >=4.16 && <4.22,
     effective,
+
+test-suite readme
+  import: common
+  type: exitcode-stdio-1.0
+  main-is: README.lhs
+  hs-source-dirs:
+    .
+
+  build-depends:
+    base >=4.16 && <4.22,
+    effective,
+    effective-examples,
+    hedgehog >=1.5 && <1.6,
+
+  build-tool-depends:
+    markdown-unlit:markdown-unlit
+
+  ghc-options:
+    -threaded
+    -pgmL
+    markdown-unlit
