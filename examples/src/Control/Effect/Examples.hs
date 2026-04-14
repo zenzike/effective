@@ -6,8 +6,8 @@
 -- Stability: experimental
 module Control.Effect.Examples
   ( -- * Scoped effects
-    module Control.Effect.Examples.Scoped.Identity,
+    module Control.Effect.Examples.Scoped.Scope,
   )
 where
 
-import Control.Effect.Examples.Scoped.Identity
+import Control.Effect.Examples.Scoped.Scope

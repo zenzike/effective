@@ -23,36 +23,36 @@ follow the examples.
 Scoped Effects
 --------------
 
-### Identity (minimal example)
+### Scope (minimal example)
 
 _Module:
-[`Control.Effect.Examples.Scoped.Identity`](./src/Control/Effect/Examples/Scoped/Identity.hs)_
+[`Control.Effect.Examples.Scoped.Scope`](./src/Control/Effect/Examples/Scoped/Scope.hs)_
 
-The `identity` scoped operation takes a single continuation. The corresponding
-`runIdentity` handler will simply run these continuations when the `identity`
-operation is encountered, without applying any monad transformers.
+Each `scope` scoped operation takes a single continuation. The corresponding
+`scopeId` handler will simply run these continuations when the `scope` operation
+is encountered, without applying any monad transformers.
 
 ``` haskell
-identityExample :: Int ! '[Identity]
-identityExample = do
-  result <- identity $ do
+scopeExample :: Int ! '[Scope]
+scopeExample = do
+  result <- scope $ do
     return (19 + 23)
 
   return result
 ```
 
 ``` console
-ghci> handle runIdentity identityExample
+ghci> handle scopeId scopeExample
 42
 ```
 
 <!--
 ``` haskell
-prop_identity :: Property
-prop_identity = property $ do
+prop_scopeId :: Property
+prop_scopeId = property $ do
   x <- forAll (Gen.int (Range.linear 0 1000))
-  let p = identity (return x)
-  handle runIdentity p === x
+  let p = scope (return x)
+  handle scopeId p === x
 ```
 -->
 
@@ -72,7 +72,7 @@ Imports
 This file has a number of imports:
 
 ``` haskell top
-import Control.Effect hiding (Identity, identity)
+import Control.Effect
 import Control.Effect.Examples
 ```
 

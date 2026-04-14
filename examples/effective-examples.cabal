@@ -15,7 +15,7 @@ library
   import: common
   exposed-modules:
     Control.Effect.Examples
-    Control.Effect.Examples.Scoped.Identity
+    Control.Effect.Examples.Scoped.Scope
 
   hs-source-dirs:
     src
