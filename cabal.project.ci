@@ -1,5 +1,9 @@
 packages:
     effective.cabal
+    examples/effective-examples.cabal
 
 package effective
+  ghc-options: -Werror
+
+package effective-examples
   ghc-options: -Werror

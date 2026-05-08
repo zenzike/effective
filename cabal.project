@@ -1,4 +1,5 @@
 packages:
     effective.cabal
+    examples/effective-examples.cabal
 
 tests: True

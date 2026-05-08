@@ -1012,6 +1012,10 @@ particular order in which certain effects should be handled, the `effective`
 library leaves this choice entirely to the handler.
 
 
+Further Examples
+----------------
+
+For more examples, see the [`effective-examples`](./examples/README.md) package.
 
 
 Language Extensions
