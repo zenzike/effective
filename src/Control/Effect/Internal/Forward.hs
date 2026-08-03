@@ -24,6 +24,8 @@ module Control.Effect.Internal.Forward
   , ForwardEffs (..)
   , Forwards (..)
   , ForwardsC (..)
+  , ForwardM (..)
+  , ForwardEffsM (..)
   , ForwardsM (..)
   ) where
 
@@ -32,6 +34,7 @@ import Control.Effect.Internal.Effs
 
 import Data.Kind
 import Data.HFunctor
+import Control.Monad.Trans.Identity (IdentityT (IdentityT, runIdentityT))
 #ifdef INDEXED
 import GHC.TypeNats
 import Data.List.Kind
@@ -126,10 +129,20 @@ instance (ForwardEffs effs t, Forwards effs ts) => Forwards effs (t ': ts) where
 
 -- | @ForwardsC cs effs ts@ if and only if effects @effs@ on @m@ can be transformed along
 -- the transformer stack @ts@ on input satisfying the constraint @cs@.
-class    (Forwards effs ts, ImpliesC cs (FwdsConstraint effs ts)) => ForwardsC cs effs ts where
-instance (Forwards effs ts, ImpliesC cs (FwdsConstraint effs ts)) => ForwardsC cs effs ts where
+class (Forwards effs ts, ImpliesC cs (FwdsConstraint effs ts)) => ForwardsC cs effs ts
+instance (Forwards effs ts, ImpliesC cs (FwdsConstraint effs ts)) => ForwardsC cs effs ts
+
+-- | @ForwardM eff t@ if and only if effect @eff@ on every monad @m@ can be
+-- transformed along the transformer @t@.
+class (Forward eff t, ImpliesC Monad (FwdConstraint eff t)) => ForwardM eff t
+instance (Forward eff t, ImpliesC Monad (FwdConstraint eff t)) => ForwardM eff t
+
+-- | @ForwardEffsM effs t@ if and only if effects @effs@ on every monad @m@ can be
+-- transformed along the transformer @t@.
+class (ForwardEffs effs t, ImpliesC Monad (FwdEffsConstraint effs t)) => ForwardEffsM effs t
+instance (ForwardEffs effs t, ImpliesC Monad (FwdEffsConstraint effs t)) => ForwardEffsM effs t
 
 -- | @ForwardsM effs ts@ if and only if effects @effs@ on every monad @m@ can be
 -- transformed along the transformer stack @ts@.
-class    (Forwards effs ts, ImpliesC Monad (FwdsConstraint effs ts)) => ForwardsM effs ts where
-instance (Forwards effs ts, ImpliesC Monad (FwdsConstraint effs ts)) => ForwardsM effs ts where
+class (Forwards effs ts, ImpliesC Monad (FwdsConstraint effs ts)) => ForwardsM effs ts
+instance (Forwards effs ts, ImpliesC Monad (FwdsConstraint effs ts)) => ForwardsM effs ts

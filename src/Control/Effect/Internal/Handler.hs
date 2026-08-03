@@ -179,8 +179,7 @@ fromAT at = handler (\_ -> id) (getAT at)
 {-# INLINE interpret #-}
 interpret
   :: forall effs oeffs a
-  .  ( HFunctor (Effs effs), HFunctor (Effs oeffs) )
-  => (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
+  .  (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
   -> Handler effs oeffs '[] a a
 interpret = fromAT . interpretAT
 
@@ -190,8 +189,7 @@ interpret = fromAT . interpretAT
 {-# INLINE interpretAT #-}
 interpretAT
   :: forall effs oeffs
-  .  ( HFunctor (Effs effs), HFunctor (Effs oeffs) )
-  => (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
+  .  (forall m x . Effs effs m x -> Prog oeffs x)   -- ^ @rephrase@
   -> AlgTrans effs oeffs '[] Monad
 interpretAT rephrase = AlgTrans (\oalg op -> eval oalg (rephrase op))
 
@@ -199,8 +197,7 @@ interpretAT rephrase = AlgTrans (\oalg op -> eval oalg (rephrase op))
 -- | A special case of `interpret` for one effect @eff@.
 interpret1
   :: forall eff oeffs a
-  .  ( HFunctor eff, HFunctor (Effs oeffs) )
-  => (forall m x . eff m x -> Prog oeffs x)
+  .  (forall m x . eff m x -> Prog oeffs x)
   -> Handler '[eff] oeffs '[] a a
 interpret1 rephrase = interpret (\(Eff e) -> rephrase e)
 
@@ -208,8 +205,7 @@ interpret1 rephrase = interpret (\(Eff e) -> rephrase e)
 -- | A special case of `interpretAT` for one effect @eff@.
 interpretAT1
   :: forall eff oeffs
-  .  ( HFunctor eff, HFunctor (Effs oeffs) )
-  => (forall m x . eff m x -> Prog oeffs x)
+  .  (forall m x . eff m x -> Prog oeffs x)
   -> AlgTrans '[eff] oeffs '[] Monad
 interpretAT1 rephrase = interpretAT (\(Eff e) -> rephrase e)
 
@@ -270,7 +266,7 @@ appendHdl (Handler r1 a1) (Handler _ a2) = Handler (weakenR r1) (weakenC (append
 
 -- * Fusion-based handler combinators
 
-infixr 9 `fuse`, |>
+infixl 7 `fuse`, |>
 
 {-# INLINE fuse #-}
 {-# INLINE (|>) #-}
@@ -305,7 +301,7 @@ fuse (Handler run1 malg1) (Handler run2 malg2)
 (|>) = fuse
 
 
-infixr 9 `pipe`, ||>
+infixl 7 `pipe`, ||>
 
 {-# INLINE pipe #-}
 {-# INLINE (||>) #-}
@@ -427,7 +423,7 @@ recall _ (Handler run halg) =
 
 {-# INLINE handle #-}
 handle :: forall effs ts fs a b .
-  (Monad (Apply ts Identity), HFunctor (Effs effs))
+  (Monad (Apply ts Identity))
   => Handler effs '[] ts a b      -- ^ Handler @h@ with no output effects
   -> Prog effs a                  -- ^ Program @p@ with effects @effs@
   -> b
@@ -436,8 +432,7 @@ handle (Handler run halg)
 
 type HandleM# effs xeffs =
   ( Injects (xeffs :\\ effs) xeffs
-  , Append effs (xeffs :\\ effs)
-  , HFunctor (Effs (effs `Union` xeffs)))
+  , Append effs (xeffs :\\ effs))
 
 -- | @handleM xalg h p@ uses the handler @h@ to evaluate the program @p@ into some
 -- monad @m@ (e.g. the @IO@ monad). The monad @m@ may come with some effects @xeffs@
@@ -445,7 +440,7 @@ type HandleM# effs xeffs =
 -- handled by the handler @h@. The effects @xeffs@ on @m@ must be forwardable by
 -- the transformer stack @ts@.
 -- (When an effect is both in @effs@ and @xeffs@, it is handled by @h@).
-handleM :: forall effs oeffs xeffs m ts fs a b .
+handleM :: forall effs oeffs xeffs m ts a b .
   ( Monad m
   , Monad (Apply ts m)
   , ForwardsM xeffs ts
@@ -466,8 +461,7 @@ handleM xalg (Handler run halg)
 handleM' :: forall effs oeffs xeffs m ts a b .
   ( Monad m
   , Monad (Apply ts m)
-  , Injects oeffs xeffs
-  , HFunctor (Effs effs) )
+  , Injects oeffs xeffs)
   => Algebra xeffs m                 -- ^ Algebra @xalg@ for external effects @xeffs@
   -> Handler effs oeffs ts a b       -- ^ Handler @h@
   -> Prog effs a

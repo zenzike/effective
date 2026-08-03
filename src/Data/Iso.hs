@@ -1,4 +1,5 @@
 module Data.Iso where
+import GHC.Base (Coercible, coerce)
 
 data Iso a b = Iso { fwd :: !(a -> b), bwd :: !(b -> a) }
 
@@ -13,3 +14,6 @@ trans (Iso f g) (Iso h k) = Iso (h . f) (g . k)
 
 cong :: Functor f => Iso a b -> Iso (f a) (f b)
 cong (Iso f g) = Iso (fmap f) (fmap g)
+
+coercibles :: (Coercible a b, Coercible b a) => Iso a b
+coercibles = Iso coerce coerce

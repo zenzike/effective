@@ -97,9 +97,7 @@ instance Monad (Prog effs) where
 -- | Weaken a program of type @Prog effs a@ so that it can be used in
 -- place of a program of type @Prog effs a@, when every @effs@ is a member of @effs'@.
 weakenProg :: forall effs effs' a
-  . ( Injects effs effs'
-    , HFunctor (Effs effs)
-    )
+  . ( Injects effs effs')
   => Prog effs a -> Prog effs' a
 weakenProg p = Prog $ \alg -> runProg p (alg . injs)
 
@@ -108,7 +106,7 @@ weakenProg p = Prog $ \alg -> runProg p (alg . injs)
 -- the algebra @Eff effs m -> m@.
 {-# INLINE eval #-}
 eval
-  :: forall effs m a . (Monad m, HFunctor (Effs effs))
+  :: forall effs m a . Monad m
   => Algebra effs m
   -> Prog effs a -> m a
 eval alg p = runProg p alg

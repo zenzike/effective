@@ -31,10 +31,11 @@ module Control.Effect.Family.Algebraic where
 import Control.Effect.Internal.Forward
 
 import Data.Iso
-import Data.Kind ( Type )
+import Data.Kind ( Type, Constraint )
 import Data.HFunctor
 import Control.Monad.Trans.Class ( MonadTrans(..) )
 import Control.Effect.Internal.Effs.Sum.Type (Algebra, Effs(..))
+import Control.Monad.Trans.Identity (IdentityT)
 
 -- | @Alg sig@ is the (higher-order) signature of algebraic operations of
 -- (first-order) signature @sig@.
