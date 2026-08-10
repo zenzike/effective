@@ -181,7 +181,7 @@ The codebase also contains some Haddock documentation (although not very complet
 logical order of source files is as follows:
 
 * `Control/Effect/Internal/Algebra.hs`
-* `Control/Effect/Internal/Prog/ProgImp.hs`
+* `Control/Effect/Internal/Prog/Imp.hs`
 * `Control/Effect/Internal/AlgTrans.hs`
 * `Control/Effect/Internal/Forward.hs`
 * `Control/Effect/Internal/Runner.hs`

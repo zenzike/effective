@@ -100,7 +100,7 @@ library
     Data.Sequence.Class
 
     Control.Effect.Internal.Algebra
-    Control.Effect.Internal.Prog.ProgImp
+    Control.Effect.Internal.Prog.Imp
     Control.Effect.Internal.Prog
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Handler

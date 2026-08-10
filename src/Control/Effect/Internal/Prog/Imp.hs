@@ -1,5 +1,5 @@
 {-|
-Module      : Control.Effect.Internal.ProgImp
+Module      : Control.Effect.Internal.Imp
 Description : Programs in impredicative encoding
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
@@ -21,7 +21,7 @@ the representation from this module is suitable for our purpose.
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Effect.Internal.Prog.ProgImp (
+module Control.Effect.Internal.Prog.Imp (
   -- * Program datatype
   Prog,
 

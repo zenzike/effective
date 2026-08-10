@@ -11,7 +11,7 @@ Stability   : experimental
 This module exports the type of effectful programs. We may have more than one
 underlying representations (that provide the same interface) and which one used
 is controlled by some CPP flags. Currently the default is the impredicative
-encoding in "Control.Effect.Internal.Prog.ProgImp".
+encoding in "Control.Effect.Internal.Prog.Imp".
 -}
 
 module Control.Effect.Internal.Prog
@@ -33,7 +33,7 @@ module Control.Effect.Internal.Prog
   where
 
 
-import Control.Effect.Internal.Prog.ProgImp
+import Control.Effect.Internal.Prog.Imp
 import Control.Effect.Internal.Algebra
 
 -- | @a ! effs@ is the type of programs with a polymorphic effect set that contains at least @effs@.
