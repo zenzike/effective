@@ -191,7 +191,8 @@ instance (sigs' ~ (sig' ': sigs), Member' sig sigs n) => Member' sig sigs' (Succ
 
 -- | @Member sig sigs@ holds when @sig@ is contained in @sigs@.
 type Member :: Effect -> [Effect] -> Constraint
-type Member sig sigs = Member' sig sigs (PElemIndex sig sigs)
+class Member' sig sigs (PElemIndex sig sigs) => Member sig sigs
+instance Member' sig sigs (PElemIndex sig sigs) => Member sig sigs
 
 -- | @Member sigs sigs'@ holds when every @sig@ which is a 'Member' of in @sigs@
 -- is also a 'Member' of @sigs'@.

@@ -31,6 +31,7 @@ import Unsafe.Coerce
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 import Data.Kind (Type)
+import Control.Effect.Internal.Forward (ForwardM)
 
 -- | Make a copy of an effect signature, which is useful when more than one
 -- instances of the same effect are needed in a program.
@@ -39,8 +40,8 @@ newtype Clone (eff :: Effect)
               (k   :: Type)
               = Clone { unClone :: eff f k } deriving (Functor, HFunctor)
 
-instance Forward eff t => Forward (Clone eff) t where
-  type FwdConstraint (Clone eff) t = FwdConstraint eff t
+instance ForwardM eff t => Forward (Clone eff) t where
+  type FwdConstraint (Clone eff) t = Monad --FwdConstraint eff t
   fwd alg (Clone op) = fwd (alg . Clone) op
 
 -- | Every handler of @effs@ gives rise to a handler of its clone.

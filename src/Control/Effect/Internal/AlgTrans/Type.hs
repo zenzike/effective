@@ -31,7 +31,7 @@ newtype AlgTrans effs oeffs ts cs = AlgTrans {
 -- * Constraints
 
 -- | The always true constraint.
-class    TruthC (m :: Type -> Type) where
+class    TruthC m where
 instance TruthC m where
 
 -- | A constraint synonym that is frequently used when composing algebra transformers.

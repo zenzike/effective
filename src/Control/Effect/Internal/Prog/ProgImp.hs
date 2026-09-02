@@ -18,6 +18,10 @@ the representation from this module is suitable for our purpose.
 
 module Control.Effect.Internal.Prog.ProgImp (
   -- * Program datatype
+  callCounter,
+  namedCall,
+  incrementCallCounter,
+  incrementGlobalCallCounter,
   Prog,
 
   -- * Program constructors
@@ -39,6 +43,22 @@ import Data.HFunctor
 import Control.Applicative
 #endif
 import Control.Monad
+import Data.IORef (IORef, newIORef, atomicModifyIORef')
+import GHC.IO (unsafePerformIO)
+import Data.Map (Map)
+import qualified Data.Map as Map
+
+{-# NOINLINE callCounter #-}
+callCounter :: IORef (Map String Int)
+callCounter = unsafePerformIO (newIORef Map.empty)
+
+globalCounterName = "global"
+
+incrementCallCounter :: String -> b -> b
+incrementCallCounter name !x = unsafePerformIO (atomicModifyIORef' callCounter (\c -> (Map.insertWith (+) name 1 c, x)))
+
+incrementGlobalCallCounter :: b -> b
+incrementGlobalCallCounter = incrementCallCounter globalCounterName
 
 -- | The impredicative-encoding of effectful programs
 newtype Prog (effs :: [Effect]) a = Prog { runProg :: forall m. Monad m => Algebra effs m -> m a }
@@ -49,21 +69,28 @@ call :: forall eff effs a . (Member eff effs, HFunctor eff) => eff (Prog effs) a
 call x = Prog $ \(alg :: Algebra effs m) ->
   let r :: forall x. Prog effs x -> m x
       r p = runProg p alg
-  in alg (inj (hmap r x))
+  in incrementGlobalCallCounter (alg (inj (hmap r x)))
+
+{-# INLINE namedCall #-}
+namedCall :: forall eff effs a . (Member eff effs, HFunctor eff) => String -> eff (Prog effs) a -> Prog effs a
+namedCall name x = Prog $ \(alg :: Algebra effs m) ->
+  let r :: forall x. Prog effs x -> m x
+      r p = runProg p alg
+  in incrementCallCounter name (alg (inj (hmap r x)))
 
 -- | A variant of `call` with an continuation argument given as return values.
 -- Semantically, @callJ = join . `call`@.
 {-# INLINE callJ #-}
 callJ :: forall eff effs a . (Member eff effs, HFunctor eff)
      => eff (Prog effs) (Prog effs a) -> Prog effs a
-callJ = join . call
+callJ = incrementGlobalCallCounter . join . call
 
 -- | A variant of `call` with an continuation argument given as a function.
 -- Semantically, @callK x k = `call` x >>= k@.
 {-# INLINE callK #-}
 callK :: forall eff effs a b . (Member eff effs, HFunctor eff)
       => eff (Prog effs) a -> (a -> Prog effs b) -> Prog effs b
-callK x k = call x >>= k
+callK x k = incrementGlobalCallCounter (call x >>= k)
 
 -- | Construct a program from an operation in a union.
 {-# INLINE progAlg #-}
@@ -71,7 +98,7 @@ progAlg :: forall effs. HFunctor (Effs effs) => Algebra effs (Prog effs)
 progAlg x = Prog $ \(alg :: Algebra effs m) ->
   let r :: forall x. Prog effs x -> m x
       r p = runProg p alg
-  in alg (hmap r x)
+  in incrementGlobalCallCounter (alg (hmap r x))
 
 instance Functor (Prog sigs) where
   {-# INLINE fmap #-}

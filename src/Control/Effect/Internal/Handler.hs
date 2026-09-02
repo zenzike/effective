@@ -511,7 +511,6 @@ handleP = handleM progAlg
 -- by the handler @h@.
 handleP' :: forall effs oeffs xeffs ts fs a b .
   ( Monad (Apply ts (Prog xeffs))
-  , Forwards xeffs ts
   , Injects oeffs xeffs
   , HFunctor (Effs effs)
   , HFunctor (Effs xeffs) )

@@ -38,6 +38,7 @@ import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 
 import Control.Monad.Trans.Except (ExceptT(..), runExceptT)
+import Control.Effect.Internal.Prog.ProgImp (namedCall)
 
 -- | Signature for throwing exceptions of type @e@.
 type Throw e = Alg (Throw_ e)
@@ -51,7 +52,7 @@ newtype Throw_ e k where
 {-# INLINE throw #-}
 -- > throw e >>= k = throw e
 throw :: forall e sig a . (Member (Throw e) sig) => e -> Prog sig a
-throw e = call @(Throw e) (Alg (Throw e))
+throw e = namedCall @(Throw e) "Throw" (Alg (Throw e))
 
 -- | Internal signature for catching exceptions of type @e@.
 type Catch e = Scp (Catch_ e)
