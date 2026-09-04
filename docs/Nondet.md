@@ -8,10 +8,11 @@ module Nondet where
 import Prelude hiding (or)
 
 import Control.Effect
-import Control.Effect.Alternative
+import Control.Effect.Nondet.Alternative
+import Control.Effect.Nondet.Cut
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
-import Control.Effect.Cut
+import Control.Effect.Nondet.List
 import Control.Effect.Nondet
 
 import Control.Monad (guard)
@@ -36,13 +37,10 @@ example_Nondet1 = property $ (handle list $ knapsack 3 [3, 2, 1] :: [[Int]])
 -- into a list. It handles the t`Empty`, t`Choose`, and t`Once` effects.
 list' :: Prog [Empty, Choose, Once] a -> [a]
 list' = eval halg where
-  halg :: Effs [Empty, Choose, Once] [] a -> [a]
-  halg op
-    | Just (Alg Empty_)          <- prj op = []
-    | Just (Scp (Choose_ xs ys)) <- prj op = xs ++ ys
-    | Just (Scp (Once_ xs))       <- prj op = case xs of
-                                               []     -> []
-                                               (x:xs) -> [x]
+  halg :: Algebra [Empty, Choose, Once] []
+  halg = (\Empty -> []) :#
+         (\(Choose xs ys) -> xs ++ ys) :#.
+         (\(Once xs) -> case xs of [] -> []; (x:xs) -> [x])
 
 -- `list'` is not a modular handler and uses `eval` directly
 example_Nondet1' :: Property
@@ -55,7 +53,7 @@ example_Nondet1' = property $ (list' $ knapsack 3 [3, 2, 1] :: [[Int]])
 -- however it requires `choose` to be algebraic.
 
 example_Nondet2 :: Property
-example_Nondet2 = property $ (handle (unscope (Proxy @(Choose_)) |> nondet) $ knapsack 3 [3, 2, 1] :: [[Int]])
+example_Nondet2 = property $ (handle (chooseByNondet |> nondet) $ knapsack 3 [3, 2, 1] :: [[Int]])
   === [[3],[2,1],[1,2],[1,1,1]]
 
 -- `backtrack` is modular, and is furthermore simply
@@ -67,7 +65,7 @@ example_backtrack1 = property $ (handle backtrack $ knapsack 3 [3, 2, 1] :: [[In
 
 example_backtrack2 :: Property
 example_backtrack2 = property $ handle backtrack p === [1, 2] where
-  p :: (Alternative (Prog sigs), Members '[Once] sigs) => Prog sigs Int
+  p :: (Alternative (Prog effs), Members '[Once] effs) => Prog effs Int
   p = do x <- once (return 0 <|> return 5)
          (return (x + 1)) <|> (return (x + 2))
 -- ghci> exampleOnce
@@ -75,7 +73,7 @@ example_backtrack2 = property $ handle backtrack p === [1, 2] where
 
 example_Once' :: Property
 example_Once' = property $ handle onceNondet p === [1, 2] where
-  p :: Members '[Choose, Empty, Once] sigs => Prog sigs Int
+  p :: Members '[Choose, Empty, Once] effs => Prog effs Int
   p = do x <- once ((return 0) <|> (return 5))
          (return (x + 1)) <|> (return (x + 2))
 -- ghci> exampleOnce'
@@ -83,13 +81,13 @@ example_Once' = property $ handle onceNondet p === [1, 2] where
 
 example_Once'' :: Property
 example_Once'' = property $ handle onceNondet p === [1, 2] where
-  p :: Members '[Choose, Empty, Once] sigs => Prog sigs Int
+  p :: Members '[Choose, Empty, Once] effs => Prog effs Int
   p = do x <- once ((return 0) <|> (return 5))
          (return (x + 1)) <|> (return (x + 2))
 
 example_Once''' :: Property
 example_Once''' = property $ handle onceNondet p === [1, 2] where
-  p :: Members '[Choose, Empty, Once] sigs => Prog sigs Int
+  p :: Members '[Choose, Empty, Once] effs => Prog effs Int
   p = do x <- once ((return 0) <|> (return 5))
          (return (x + 1)) <|> (return (x + 2))
 

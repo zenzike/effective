@@ -1,6 +1,6 @@
 {-|
-Module      : Control.Effect.Distributive
-Description : The distributive effect family
+Module      : Control.Effect.Family.Distributive
+Description : Distributive operations
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
@@ -10,17 +10,17 @@ Distributive effects on a monad @m@ are operations of the form
 functions of type @forall x. (exists b. (r (m b) , r b -> a)) -> m x@ by
 left Kan extension. A good example of operations in this form is
 @jpar :: forall x. (m x, m x) -> m (x, x)@ that runs two computations
-in paralell and wait until both of them finish (this is in contrast from
-the operation @par :: forall x. (m x, m x) -> m x@ from "Control.Effect.Distributive",
-which only keeps the result from the first computation).
+in parallel and waits until both of them finish (in contrast to
+the scoped operation @par :: forall x. (m x, m x) -> m x@ which only keeps the
+result from one of the two arguments).
 
 These operations were called \'parallel effects\' in the paper "A framework for
 higher-order effects & handlers" by Birthe van den Berg and Tom Schrijvers, but
 they are not inherently tied to parallel composition, so we call them
-distributive effects in this library, since such operations @forall x. r (m x) -> r (m x)@
+distributive effects in this library, since such operations @forall x. r (m x) -> m (r x)@
 are called /distributive laws/ (between functors @r@ and @m@) and are well
 studied in theoretical computer science (distributive laws between
-around the powerset functor and probabilistic distribution monad are especially
+the powerset functor and the probabilistic distribution monad are especially
 important in the study of (nondeterministic/probabilistic) automata theory.)
 -}
 {-# LANGUAGE  TypeFamilies  #-}

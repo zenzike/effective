@@ -13,18 +13,18 @@ and @s@-computations. The datatype @ResT s m@ has universal properties:
   1. It carries the initial algebra of the functor @μ x. m (a + s x)@. This is
   how we define @ResT s m a@ below.
 
-  2. As a monad @ResT s m@ over @Type@ is that it is the coproduct of
+  2. As a monad over @Type@, @ResT s m@ is the coproduct of
   @m@ and the @Free s@ in the category of monads, evidenced by `elimRes` below.
 
   3. In the Kleisli category @Kl(m)@ of the monad @m@, the object @a + s (ResT s m a)@
-  carries an initial algebra for the endofunctor @F_m . (a + s -) . U_m)@, where
+  carries an initial algebra for the endofunctor @F_m . (a + s -) . U_m@, where
   @F_m ⊣ U_m : Kl(m) -> Type@ is the Kleisli adjunction for the monad @m@. This
   is evidenced by `sresAlg` and `foldSRes` below.
   Moreover, @ResT s m a@ also carries an algebra of this functor (`resAlg` below) and
-  there is a homomorphism from `resAlg` to `sresAlg`, making `resAlg` as a weak
+  there is a homomorphism from `resAlg` to `sresAlg`, making `resAlg` a weak
   initial algebra.
   (In general, for every functor @s@ over @Type@, the datatype @s (μ x. m (s
-  x))@, which is isomorphic to simply @μ x. s (m x)@ carries an initial algebra for
+  x))@, which is isomorphic to simply @μ x. s (m x)@, carries an initial algebra for
   the functor @F_m . s . U_m : Kl(m) -> Kl(m)@ over the Kleisli category.)
 -}
 module Control.Monad.Trans.Resump  where
@@ -73,10 +73,11 @@ resOp' o = ResT $ return (Right (fmap return o))
 
 -- | The universal property of the monad @ResT s m x@ as the coproduct of the monad
 -- @m@ and the free monad over @s@.
-elimRes :: Monad n
-        => (forall x. m x -> n x)            -- ^ a monad morphism
-        -> (forall x. s x -> n x)            -- ^ a natural transformation
-        -> (forall x. ResT s m x -> n x)     -- ^ a monad morphism
+elimRes
+  :: Monad n
+  => (forall x. m x -> n x)           -- ^ a monad morphism
+  -> (forall x. s x -> n x)           -- ^ a natural transformation
+  -> (forall x. ResT s m x -> n x)    -- ^ a monad morphism
 elimRes l r res =
   do e <- l (unResT res)
      case e of
@@ -124,22 +125,27 @@ foldRes ret salg r =
 type SResT s m a = Either a (s (ResT s m a))
 
 -- | The initial algebra carried by @SResT@.
-sresAlg :: (Functor s, Monad m)
-        => Either a (s (m (SResT s m a))) -> m (SResT s m a)
+sresAlg
+  :: ( Functor s, Monad m )
+  => Either a (s (m (SResT s m a)))
+  -> m (SResT s m a)
 sresAlg (Left a)  = return (Left a)
 sresAlg (Right b) = return (Right (fmap ResT b))
 
 -- | The inverse of the initial algebra in the Kleisli category
-sresAlgInv :: (Functor s, Monad m)
-           => SResT s m a -> m (Either a (s (m (SResT s m a))))
+sresAlgInv
+  :: ( Functor s, Monad m )
+  => SResT s m a
+  -> m (Either a (s (m (SResT s m a))))
 sresAlgInv (Left a) = return (Left a)
 sresAlgInv (Right b) = return (Right (fmap unResT b))
 
 -- | The universal property of @sresAlg@ as the initial algebra of @F_m . (a + s -) . U_m@.
-foldSRes :: (Functor s, Monad m)
-         => (a -> m t)             -- ^ @ret@
-         -> (s (m t) -> m t)       -- ^ @salg@
-         -> (SResT s m a -> m t)   -- ^ An algebra homomorphism from @sresAlg@ to @either ret salg@.
+foldSRes
+  :: ( Functor s, Monad m )
+  => (a -> m t)                -- ^ @ret@
+  -> (s (m t) -> m t)          -- ^ @salg@
+  -> (SResT s m a -> m t)      -- ^ An algebra homomorphism from @sresAlg@ to @either ret salg@.
 foldSRes ret salg =
   sresAlgInv
   >=> (return . fmap (fmap (>>= foldSRes ret salg)))

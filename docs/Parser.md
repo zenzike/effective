@@ -5,8 +5,9 @@
 module Parser where
 
 import Control.Effect
-import Control.Effect.Cut
-import Control.Effect.Nondet
+import Control.Effect.Nondet.Cut
+import Control.Effect.Nondet.List
+import Control.Effect.Nondet.Alternative (chooseByNondet, list)
 import Control.Effect.State
 
 import Hedgehog
@@ -21,17 +22,17 @@ char = do
     (x:xs) -> do put xs
                  return x
 
-symbol :: Members [Get [Char], Put [Char], Empty, Choose] sigs => Char -> Prog sigs Char
+symbol :: Members [Get [Char], Put [Char], Empty, Choose] effs => Char -> Prog effs Char
 symbol c = do
   c' <- char
   if c == c'
     then return c
     else empty
 
-digit :: Members [Get [Char], Put [Char], Empty, Choose] sigs => Prog sigs Char
+digit :: Members [Get [Char], Put [Char], Empty, Choose] effs => Prog effs Char
 digit = foldr (<|>) empty (fmap symbol ['0' .. '9'])
 
-int, expr, term, fact :: Members [Get [Char], Put [Char], Empty, Choose] sigs => Prog sigs Int
+int, expr, term, fact :: Members [Get [Char], Put [Char], Empty, Choose] effs => Prog effs Int
 int  = do ds <- some digit ; return (read ds)
 expr = (do i <- term ; symbol '+' ; j <- expr ; return (i + j))
    <|> (do i <- term ; return i)
@@ -40,12 +41,12 @@ term = (do i <- fact ; symbol '*' ; j <- term ; return (i * j))
 fact = (int)
    <|> (do symbol '(' ; i <- expr ; symbol ')' ; return i)
 
--- int', expr', term', fact' :: forall sigs .
---   ( Member ((Get [Char])) sigs
---   , Member ((Put [Char])) sigs
---   , Member (Empty) sigs
---   , Member (Choose) sigs)
---   => Prog sigs Int
+-- int', expr', term', fact' :: forall effs .
+--   ( Member ((Get [Char])) effs
+--   , Member ((Put [Char])) effs
+--   , Member (Empty) effs
+--   , Member (Choose) effs)
+--   => Prog effs Int
 --
 -- int'  = read <$> some digit
 -- expr' = ((+) <$> term' <* symbol '+' <*> expr') <|> term'
@@ -62,7 +63,7 @@ parse cs p = handle (state cs `fuse` list) p
 parseBacktrack
   :: text -> a ! [Put text, Get text, Empty, Choose, Once]
   -> [(a, text)]
-parseBacktrack cs p = handle (unscope (Proxy @(Choose_)) |> state cs |> backtrack) p
+parseBacktrack cs p = handle (chooseByNondet |> state cs |> backtrack) p
 
 example_Parse1 :: Property
 example_Parse1 = property $
@@ -83,9 +84,9 @@ example_NotParse = property $
     ([],"")
 
 -- This example demonstrates the use of Cut
-expr', term', fact' :: forall sigs .
-  Members [Get [Char], Put [Char], Empty, Choose, CutFail, CutCall] sigs
-  => Prog sigs Int
+expr', term', fact' :: forall effs .
+  Members [Get [Char], Put [Char], Empty, Choose, CutFail, CutCall] effs
+  => Prog effs Int
 expr' = do i <- term'
            cutCall ((do symbol '+' ; cut; j <- expr' ; return (i + j)) <|>
                     (do return i))
@@ -95,7 +96,7 @@ term' = do i <- fact'
 fact' = int <|> (do symbol '(' ; i <- expr' ; symbol ')' ; return i)
 --
 -- A different parser!
-parse' :: text -> Prog [Put text, Get text, Once, Empty, Choose, CutFail, CutCall] a -> [(a, text)]
+parse' :: text -> Prog [Put text, Get text, Once, Empty, Choose, NondetOr, CutFail, CutCall] a -> [(a, text)]
 parse' cs p  = handle (state cs `fuse` onceNondet) p
 
 example_Parse2 :: Property

@@ -12,7 +12,7 @@ import Control.Applicative
 import Control.Monad.Trans.Class
 
 -- | The t`CutListT` transformer builds a cut list, which is similar to a
--- list, but where a @cut@ operation from logic programming is included.
+-- list but includes a @cut@ operation from logic programming.
 -- The Church encoding is used for efficiency.
 newtype CutListT m a = CutListT
   { runCutListT :: forall b . (a -> m b -> m b) -> m b -> m b -> m b }

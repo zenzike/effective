@@ -1,14 +1,17 @@
 {-|
-Module      : Control.Effect.CodeGen.Type
+Module      : Control.Effect.CodeGen.Operations
 Description : Types for the code-generation effect
 License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
 
-This module contains some basic definitions for type `Up` of code.
+This module contains some basic definitions for type `CodeQ` of code.
 -}
 {-# LANGUAGE TemplateHaskell #-}
-module Control.Effect.CodeGen.Type where
+module Control.Effect.CodeGen.Operations
+  ( module Control.Effect.CodeGen.Operations
+  , CodeQ (..)
+  ) where
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Syntax
@@ -17,14 +20,9 @@ import Control.Effect.Reader
 import Control.Effect.Except
 import Control.Effect ( Member, Prog )
 
--- | In two-level type theory, the type constructor @Up@ turns every object-level
--- type into a meta-level type. In Template Haskell, the object-level language
--- and the meta-level language are the same.
-type Up = CodeQ
-
 -- | Print a piece of code.
-printUp :: Up a -> IO ()
-printUp a = do
+printCodeQ :: CodeQ a -> IO ()
+printCodeQ a = do
   x <- unType <$> runQ (examineCode a)
   print $ ppr x
 
@@ -33,7 +31,7 @@ printUp a = do
 -- for example to implement this @codeApp@ such that @codeApp xs [|| [] ||]@
 -- equals @xs@ (rather than @[|| $$xs ++ [] ||]@). We don't essentially rely on
 -- this but it is handy in a few places for generating better-looking code.
-codeApp :: Up [a] -> Up [a] -> Up [a]
+codeApp :: CodeQ [a] -> CodeQ [a] -> CodeQ [a]
 codeApp cql@(Code ql) cqr@(Code qr) = Code $
   do r <- qr
      if isEmptyListExp r
@@ -45,26 +43,26 @@ codeApp cql@(Code ql) cqr@(Code qr) = Code $
       | e == '[]     =  True
     isEmptyListExp _ = False
 
--- * Operations specialised for `Up`.
+-- * Operations specialised for `CodeQ`.
 --
--- Sometimes GHC has a hard time of inferring the type of operations like
+-- Sometimes GHC has a hard time inferring the type of operations like
 -- @put [|| ... ||]@ because the quotation by default has type @Code m@.
 -- So having some specialised operations is sometimes handy.
 
-putUp :: Member (Put (Up c)) sigs => Up c -> Prog sigs ()
-putUp = put
+putC :: Member (Put (CodeQ c)) effs => CodeQ c -> Prog effs ()
+putC = put
 
-getUp :: Member (Get (Up c)) sigs => Prog sigs (Up c)
-getUp = get
+getC :: Member (Get (CodeQ c)) effs => Prog effs (CodeQ c)
+getC = get
 
-askUp :: Member (Ask (Up c)) sigs => Prog sigs (Up c)
-askUp = ask
+askC :: Member (Ask (CodeQ c)) effs => Prog effs (CodeQ c)
+askC = ask
 
-localUp :: Member (Local (Up c)) sigs => (Up c -> Up c) -> Prog sigs (Up c) -> Prog sigs (Up c)
-localUp = local
+localC :: Member (Local (CodeQ c)) effs => (CodeQ c -> CodeQ c) -> Prog effs (CodeQ c) -> Prog effs (CodeQ c)
+localC = local
 
-throwUp :: Member (Throw (Up c)) sigs => Up c -> Prog sigs a
-throwUp = throw
+throwC :: Member (Throw (CodeQ c)) effs => CodeQ c -> Prog effs a
+throwC = throw
 
-catchUp :: Member (Catch (Up c)) sigs => Prog sigs a -> (Up c -> Prog sigs a) -> Prog sigs a
-catchUp = catch
+catchC :: Member (Catch (CodeQ c)) effs => Prog effs a -> (CodeQ c -> Prog effs a) -> Prog effs a
+catchC = catch

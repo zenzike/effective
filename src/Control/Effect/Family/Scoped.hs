@@ -1,12 +1,12 @@
 {-|
-Module      : Control.Effect.Scoped
-Description : The scoped effect family
+Module      : Control.Effect.Family.Scoped
+Description : Scoped operations
 License     : BSD-3-Clause
 Maintainer  : Nicolas Wu
 Stability   : experimental
 
 A scoped operation of signature @sig :: Type -> Type@ on a monad @m@ is a
-function @s :: forall x. sig (m x) -> m x@. Unlike \'algebraic operations\'
+function @s :: forall x. sig (m x) -> m x@. Unlike algebraic operations
 defined in "Control.Effect.Family.Algebraic", scoped operations don't need
 to satisfy the equation:
 
@@ -14,7 +14,7 @@ to satisfy the equation:
 
 so the operation @s@ intuitively delimits a boundary between its argument
 @x@ and the rest of the computation @k@. The effect of @s@ is applied only
-to its \'scope\' @x@. Important examples are scoped operations include
+to its \'scope\' @x@. Important examples of scoped operations include
 
 1. exception catching @catch p q@,
 2. semi-deterministic operator @once@ in logic programming,
@@ -48,7 +48,6 @@ import Control.Monad.Trans.Identity
 import Control.Effect.Internal.AlgTrans
 import Control.Effect.Internal.Handler
 import Control.Effect.Internal.Forward
-import Control.Effect.Internal.Effs
 import Control.Monad.Trans.CutList
 import Control.Monad.Logic
 import Data.List.Kind
@@ -58,9 +57,9 @@ import Data.Proxy
 -- | The family of scoped operations. Forwarding scoped operations through a
 -- transformer must be given explicitly using the `Forward` class.
 newtype Scp (sig :: Type -> Type)
-         (f :: Type -> Type)
-         k
-         = Scp (sig (f k))
+        (f :: Type -> Type)
+        k
+        = Scp (sig (f k))
 {-
 We can optimise the constructor @Scp@ by using a Coyoneda representation so that
 instead the constructor becomes:
@@ -115,24 +114,25 @@ instance Functor sig => Forward (Scp sig) (ReaderT w) where
   {-# INLINE fwd #-}
   fwd alg (Scp op) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op)))
 
--- | Unary scoped operations can be forwarded by `ListT` by applying the
--- operation recursively to all @m@-actions inside the `ListT` value.
+-- | Unary scoped operations can be forwarded by t`ListT` by applying the
+-- operation recursively to all @m@-actions inside the t`ListT` value.
 instance U.Unary sig => Forward (Scp sig) ListT where
   type FwdConstraint (Scp sig) ListT = Functor
-  fwd :: forall m. Functor m => Algebra1 (Scp sig) m
-      -> Algebra1 (Scp sig) (ListT m)
+  fwd :: forall m. Functor m => (forall x. Scp sig m x -> m x)
+      -> (forall x. Scp sig (ListT m) x -> ListT m x)
   fwd alg (Scp op) = hmap ualg (U.get op) where
     ualg :: forall y. m y -> m y
     ualg op' = alg (Scp (U.upd op op'))
+
 {-
 The following instance compiles but has the unintended effect of
-applying the forwarder only to the first "element" in the `ListT`:
+applying the forwarder only to the first "element" in the @ListT@:
 
 > instance Functor sig => Forward (Scp sig) ListT where
 >   {-# INLINE fwd #-}
 >   fwd alg (Scp op) = ListT (alg (Scp (fmap runListT op)))
 
-A similar problem occurs for these instances of `CutListT` and `LogicT`:
+A similar problem occurs for these instances of @CutListT@ and @LogicT@:
 
 > instance Functor sig => Forward (Scp sig) CutListT where
 >   {-# INLINE fwd #-}
@@ -145,23 +145,8 @@ A similar problem occurs for these instances of `CutListT` and `LogicT`:
 
 instance (Functor s, U.Unary sig) => Forward (Scp sig) (ResT s) where
   type FwdConstraint (Scp sig) (ResT s) = Functor
-  fwd :: forall m. Functor m => Algebra1 (Scp sig) m
-      -> Algebra1 (Scp sig) (ResT s m)
+  fwd :: forall m. Functor m => (forall x. Scp sig m x -> m x)
+      -> (forall x. Scp sig (ResT s m) x -> ResT s m x)
   fwd alg (Scp op) = hmap ualg (U.get op) where
     ualg :: forall y. m y -> m y
     ualg op' = alg (Scp (U.upd op op'))
-
-unscope :: Proxy sig -> Handler '[Scp sig] '[Alg sig] '[] a a
-unscope _ = interpretM1 (\oalg (Scp op) -> oalg (Eff (Alg op)) >>= id)
-
-class Unscopes sigs where
-  unscopes :: Proxy sigs -> Handler (Map Scp sigs) (Map Alg sigs) '[] a a
-
-instance Unscopes '[] where
-  unscopes :: Proxy '[] -> Handler (Map Scp '[]) (Map Alg '[]) '[] a a
-  unscopes _ = identity
-
-instance (AppendAT# '[Scp sig] (Map Scp sigs) '[Alg sig] (Map Alg sigs),
-   Unscopes sigs) => Unscopes (sig ': sigs) where
-  unscopes :: Proxy (sig ': sigs) -> Handler (Map Scp (sig ': sigs)) (Map Alg (sig ': sigs)) '[] a a
-  unscopes _ = unscope (Proxy @sig) `appendHdl` unscopes (Proxy @sigs)

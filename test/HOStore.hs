@@ -6,12 +6,11 @@ import Control.Effect
 import Control.Effect.HStore.Unsafe
 import qualified Control.Effect.HStore.Safe as Safe
 import qualified Control.Effect.State as St
-import Control.Effect.Nondet
+import Control.Effect.Nondet.List
 import Data.List.Kind
 import Data.Functor.Identity
-import Data.HFunctor
 
-prog1 :: Progs '[New, Get, Put] Int
+prog1 :: Int ! '[New, Get, Put]
 prog1 = do iRef <- new @Int 1
            fRef <- new @(Int -> Int) (\i -> i * i)
            f <- get fRef
@@ -22,10 +21,10 @@ prog1 = do iRef <- new @Int 1
 test1 :: Int
 test1 = handle hstore prog1
 
-landinKnot :: forall sigs. Members '[New, Get, Put] sigs => Prog sigs Int
+landinKnot :: forall effs. Members '[New, Get, Put] effs => Prog effs Int
 landinKnot =
   do fRef <- new (\i -> return 0)
-     let factorial :: Int -> Prog sigs Int
+     let factorial :: Int -> Prog effs Int
          factorial 0 = return 1
          factorial n = do f <- get fRef; fmap (n *) (f (n - 1))
      put fRef factorial
@@ -34,18 +33,18 @@ landinKnot =
 test2 :: Int
 test2 = handle hstore landinKnot   -- 120
 
-goWrong :: forall sigs. Members '[New, Get, Put] sigs => Prog sigs Int
+goWrong :: forall effs. Members '[New, Get, Put] effs => Prog effs Int
 goWrong = do iRef <- new @Int 0
              return (handle hstore (get iRef))
 test3 = handle hstore goWrong      -- crash
 
 
-goWrong2 :: forall sigs.
+goWrong2 :: forall effs.
             Members '[ New, Get, Put,
                        Empty, Choose,
                        St.Put (Maybe (Ref Int)), St.Get (Maybe (Ref Int))
-                     ] sigs
-         => Prog sigs Int
+                     ] effs
+         => Prog effs Int
 goWrong2 = do iRef <- new @Int 0
               (do iRef' <- new @Int 0; St.put (Just iRef'); return 0) <|>
                 (do r <- St.get;
@@ -56,8 +55,8 @@ goWrong2 = do iRef <- new @Int 0
 test3' :: [Int]
 test3' = handle (hstore |> nondet' |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
 
-progS :: forall w sigs. (Members '[Safe.Put w, Safe.Get w, Safe.New w] sigs)
-      => Prog sigs Int
+progS :: forall w effs. (Members '[Safe.Put w, Safe.Get w, Safe.New w] effs)
+      => Prog effs Int
 progS = do iRef <- Safe.new @Int @w 1
            fRef <- Safe.new @(Int -> Int) @w (\i -> i * i)
            f <- Safe.get fRef
@@ -66,11 +65,11 @@ progS = do iRef <- Safe.new @Int @w 1
            return (f i)
 
 test4 :: Int
-test4 = runIdentity (Safe.handleHSM @'[] absurdEffs progS') where
+test4 = runIdentity (Safe.handleHSM @'[] emptyAlg progS') where
   progS' :: forall w. Prog (Safe.HSEffs w) Int
   progS' = progS @w
 
-prog2 :: forall w. Progs '[Choose, Empty, Safe.Put w, Safe.Get w, Safe.New w] Int
+prog2 :: forall w. Int ! '[Choose, Empty, Safe.Put w, Safe.Get w, Safe.New w]
 prog2 = do iRef <- Safe.new @Int @w 1
            (do Safe.put iRef 2; return 0) <|> (do Safe.get iRef)
 
@@ -78,9 +77,9 @@ prog2 = do iRef <- Safe.new @Int @w 1
 -- test5 == [0, 1]
 test5 :: [Int]
 test5 = handle nondet' (Safe.handleHSP prog2') where
-  prog2' :: forall w sigs.
-         ( Members '[Empty, Choose] sigs, Append (Safe.HSEffs ()) sigs )
-         => Prog (Safe.HSEffs w :++ sigs) Int
+  prog2' :: forall w effs.
+         ( Members '[Empty, Choose] effs )
+         => Prog (Safe.HSEffs w :++ effs) Int
   prog2' = prog2 @w
 
 -- State is global if state gets handled later

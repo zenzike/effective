@@ -2,13 +2,12 @@ cabal-version:       3.0
 name:                effective
 version:             0.1.0.0
 synopsis:            Effect handlers
-description:         Effect handlers library for algebraic, scoped, and other effects.
+description:         Composable and stageable handlers of higher-order algebraic effects
 license:             BSD-3-Clause
 license-file:        LICENSE
-author:              Nicolas Wu
+author:              Nicolas Wu, Zhixuan Yang
 maintainer:          Nicolas Wu   <n.wu@imperial.ac.uk>
                      Zhixuan Yang <zhixuan.yang@protonmail.com>
--- copyright:
 category:            Control
 build-type:          Simple
 extra-source-files:
@@ -29,15 +28,16 @@ source-repository head
 common common
   default-language: GHC2021
   default-extensions:
-    DataKinds, CPP, ViewPatterns, PatternSynonyms, TemplateHaskell
+    DataKinds, CPP, ViewPatterns, PatternSynonyms, TemplateHaskell, PartialTypeSignatures, MonoLocalBinds
   if impl(ghc >=9.10.1)
     default-extensions: RequiredTypeArguments
 
+  ghc-options: -Wno-partial-type-signatures
 
-  ghc-options:
-  --cpp-options: -DINDEXED
-  --cpp-options: -DPROGDIRECT
-
+flag dump
+  description: Make some test cases dump splices and/or ghc-core
+  default: False
+  manual: True
 
 library
   import: common
@@ -45,34 +45,34 @@ library
   exposed-modules:
     Control.Effect.Plugin
     Control.Effect
-
-    Control.Effect.Alternative
-    Control.Effect.Cut
-    Control.Effect.Except
-    Control.Effect.IO
-    Control.Effect.Maybe
-    Control.Effect.Nondet
-    Control.Effect.Concurrency
-    Control.Effect.Concurrency.Type
-    Control.Effect.Yield
-    Control.Effect.Nondet.Type
-    Control.Effect.Nondet.List
-    Control.Effect.Nondet.Logic
-    Control.Effect.Reader
-    Control.Effect.State
-    Control.Effect.State.Type
-    Control.Effect.State.Lazy
-    Control.Effect.State.Strict
-    Control.Effect.Writer
+    Control.Effect.WithName
     Control.Effect.Family.Algebraic
     Control.Effect.Family.Scoped
     Control.Effect.Family.Distributive
-    Control.Effect.WithName
+--
+    Control.Effect.Except
+    Control.Effect.IO
+    Control.Effect.Maybe
+    Control.Effect.Concurrency
+    Control.Effect.Concurrency.Operations
+    Control.Effect.Yield
+    Control.Effect.Nondet
+    Control.Effect.Nondet.Operations
+    Control.Effect.Nondet.Alternative
+    Control.Effect.Nondet.List
+    Control.Effect.Nondet.Logic
+    Control.Effect.Nondet.Cut
+    Control.Effect.Reader
+    Control.Effect.State
+    Control.Effect.State.Operations
+    Control.Effect.State.Lazy
+    Control.Effect.State.Strict
+    Control.Effect.Writer
     Control.Effect.HStore.Unsafe
     Control.Effect.HStore.Safe
 
     Control.Effect.CodeGen
-    Control.Effect.CodeGen.Type
+    Control.Effect.CodeGen.Operations
     Control.Effect.CodeGen.Up
     Control.Effect.CodeGen.Down
     Control.Effect.CodeGen.Split
@@ -82,6 +82,7 @@ library
     Control.Effect.CodeGen.SoPU
     Control.Effect.CodeGen.Nondet
     Control.Effect.CodeGen.Concurrency
+    Control.Effect.CodeGen.ScopedC
 
     Control.Monad.Trans.CutList
     Control.Monad.Trans.List
@@ -92,21 +93,14 @@ library
     Control.Monad.Trans.Compose
     Control.Monad.Trans.Push
 
-    Data.CutList
     Data.Iso
     Data.HFunctor
     Data.List.Kind
     Data.Functor.Unary
+    Data.Sequence.Class
 
-    Control.Effect.Internal.Effs
-    Control.Effect.Internal.Effs.Indexed
-    Control.Effect.Internal.Effs.Indexed.Array
-    Control.Effect.Internal.Effs.Indexed.Class
-    Control.Effect.Internal.Effs.Indexed.Type
-    Control.Effect.Internal.Effs.Sum
-    Control.Effect.Internal.Effs.Sum.Type
-    Control.Effect.Internal.Prog.ProgImp
-    Control.Effect.Internal.Prog.ProgDirect
+    Control.Effect.Internal.Algebra
+    Control.Effect.Internal.Prog.Imp
     Control.Effect.Internal.Prog
     Control.Effect.Internal.Forward
     Control.Effect.Internal.Handler
@@ -114,8 +108,11 @@ library
     Control.Effect.Internal.AlgTrans
     Control.Effect.Internal.AlgTrans.Type
     Control.Effect.Internal.TH
+
   hs-source-dirs:
     src
+
+  ghc-options: -O2
 
   build-depends:
     base               >= 4.16   && < 4.23,
@@ -125,9 +122,11 @@ library
     ghc-prim           >= 0.8    && < 0.14,
     logict             >= 0.8.2  && < 0.9,
     template-haskell   >= 2.18   && < 2.25,
-    ghc
+    primitive          >= 0.7.1  && < 0.10,
+    ghc                >= 9.2.1  && < 9.15
 
 test-suite readme
+  import:        common
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded -pgmL markdown-unlit
   main-is:       README.lhs
@@ -167,17 +166,24 @@ test-suite docs
     Operations
 
 test-suite concur
+  import:        common
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded
+  if flag(dump)
+    ghc-options: -ddump-splices -ddump-to-file
   main-is:       Concur.hs
   default-language: GHC2021
-  default-extensions: DataKinds
+  default-extensions: DataKinds, TemplateHaskell
   hs-source-dirs:  test
+  other-modules:
+    ConcurStaged
   build-depends:
     base               >= 4.16 && < 4.23,
     effective,
+    containers         >= 0.6    && < 0.9,
 
 test-suite hostore
+  import:        common
   type:          exitcode-stdio-1.0
   ghc-options:   -threaded
   main-is:       HOStore.hs
@@ -189,10 +195,13 @@ test-suite hostore
     effective,
 
 test-suite staged
+  import:        common
   type:          exitcode-stdio-1.0
   main-is:       Staged.hs
   default-language: GHC2021
   default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
+  if flag(dump)
+    ghc-options: -ddump-to-file -ddump-splices
   hs-source-dirs:  test
   build-depends:
     base               >= 4.16 && < 4.23,
@@ -203,7 +212,9 @@ test-suite staged
   other-modules:
     StagedGen
 
+
 test-suite plugin
+  import:        common
   type:          exitcode-stdio-1.0
   ghc-options:   -fplugin Control.Effect.Plugin
   main-is:       PluginTest.hs
@@ -220,13 +231,15 @@ test-suite plugin
     StagedGen
 
 test-suite misc
-  import: common
+  import:        common
   type:          exitcode-stdio-1.0
   main-is:       Misc.hs
   default-language: GHC2021
   default-extensions: DataKinds TemplateHaskell ImpredicativeTypes AllowAmbiguousTypes
   hs-source-dirs:  test
-  -- ghc-options: -ddump-splices
+  if flag(dump)
+    ghc-options: -ddump-to-file -ddump-splices -ddump-simpl -dsuppress-idinfo
+                 -dsuppress-uniques -dsuppress-coercions -dsuppress-module-prefixes
   build-depends:
     base               >= 4.16 && < 4.23,
     effective,

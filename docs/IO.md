@@ -33,8 +33,8 @@ import qualified Hedgehog as H
 Working with IO
 ===============
 
-A value of type `Prog sigs a` is a syntax tree of a program that uses
-operations in the signature `sigs`, and with variables of type `a`. It
+A value of type `Prog effs a` is a syntax tree of a program that uses
+operations in the effects `effs`, and with variables of type `a`. It
 describes the order in which the operations are performed, but leaves
 the semantics of those operations for the handler to interpret.
 
@@ -57,8 +57,8 @@ Pure vs Mutable State
 The `get` and `set` operations are used to work with a single state
 value of type `s`:
 ```haskell ignore
-put :: Member (Put s) sig => s -> Prog sig ()
-get :: Member (Get s) sig => Prog sig s
+put :: Member (Put s) effs => s -> Prog effs ()
+get :: Member (Get s) effs => Prog effs s
 ```
 They can be used to define a simple increment function that
 bumps the value in the state by 1:
@@ -108,7 +108,7 @@ example2 = do ref <- newIORef (41 :: Int)
 Recording IO Actions
 --------------------
 ```haskell
-helloIO :: Members '[Alg IO] sigs => Prog sigs ()
+helloIO :: Members '[Alg IO] effs => Prog effs ()
 helloIO = io (Prelude.putStrLn "hello")
 ```
 `helloIO` prints only when the program is evaluated with an algebra that runs
@@ -196,9 +196,9 @@ non-pure base monad is `handleM`. It runs the handler in a caller-chosen monad a
 supplies an algebra for the effects that remain in that monad:
 ```haskell ignore
 handleM
-  :: Algebra xsigs m
-  -> Handler sigs osigs ts a b
-  -> Prog (sigs `Union` xsigs) a
+  :: Algebra xeffs m
+  -> Handler effs oeffs ts a b
+  -> Prog (effs `Union` xeffs) a
   -> m b
 ```
 For ordinary terminal `IO`, the external algebra is `ioAlg`:
@@ -235,8 +235,8 @@ can work directly with an `AlgTrans` and use `evalAT'`.
 Here is a simplified type:
 ```haskell ignore
 evalAT'
-  :: AlgTrans sigs '[] ts cs
-  -> Prog sigs a
+  :: AlgTrans effs '[] ts cs
+  -> Prog effs a
   -> Apply ts m a
 ```
 
@@ -291,8 +291,8 @@ useful carrier behaviour underneath it.
 To see where the requirements come from, look at the two parts of a handler.
 Ignoring some internal wrappers, a handler has the following shape:
 ```haskell ignore
-halg :: forall m. Monad m => Algebra osigs m -> Algebra sigs (Apply ts m)
-hrun :: forall m. Monad m => Algebra osigs m -> Apply ts m a -> m b
+halg :: forall m. Monad m => Algebra oeffs m -> Algebra effs (Apply ts m)
+hrun :: forall m. Monad m => Algebra oeffs m -> Apply ts m a -> m b
 ```
 The algebra transformer `halg` explains how to interpret the input operations in
 the carrier `Apply ts m`. The runner `hrun` explains how to run the final carrier
@@ -303,8 +303,8 @@ For example, `handle` has a constraint of this shape:
 ```haskell ignore
 handle
   :: Monad (Apply ts Identity)
-  => Handler sigs '[] ts a b
-  -> Prog sigs a
+  => Handler effs '[] ts a b
+  -> Prog effs a
   -> b
 ```
 Handler composition needs the stronger reusable version: if `m` is a monad, then
@@ -488,11 +488,11 @@ present in the type without contributing meaningfully to the `IO` action that
 `ConstIO` stores.
 
 This is allowed because `Handler` does not promise that every carrier layer is
-observationally relevant. It tracks which operation signatures are consumed and
-which operation signatures remain. It also asks for forwarding evidence when
-operations must pass through a carrier. It does not impose a noninterference law
-saying that a carrier must preserve, run, or expose all carrier behaviour below
-it. The runner for `constIO` has the essential shape:
+observationally relevant. It tracks which effects are consumed and which effects
+remain. It also asks for forwarding evidence when operations must pass through a
+carrier. It does not impose a noninterference law saying that a carrier must
+preserve, run, or expose all carrier behaviour below it. The runner for
+`constIO` has the essential shape:
 ```haskell ignore
 forall m. Monad m => ConstIO m a -> m (IO a)
 ```
@@ -539,7 +539,7 @@ example_constIO_cannot_lift_base = property $ do
 First, `handle constIO` constructs an `IO` action. The effects have not happened
 until that returned action is run:
 ```haskell
-recordIO :: Members '[Alg IO] sigs => IORef [String] -> Prog sigs [String]
+recordIO :: Members '[Alg IO] effs => IORef [String] -> Prog effs [String]
 recordIO ref = do
   io (modifyIORef ref (++ ["first"]))
   io (modifyIORef ref (++ ["second"]))
@@ -580,7 +580,7 @@ example_constIO_underMaybeT_success = property $ do
 It also cooperates with failure in the layer above it. The first `IO` action has
 already been sequenced before the failure; the second one is never reached:
 ```haskell
-recordThenAbort :: Members '[Alg IO, Maybe.Throw] sigs => IORef [String] -> Prog sigs ()
+recordThenAbort :: Members '[Alg IO, Maybe.Throw] effs => IORef [String] -> Prog effs ()
 recordThenAbort ref = do
   io (modifyIORef ref (++ ["before"]))
   Maybe.throw
@@ -605,7 +605,7 @@ the usual `StateT` carrier. This handler consumes `Get` and `Put`, and emits
 `Alg IO` actions that read and write the reference:
 ```haskell
 
-bumpTwice :: Members '[State.Get Int, State.Put Int] sigs => Prog sigs Int
+bumpTwice :: Members '[State.Get Int, State.Put Int] effs => Prog effs Int
 bumpTwice = do
   n <- State.get @Int
   State.put @Int (n + 1)

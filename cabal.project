@@ -2,3 +2,5 @@ packages:
     effective.cabal
 
 tests: True
+haddock-css: docs/haddock-theme/effective.css
+haddock-hyperlink-source: True

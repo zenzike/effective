@@ -5,7 +5,7 @@ License     : BSD-3-Clause
 Maintainer  : Nicolas Wu
 Stability   : experimental
 
-This module contains the `HFunctor` class, which descibes higher-order functors.
+This module contains the `HFunctor` class, which describes higher-order functors.
 -}
 
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -24,7 +24,7 @@ import qualified Control.Monad.Trans.State.Lazy as Lazy
 import Data.Kind ( Type )
 
 -- | A type @h@ is a higher-order functor if it provides a function `hmap` which,
--- given any functors @f@ and @g@ lets you apply a natural transformation
+-- given any functors @f@ and @g@, lets you apply a natural transformation
 -- @forall x . f x -> g x@ between them. Given any functor @f@, the type @h f@ must
 -- also be a functor, and `hmap` must adhere to the following laws:
 --
@@ -40,8 +40,11 @@ instance HFunctor IdentityT where
 instance (HFunctor h, HFunctor k) =>
   HFunctor (ComposeT h k) where
     {-# INLINE hmap #-}
-    hmap :: (HFunctor h, HFunctor k, Functor f, Functor g) =>
-      (forall x. f x -> g x) -> ComposeT h k f a -> ComposeT h k g a
+    hmap
+      :: ( HFunctor h, HFunctor k, Functor f, Functor g )
+      => (forall x. f x -> g x)
+      -> ComposeT h k f a
+      -> ComposeT h k g a
     hmap h (ComposeT x) = ComposeT (hmap (hmap h) x)
 
 instance HFunctor MaybeT where

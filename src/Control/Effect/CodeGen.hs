@@ -7,11 +7,11 @@ Stability   : experimental
 
 This module contains everything related to the code-generation effect for
 staged monadic programming. This effect is useful for writing highly optimised
-effectful programs without any abstract cost incurred by algebraic effects and
-handlers. Programming with the code-generation effect slightly changes the way
-of using the @effective@ library, so it deserves its own dedicated tutorial
+effectful programs without any abstraction overhead incurred by algebraic effects and
+handlers. Programming with the code-generation effect slightly changes how
+the @effective@ library is used, so it deserves its own dedicated tutorial
 (to be written). The rough idea is that instead of handling effectful programs
-of type @Prog sigs a@ at runtime, we only use @effective@ at compile time to
+of type @Prog effs a@ at runtime, we only use @effective@ at compile time to
 generate (optimised) monadic programs (e.g. of type @StateT (ListT Identity) a@)
 to be executed at runtime. There are some random small examples in @test/Staged.hs@
 and @test/StagedGen.hs@ of how this is done.
@@ -25,9 +25,10 @@ module Control.Effect.CodeGen (
     module Control.Effect.CodeGen.Up
   , module Control.Effect.CodeGen.Split
   , module Control.Effect.CodeGen.Down
-  , module Control.Effect.CodeGen.Type
+  , module Control.Effect.CodeGen.Operations
   , module Control.Effect.CodeGen.Gen
   , module Control.Effect.CodeGen.Eval
+  , module Control.Effect.CodeGen.ScopedC
   , module Control.Effect.CodeGen.JoinFlow
   , module Control.Effect.CodeGen.Nondet
   , module Control.Effect.CodeGen.Concurrency
@@ -36,9 +37,10 @@ module Control.Effect.CodeGen (
 import Control.Effect.CodeGen.Up
 import Control.Effect.CodeGen.Split
 import Control.Effect.CodeGen.Down
-import Control.Effect.CodeGen.Type
+import Control.Effect.CodeGen.Operations
 import Control.Effect.CodeGen.Gen
 import Control.Effect.CodeGen.Eval
+import Control.Effect.CodeGen.ScopedC
 import Control.Effect.CodeGen.JoinFlow
 import Control.Effect.CodeGen.Nondet
 import Control.Effect.CodeGen.Concurrency

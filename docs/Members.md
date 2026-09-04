@@ -12,19 +12,19 @@ Members
 -------
 
 There are three scenarios to consider when trying to engineer a fit between a
-program (shaft) of type `Prog sigs a` and a handler (hole) of type
-`Handler isigs osigs ts fs`, depending on how their interfaces correspond:
+program (shaft) of type `Prog effs a` and a handler (hole) of type
+`Handler ieffs oeffs ts fs`, depending on how their interfaces correspond:
 
-1. *Transition* (`sigs = isigs`): The program and the handler have the same
-   signatures. In the effective library, every effect is
+1. *Transition* (`effs = ieffs`): The program and the handler have the same
+   effects. In the effective library, every effect is
    handled sequentially, from left to right in the order dictated by the
    handler. Programs are defined using `Members` so that reorderings
    are dealt with by the constraints solver.
-2. *Clearance* (`sigs < isigs`): The handler can deal with more operations than
+2. *Clearance* (`effs < ieffs`): The handler can deal with more operations than
    required by the program. In these situations the handler or the program can
    be weakened. In the effective library, the program is weakened by
    the constraints solver due to the `Members` constraint.
-3. *Interference* (`sigs > isigs`): The handler cannot deal with all the
+3. *Interference* (`effs > ieffs`): The handler cannot deal with all the
    operations exposed by the program. Any residual effects will have to be
    handled later. In the effective library, a handler's interface can be
    extended using `fuse` and `pipe` with another handler, and residual

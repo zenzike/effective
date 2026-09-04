@@ -16,21 +16,31 @@ module Control.Effect.Internal.AlgTrans.Type where
 
 import Data.Kind
 import Data.List.Kind
-import Control.Effect.Internal.Effs
+import Control.Effect.Internal.Algebra
 
--- | Transforming effects @osigs@ into effects @sigs@ on a functor satisfying @cs@.
+-- | Transforming effects @oeffs@ into effects @effs@ on a functor satisfying @cs@.
 type AlgTrans
-  :: [Effect]                             -- ^ sigs  : input effects
-  -> [Effect]                             -- ^ osigs : output effects
+  :: [Effect]                             -- ^ effs  : input effects
+  -> [Effect]                             -- ^ oeffs : output effects
   -> [(Type -> Type) -> (Type -> Type)]   -- ^ ts    : carrier transformer
   -> ((Type -> Type) -> Constraint)       -- ^ cs    : carrier constraint
   -> Type
-newtype AlgTrans sigs osigs ts cs = AlgTrans {
-   getAT :: forall m . cs m => Algebra osigs m -> Algebra sigs (Apply ts m) }
+newtype AlgTrans effs oeffs ts cs = AlgTrans {
+   getAT :: forall m . cs m => Algebra oeffs m -> Algebra effs (Apply ts m) }
+
+-- | Transforming /code/ of algebras of @oeffs@ into code of algebras of @effs@.
+type AlgTransC
+  :: [Effect]                             -- ^ effs  : input effects
+  -> [Effect]                             -- ^ oeffs : output effects
+  -> [(Type -> Type) -> (Type -> Type)]   -- ^ ts    : carrier transformer
+  -> ((Type -> Type) -> Constraint)       -- ^ cs    : carrier constraint
+  -> Type
+newtype AlgTransC effs oeffs ts cs = AlgTransC {
+   getATC :: forall m . cs m => AlgebraC oeffs m -> AlgebraC effs (Apply ts m) }
 
 -- * Constraints
 
--- | The always true constraint.
+-- | The always-true constraint.
 class    TruthC (m :: Type -> Type) where
 instance TruthC m where
 

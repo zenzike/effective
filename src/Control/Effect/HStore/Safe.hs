@@ -1,4 +1,4 @@
-{-# LANGUAGE QuantifiedConstraints, MonoLocalBinds, CPP, AllowAmbiguousTypes #-}
+{-# LANGUAGE QuantifiedConstraints, MonoLocalBinds, CPP, AllowAmbiguousTypes, MagicHash #-}
 {-|
 Module      : Control.Effect.HStore.Safe
 Description : Higher-order store (safe implementation)
@@ -7,17 +7,17 @@ Maintainer  : Zhixuan Yang
 Stability   : experimental
 
 This module provides the effect of higher-order store, that is, mutable state that
-supports dynamically creation of cells that store values of /any (lifted) type/.
+supports the dynamic creation of cells that store values of /any (lifted) type/.
 This module eliminates the problems mentioned in the sister module "Control.Effect.HOStore.Unsafe"
 using a technique similar to Haskell's @ST@ monad. The reference type t`Ref` and the types of the
 operations t`Put`, t`New`, t`Get` are all indexed by an additional \'world\' index @w@, and the
 handler can only be applied to programs polymorphic in the world parameter.
-Currently, @effective@ doesn't have machinery for such /word-indexed/ handlers and operations, so
+Currently, @effective@ doesn't have machinery for such /world-indexed/ handlers and operations, so
 this module only exports handling functions such as `runHS`, `handleHS`, `handleHSP`, `handleHSM`
 without exporting an actual handler that can be combined with other handlers.  This situation may
 be changed in future versions of @effective@.
 
-The author conjecture with reasonable confidence that the API exposed by this module is safe (i.e.
+The author conjectures with reasonable confidence that the API exposed by this module is safe (i.e.
 reading/writing a reference always succeeds) when this module is used with any algebraic and scoped
 effects (in whatever handling order). But if there are higher-order operations @op@ that are not
 scoped operations and these operations @op@ are handled /after/ higher-order store, one should be
@@ -43,10 +43,7 @@ module Control.Effect.HStore.Safe (
   handleHSM,
 ) where
 
-import Control.Effect.Internal.Effs
-import Control.Effect.Internal.Forward
-import Control.Effect.Internal.Handler
-import Control.Effect.Internal.Prog ( Prog, call, progAlg )
+import Control.Effect
 import Control.Monad.Trans.Class
 import GHC.Types (Any)
 import Unsafe.Coerce
@@ -55,9 +52,6 @@ import qualified Control.Monad.Trans.State as St
 import Data.HFunctor
 import Data.List.Kind
 import Data.Kind (Type)
-#ifdef INDEXED
-import GHC.TypeNats
-#endif
 
 -- | Internally locations in the store are just integers.
 type Loc = Int
@@ -77,7 +71,7 @@ instance HFunctor (New w) where
   hmap _ (New a k) = New a k
 
 -- | Smart constructor for the t`New` operation.
-new :: forall a w sig. Member (New w) sig => a -> Prog sig (Ref w a)
+new :: forall a w effs. Member (New w) effs => a -> Prog effs (Ref w a)
 new a = call (New a id)
 
 -- | Signature for the operation of updating a memory reference
@@ -92,7 +86,7 @@ instance HFunctor (Put w) where
   hmap _ (Put r a k) = Put r a k
 
 -- | Smart constructor for the t`Put` operation.
-put :: forall a w sig. Member (Put w) sig => Ref w a -> a -> Prog sig ()
+put :: forall a w effs. Member (Put w) effs => Ref w a -> a -> Prog effs ()
 put r a = call (Put r a ())
 
 -- | Signature for the operation of reading a memory reference.
@@ -106,70 +100,63 @@ instance HFunctor (Get w) where
   hmap _ (Get r k) = Get r k
 
 -- | Smart constructor for the t`Get` operation.
-get :: forall a w sig. Member (Get w) sig => Ref w a -> Prog sig a
+get :: forall a w effs. Member (Get w) effs => Ref w a -> Prog effs a
 get r = call (Get r id)
 
 -- | Internal representation of the store.
 type Mem = M.Map Loc Any
 
--- | The effects of higher-order in world @w@.
+-- | The effects of higher-order store in world @w@.
 type HSEffs w = '[Put w, Get w, New w]
 
 -- | The handler of higher-order store. This is not exported because currently
--- effective does not have a world-indexed handdler API. Users of higher-order
+-- effective does not have a world-indexed handler API. Users of higher-order
 -- store now can only use functions such as `handleHSM` exported by this module.
 hstore :: Handler (HSEffs w) '[] '[St.StateT Mem] a a
-hstore = handler' (flip St.evalStateT M.empty) (\_ -> hstoreAlg)
+hstore = handler' (flip St.evalStateT M.empty) hstoreAlg
 
-hstoreAlg :: forall m w.
-     Monad m
-  => Algebra (HSEffs w) (St.StateT Mem m)
-hstoreAlg op
-  | Just (Put r a p) <- prj @(Put w) op =
+hstoreAlg :: forall m w. Monad m => Algebra (HSEffs w) (St.StateT Mem m)
+hstoreAlg =
+  (\(Put r a p) ->
       do St.modify (\mem -> M.insert (unRef r) (unsafeCoerce a) mem)
-         return p
-
-  | Just (Get r p) <- prj @(Get w) op =
+         return p)
+  :#
+  (\(Get r p) ->
       do mem <- St.get
-         return (p (unsafeCoerce (mem M.! (unRef r))))
-
-  | Just (New a p) <- prj @(New w) op =
+         return (p (unsafeCoerce (mem M.! (unRef r)))))
+  :#.
+  (\(New a p) ->
       do mem <- St.get
          let n = M.size mem
          let mem' = M.insert n (unsafeCoerce a) mem
          St.put mem'
-         return (p (Ref @w n))
+         return (p (Ref @w n)))
 
--- | Running a program with only the effect of higher-order on the empty store, extracting
+-- | Running a program with only the effect of higher-order store on the empty store, extracting
 -- the final pure result.
 runHS, handleHS :: forall a. (forall w. Prog (HSEffs w) a) -> a
 runHS p = handle identity (handleHSP p)
 
 handleHS = runHS
 
--- | Running a program with higher-order store and other effects @sigs@ on @m@,
+-- | Running a program with higher-order store and other effects @effs@ on @m@,
 -- resulting in an @m@ program.
-handleHSM :: forall sigs a m.
-          ( forall s. ForwardsM sigs '[St.StateT s]
-#ifdef INDEXED
-          , Append (HSEffs ()) sigs
-#endif
-          , HFunctor (Effs sigs)
-          , Monad m
-          )
-          => Algebra sigs m -> (forall w. Prog (HSEffs w :++ sigs) a) -> m a
+handleHSM
+  :: forall effs a m.
+     ( forall s. ForwardsM effs '[St.StateT s]
+     , Monad m )
+  => Algebra effs m
+  -> (forall w. Prog (HSEffs w :++ effs) a)
+  -> m a
 handleHSM alg p = handleMApp alg hstore p
 
--- | Running a program with higher-order store and other effects @sigs@, resulting
--- in a program with effects @sigs@.
-handleHSP :: forall sigs a.
-             ( forall s. ForwardsM sigs '[St.StateT s]
-#ifdef INDEXED
-             , Append (HSEffs ()) sigs
-#endif
-             , HFunctor (Effs sigs)
-             )
-          => (forall w. Prog (HSEffs w :++ sigs) a) -> Prog sigs a
+-- | Running a program with higher-order store and other effects @effs@, resulting
+-- in a program with effects @effs@.
+handleHSP
+  :: forall effs a.
+     ( forall s. ForwardsM effs '[St.StateT s], ProgAlg# effs )
+  => (forall w. Prog (HSEffs w :++ effs) a)
+  -> Prog effs a
 handleHSP p = handleMApp progAlg hstore p
 
 instance (MonadTrans t) => Forward (New w) t where

@@ -23,9 +23,9 @@ import Control.Effect.State
 import Hedgehog
 
 $(makeGen [e| getLine  :: String |])
-$(makeGen [e| putStrLn :: String -> () |])
+$(makeGen [e| putStrLn :: String ~> () |])
 
-echo :: (Members '[GetLine, PutStrLn] sigs) => Prog sigs ()
+echo :: (Members '[GetLine, PutStrLn] effs) => Prog effs ()
 echo = do str <- getLine
           case str of
             [] -> return ()
@@ -33,9 +33,9 @@ echo = do str <- getLine
                      echo
 
 teletypeIO :: Handler '[GetLine, PutStrLn] '[Alg IO] '[] a a
-teletypeIO = interpret
-  (\case GetLine k     -> do x <- io Prelude.getLine; return (k x)
-         PutStrLn xs k -> do io (Prelude.putStrLn xs); return k)
+teletypeIO = interpret $
+  (\(GetLine k)     -> do x <- io Prelude.getLine; return (k x)) :%
+  (\(PutStrLn xs k) -> do io (Prelude.putStrLn xs); return k)    :% emptyCase
 ```
 -->
 
@@ -92,12 +92,12 @@ Programs and Handlers
 The type of the `echoTick` program is `() ! '[GetLine, PutStrLn, Tick]`, which is in
 fact a synonym roughly equivalent to:
 ```haskell ignore
-echoTick :: forall sigs. (Member GetLine sigs, Member PutStrLn sigs, Member Tick sigs)
-         => Prog sigs ()
+echoTick :: forall effs. (Member GetLine effs, Member PutStrLn effs, Member Tick effs)
+         => Prog effs ()
 ```
-The `a ! sigs` datatype thus describes a *family* of programs which contains
-all the operations given in `sigs`. No order of the members is
-implied (because the constraints are not ordered), and nor is the list necessarily exhaustive (because `sigs` could contain other operations).
+The `a ! effs` datatype thus describes a *family* of programs which contains
+all the operations given in `effs`. No order of the members is
+implied (because the constraints are not ordered), and nor is the list necessarily exhaustive (because `effs` could contain other operations).
 
 The `ticker` and `unticker` handlers have the following types:
 ```haskell ignore
@@ -124,7 +124,7 @@ The signature of the handler tells us how it behaves:
   `'Apply [t3, t2, t1] m a = t3 (t2 (t1 m a))`.
 * **Input/output types**: The input/output types are the types of the return values
   of an effectful program before/after applying the handler. When `ticker` is used
-  to handle a program of type `Prog sigs a`, the output will be the type `(a, Int)`.
+  to handle a program of type `Prog effs a`, the output will be the type `(a, Int)`.
 
 A handler is applied to a program using the `handle` function or its variants.
 In `exampleEchoTick`, the pipeline is complete because `ticker` consumes `Tick`,
@@ -133,8 +133,8 @@ consumes the remaining `Alg IO` operations at the end.
 ```haskell ignore
 handle
   :: (...)
-  => Handler sigs '[] ts a b
-  -> Prog sigs a -> Apply ts Identity b
+  => Handler effs '[] ts a b
+  -> Prog effs a -> Apply ts Identity b
 ```
 So far, we have been working with examples of _impure_ effects that ultimately
 rely on `IO`. Another important class of effects is the class of _pure_ effects,
@@ -147,10 +147,10 @@ Working with Pure Handlers
 A pure handler can be applied when all the effects in a program are
 processed, and when none are produced:
 ```haskell ignore
-handle :: forall sigs ts fs a .
-  (Monad (Apply ts Identity), HFunctor (Effs sigs))
-  => Handler sigs '[] ts fs
-  -> Prog sigs a
+handle :: forall effs ts fs a .
+  (Monad (Apply ts Identity), HFunctor (Effs effs))
+  => Handler effs '[] ts fs
+  -> Prog effs a
   -> Apply fs a
 ```
 
@@ -206,7 +206,7 @@ which does not return the final state:
 state_ :: s -> Handler [Put s, Get s] '[] '[StateT s] '[]
 ```
 Here the final wrapper is `'[]`, and so applying this to a program
-of type `Prog sigs a` will simply return a value of type `a`.
+of type `Prog effs a` will simply return a value of type `a`.
 ```console
 ghci> handle (state_ "Hello!") getStringLength
 6
@@ -266,12 +266,9 @@ underlying signature `Tick_`. The convention is to add an *underscore* for the *
 
 ### Pattern Synonym
 
-A pattern synonym `Tick` is defined that projects `Alg Tick_` into
-an `Effs` type, which is the type used to assemble multiple effects into one:
+A pattern synonym `Tick` is defined:
 ```haskell
-pattern Tick :: Member Tick sigs => k -> Effs sigs m k
-pattern Tick p <- (prj -> Just (Alg (Tick_ p)))
-  where Tick p = inj (Alg (Tick_ p))
+pattern Tick p = Alg (Tick_ p)
 ```
 
 ### Smart Constructor
@@ -280,7 +277,7 @@ A smart constructor `tick` is defined that allows programs to be written
 that uses this operation:
 ```haskell
 tick :: () ! '[Tick]
-tick = call (Alg (Tick_ ()))
+tick = call (Tick ())
 ```
 The signature of `tick` uses a `Member` constraint to describe how `tick` can be
 used in any program where `Tick` is in its signature, and this is the same as
@@ -295,9 +292,9 @@ will interpret `Tick` in different ways. The simplest one is `unticker`,
 which removes all instances of `Tick`:
 ```haskell
 unticker :: Handler '[Tick] '[] '[] a a
-unticker = interpret (\(Tick x) -> return x)
+unticker = interpret1 (\(Tick x) -> return x)
 ```
-The `interpret` function builds a handler from a function
+The `interpret1` function builds a handler from a function
 that describes how to rephrase an operation. Here, `Tick x`
 is translated into `return x`.
 
@@ -307,30 +304,30 @@ with an `Int` to keep track of how many ticks have been produced.
 Notice that the `gen` function generates these operations from the given `tick`:
 ```haskell
 tickState :: Handler '[Tick] '[Put Int, Get Int] '[] a a
-tickState = interpret rephrase where
-  rephrase :: Effs '[Tick] m x -> Prog [Put Int, Get Int] x
+tickState = interpret1 rephrase where
+  rephrase :: Tick m x -> Prog [Put Int, Get Int] x
   rephrase (Tick x) = do n <- get
                          put @Int (n + 1)
                          return x
 ```
 The `ticker` is produced by combining `tickState` with the `state` handler using
-the _pipe_ combinator, written `h1 ||> h2` to pipe the handler `h1` into the
+the _pipe_ combinator, written `h1 \\ h2` to pipe the handler `h1` into the
 handler `h2`.
 
 ```haskell
 ticker :: Handler '[Tick] '[] '[StateT Int] a (a, Int)
-ticker = tickState ||> state (0 :: Int)
+ticker = tickState \\ state (0 :: Int)
 ```
-Given `h1 :: Handler sigs1 osigs1 t1 f1` and `h2 :: Handler sigs2 osigs2 t2 f2`, the
-result of `h1 ||> h2` is a handler that recognises all of `sigs1`, the input
-effects of `h1`, and passes any effects `osigs1` produced by `h1` to be processed
+Given `h1 :: Handler effs1 oeffs1 t1 f1` and `h2 :: Handler effs2 oeffs2 t2 f2`, the
+result of `h1 \\ h2` is a handler that recognises all of `effs1`, the input
+effects of `h1`, and passes any effects `oeffs1` produced by `h1` to be processed
 by `h2`. Here are the types involved:
 ```haskell ignore
-(||>) :: ...
-  => Handler sigs1 osigs1 ts1 fs1    -- h1
-  -> Handler sigs2 osigs2 ts2 fs2    -- h2
-  -> Handler sigs1
-             ((osigs1 :\\ sigs2) `Union` osigs2)
+(\\) :: ...
+  => Handler effs1 oeffs1 ts1 fs1    -- h1
+  -> Handler effs2 oeffs2 ts2 fs2    -- h2
+  -> Handler effs1
+             ((oeffs1 :\\ effs2) `Union` oeffs2)
              (ts1 :++ ts2)
              (fs2 :++ fs1)
 ```
@@ -370,7 +367,7 @@ getLineIncr
              '[]                              -- no transformers
              a
              a
-getLineIncr = interpret $ \(GetLine k) ->
+getLineIncr = interpret1 $ \(GetLine k) ->
   do xs <- getLine
      incr
      return (k xs)
@@ -386,7 +383,7 @@ getLineIncrState :: Handler '[GetLine]   -- input effects
                             '[StateT Int]
                             a
                             (a, Int)
-getLineIncrState = getLineIncr ||> (state (0 :: Int))
+getLineIncrState = getLineIncr \\ (state (0 :: Int))
 ```
 This can then be executed using `handleIO`, which will deal with
 the residual `GetLine` effect:

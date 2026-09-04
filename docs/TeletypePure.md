@@ -46,7 +46,7 @@ operations `get` and `put` from a state containing a list of strings:
 ```haskell
 getLineState
   :: Handler '[GetLine] '[Get [String], Put [String]] '[] a a
-getLineState = interpret $ \(GetLine k) ->
+getLineState = interpret1 $ \(GetLine k) ->
   do xss <- get
      case xss of
        []        -> return (k "")
@@ -55,10 +55,9 @@ getLineState = interpret $ \(GetLine k) ->
 ```
 
 The signature of `getLineState` says that it is a handler that recognizes
-`GetLine` operations and interprets them in terms of some output effects in
-`osig`, which consist of `Get [String]` and `Put [String]`. Interpreting
-effects in terms of other, more primitive, effects allows other handlers to
-deal with those more primitive effects.
+`GetLine` operations and interprets them in terms of output effects `Get [String]` and `Put [String]`.
+Interpreting effects in terms of other, more primitive, effects allows other
+handlers to deal with those more primitive effects.
 
 The `getLineState` handler will process the `GetLine` effect in the
 echo program, and in so doing will output `Get [String]` and `Put [String]`
@@ -67,10 +66,10 @@ effects. These can be handled by a state handler. The output of the
 a new handler. Here are two variations:
 ```haskell
 getLinePure :: [String] -> Handler '[GetLine] '[] '[StateT [String]] a (a, [String])
-getLinePure str = getLineState ||> (state str)
+getLinePure str = getLineState \\ (state str)
 
 getLinePure_ :: [String] -> Handler '[GetLine] '[] '[StateT [String]] a a
-getLinePure_ str = getLineState ||> (state_ str)
+getLinePure_ str = getLineState \\ (state_ str)
 ```
 Now we have a means of executing a program that contains only a `GetLine` effect,
 and extracting the resulting string:
@@ -139,7 +138,7 @@ Now the task is to interpret all `putStrLn` operations in terms of the
 `tell` operation:
 ```haskell
 putStrLnTell :: Handler '[PutStrLn] '[Tell [String]] '[] a a
-putStrLnTell = interpret $ \(PutStrLn str k) ->
+putStrLnTell = interpret1 $ \(PutStrLn str k) ->
   do tell [str]
      return k
 ```
@@ -147,7 +146,7 @@ This can in turn be piped into the `writer` handler to make
 a pure version of `putStrLn`:
 ```haskell
 putStrLnPure :: Handler '[PutStrLn] '[] '[WriterT [String]] a ([String], a)
-putStrLnPure = putStrLnTell ||> writer
+putStrLnPure = putStrLnTell \\ writer
 ```
 Now, a pure handler for both `putStrLn` and `getLine` can
 be defined as the /fusion/ of `putStrLnPure` and `getLinePure`.

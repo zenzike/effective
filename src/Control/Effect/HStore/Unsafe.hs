@@ -6,12 +6,12 @@ Maintainer  : Zhixuan Yang
 Stability   : experimental
 
 This module provides an unsafe implementation of the effect of higher-order store,
-that is, mutable state that supports dynamically creation of cells that store values
+that is, mutable state that supports the dynamic creation of cells that store values
 of /any (lifted) type/.  This implementation is unsafe because references from
 different executions may be wrongly mixed. For example,
 
 @
-goWrong :: forall sigs. Members '[New, Get, Put] sigs => Prog sigs Int
+goWrong :: forall effs. Members '[New, Get, Put] effs => Prog effs Int
 goWrong = do iRef <- new @Int 0
              return (handle hstore (get iRef))
 
@@ -23,18 +23,17 @@ test = handle hstore goWrong
 Running @handle hstore goWrong@ will crash because the reference @iRef@ is from
 the outer @handle hstore@ but it is mistakenly used by the inner program.
 
-Another way of how things can go wrong is when there is 'multiple-shot algebraic effects':
+Another way things can go wrong is when there are multiple-shot algebraic effects:
 
 @
 import qualified Control.Effect.State as St
 import Control.Effect.Nondet
 
-goWrong2 :: forall sigs.
-            Members '[ New, Get, Put,
-                       Choose,
-                       St.Put (Maybe (Ref Int)), St.Get (Maybe (Ref Int))
-                     ] sigs
-         => Prog sigs Int
+goWrong2
+  :: forall effs.
+     Members '[ New, Get, Put, Choose, St.Put (Maybe (Ref Int)), St.Get (Maybe (Ref Int)) ]
+             effs
+  => Prog effs Int
 goWrong2 = do iRef <- new @Int 0
               or (do iRef' <- new @Int 0; St.put (Just iRef'); return 0)
                  (do r <- St.get;
@@ -47,10 +46,10 @@ test :: [Int]
 test = handle (hstore |> nondet |> St.state_ @(Maybe (Ref Int)) Nothing) goWrong2
 @
 
-This goes wrong because higher-order store is handled before non-determinstic
-choices, so different branches of choice have independent memory store, but
-in the first branch, a reference locally to this branch is stored in a global state,
-and this reference is de-referenced in the second branch, which has a separate
+This goes wrong because higher-order store is handled before nondeterministic
+choices, so different choice branches have independent memory stores, but
+in the first branch, a reference local to this branch is stored in a global state,
+and this reference is dereferenced in the second branch, which has a separate
 memory store.
 
 As a rule of thumb for safety, when using the effect handler from this module,
@@ -104,7 +103,7 @@ instance HFunctor New where
   hmap _ (New a k) = New a k
 
 -- | Smart constructor for the t`New` operation.
-new :: forall a sigs. Member New sigs => a -> Prog sigs (Ref a)
+new :: forall a effs. Member New effs => a -> Prog effs (Ref a)
 new a = call (New a id)
 
 -- | Signature for the operation of updating a memory reference
@@ -119,7 +118,7 @@ instance HFunctor Put where
   hmap _ (Put r a k) = Put r a k
 
 -- | Smart constructor for the t`Put` operation.
-put :: forall a sigs. Member Put sigs => Ref a -> a -> Prog sigs ()
+put :: forall a effs. Member Put effs => Ref a -> a -> Prog effs ()
 put r a = call (Put r a ())
 
 -- | Signature for the operation of reading a memory reference.
@@ -133,7 +132,7 @@ instance HFunctor Get where
   hmap _ (Get r k) = Get r k
 
 -- | Smart constructor for the t`Get` operation.
-get :: forall a sigs. Member Get sigs => Ref a -> Prog sigs a
+get :: forall a effs. Member Get effs => Ref a -> Prog effs a
 get r = call (Get r id)
 
 -- | Internally the store is implemented by a map from locations to
@@ -147,22 +146,15 @@ type Mem = M.Map Loc Any
 hstore :: Handler [Put, Get, New] '[] '[St.StateT Mem] a a
 hstore = handler' (flip St.evalStateT M.empty) hstoreAlg
 
-hstoreAlg
-  :: Monad m
-  => Algebra1 osig m
-  -> Algebra [Put, Get, New] (St.StateT Mem m)
-hstoreAlg _ op
-  | Just (Put r a p) <- prj op =
-      do St.modify (\mem -> M.insert (unRef r) (unsafeCoerce a) mem)
-         return p
-
-  | Just (Get r p) <- prj @Get op =
-      do mem <- St.get
-         return (p (unsafeCoerce (mem M.! (unRef r))))
-
-  | Just (New a p) <- prj op =
+hstoreAlg :: Monad m => Algebra '[Put, Get, New] (St.StateT Mem m)
+hstoreAlg =
+  (\(Put r a p) -> do St.modify (\mem -> M.insert (unRef r) (unsafeCoerce a) mem); return p)
+  :#
+  (\(Get r p) -> do mem <- St.get; return (p (unsafeCoerce (mem M.! (unRef r)))))
+  :#.
+  (\(New a p) ->
       do mem <- St.get
          let n = M.size mem
          let mem' = M.insert n (unsafeCoerce a) mem
          St.put mem'
-         return (p (Ref n))
+         return (p (Ref n)))

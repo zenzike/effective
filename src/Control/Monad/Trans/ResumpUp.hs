@@ -5,26 +5,26 @@ License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
 
-This module contains the monad transformer to be used at the meta level to
-the resumption monad transformers.
+This module contains the monad transformer to be used at the meta level for
+resumption monad transformers.
 -}
 
 {-# LANGUAGE TemplateHaskell #-}
 module Control.Monad.Trans.ResumpUp where
 
-import Control.Effect.CodeGen.Type ( Up )
 import Control.Monad ( ap, liftM, MonadPlus (..) )
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.CRes
 import Control.Applicative
+import Language.Haskell.TH ( CodeQ )
 
--- | @ResUpT@ is a Church-encoded version of the resumption monad transformer `ResT`
+-- | @ResUpT@ is a Church-encoded version of the resumption monad transformer t`ResT`
 -- from "Control.Monad.Trans.Resump" with the restriction that the final answer
 -- type must be code. This monad transformer is used for staging resumption
 -- monads with the code-generation effect in "Control.Effect.CodeGen".
 newtype ResUpT l n a = ResUpT
-  { runResUpT :: forall t. (a -> n (Up t)) -> (l (n (Up t)) -> n (Up t)) -> n (Up t) }
+  { runResUpT :: forall t. (a -> n (CodeQ t)) -> (l (n (CodeQ t)) -> n (CodeQ t)) -> n (CodeQ t) }
 
 instance Functor (ResUpT l n) where
   fmap = liftM
@@ -37,7 +37,7 @@ instance Monad (ResUpT l n) where
   p >>= k = ResUpT $ \k1 k2 ->
     runResUpT p (\a -> runResUpT (k a) k1 k2) k2
 
--- | Perform an @l@-action and resumes as the @ResUpT l n a@ wrapped in the functor @l@.
+-- | Perform an @l@-action and resume as the @ResUpT l n a@ wrapped in the functor @l@.
 resUpOp :: Functor l => l (ResUpT l n a) -> ResUpT l n a
 resUpOp l = ResUpT $ \k1 k2 -> k2 (fmap (\p -> runResUpT p k1 k2) l)
 

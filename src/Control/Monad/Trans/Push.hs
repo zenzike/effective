@@ -9,27 +9,27 @@ Stability   : experimental
 {-# LANGUAGE TemplateHaskell #-}
 module Control.Monad.Trans.Push where
 
-import Control.Effect.CodeGen.Type ( Up )
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad ( ap, liftM )
-import Control.Monad.Trans.Class
+import Control.Monad.Trans.Class ( MonadTrans(..) )
+import Language.Haskell.TH ( CodeQ )
 
--- | @PushT@ is a Church-encoded version of `ListT` with the restriction that the final
+-- | @PushT@ is a Church-encoded version of @ListT@ with the restriction that the final
 -- answer type must be code. This monad transformer is used for staging nondeterminism
 -- with the code-generation effect in "Control.Effect.CodeGen".
 -- The monad @PushT n a@ supports the operations of nondeterminism just like @ListT@,
--- and it additionally supports the following two operations (defined in "Control.Effect.CodeGen.Up"
+-- and it additionally supports the following two operations (defined in "Control.Effect.CodeGen.CodeQ"
 -- and "Control.Effect.CodeGen.Down"):
 --
--- > down :: PushT n (Up a) -> Up (ListT m a)
--- > up   :: Up (ListT m a) -> PushT n (Up a)
+-- > down :: PushT n (CodeQ a) -> CodeQ (ListT m a)
+-- > up   :: CodeQ (ListT m a) -> PushT n (CodeQ a)
 --
 -- for converting between meta-level and object-level nondeterministic programs.
 newtype PushT n a = PushT
   { runPushT :: forall t.
-                (a -> n (Up t) -> n (Up t))  -- ^ The continuation for cons
-             -> n (Up t)                     -- ^ The continuation for nil
-             -> n (Up t) }
+                (a -> n (CodeQ t) -> n (CodeQ t))  -- ^ The continuation for cons
+             -> n (CodeQ t)                        -- ^ The continuation for nil
+             -> n (CodeQ t) }
 
 instance Functor (PushT m) where
   fmap = liftM

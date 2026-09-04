@@ -1,19 +1,19 @@
 {-|
-Module      : Control.Effect.Algebraic
-Description : The algebraic effect family
+Module      : Control.Effect.Family.Algebraic
+Description : Algebraic operations
 License     : BSD-3-Clause
 Maintainer  : Nicolas Wu
 Stability   : experimental
 
-This module defines The family of algebraic operations. For every functor
-@sigs :: Type -> Type@, an algebraic operation of signature @sigs@ on a monad
-@m@ is a function @op :: forall a. sigs (m a) -> m a@ satisfying the following
+This module defines the family of algebraic operations. For every functor
+@sig :: Type -> Type@, an algebraic operation of signature @sig@ on a monad
+@m@ is a function @op :: forall a. sig (m a) -> m a@ satisfying the following
 property:
 
 > op x >>= k  ==  op (fmap (>>= k) x)
 
-for all @x :: sigs (m a)@ and @k :: a -> m b@. Such operations are in bijection
-with polymorphic functions of type @forall a. sigs a -> m a@, witnessed by
+for all @x :: sig (m a)@ and @k :: a -> m b@. Such operations are in bijection
+with polymorphic functions of type @forall a. sig a -> m a@, witnessed by
 `algOpIso` below.
 
 An important property of algebraic operations is that they can always be
@@ -34,45 +34,43 @@ import Data.Iso
 import Data.Kind ( Type )
 import Data.HFunctor
 import Control.Monad.Trans.Class ( MonadTrans(..) )
-import Control.Effect.Internal.Effs.Sum.Type (Algebra, Algebra1, Effs(..))
+import Control.Effect.Internal.Algebra 
 
--- | @Alg sigs@ is the (higher-order) signature of algebraic operations of
--- (first-order) signature @sigs@.
+-- | @Alg sig@ is the (higher-order) signature of algebraic operations of
+-- (first-order) signature @sig@.
 
-newtype Alg (sigs :: Type -> Type)
-         (f :: Type -> Type)
-         k
-         = Alg (sigs k)
+newtype Alg (sig :: Type -> Type)
+        (f :: Type -> Type)
+        k
+        = Alg (sig k)
 
-instance Functor sigs => Functor (Alg sigs f) where
+instance Functor sig => Functor (Alg sig f) where
   {-# INLINE fmap #-}
   fmap f (Alg op) = Alg (fmap f op)
 
-instance Functor sigs => HFunctor (Alg sigs) where
+instance Functor sig => HFunctor (Alg sig) where
   {-# INLINE hmap #-}
   hmap f (Alg op) = Alg op
 
 -- | Algebraic operations can be lifted along any monad transformers canonically.
--- We mark this instance as incoherent because for specific monad transformers we may
--- have more general lifting instances. For example, we trivially have
---
--- > instance Forward sigs IdentityT
---
--- And this is not strictly more speicific than @Forward (Alg f) t@ so we need the
--- instance here to be incoherent.
-instance {-# INCOHERENT #-} MonadTrans t => Forward (Alg f) t where
+instance MonadTrans t => Forward (Alg f) t where
   {-# INLINE fwd #-}
   fwd alg (Alg op) = lift (alg (Alg op))
 
--- | Functions @Algebra1 (Alg sigs) m@ are the same as @forall x. sigs x -> m x@,
--- and they are in bijection with functions @op :: forall x. sigs (m x) -> m x@ satisfying
+-- | Functions @forall x. Alg sig m x -> m x@ are the same as @forall x. sig x -> m x@,
+-- and they are in bijection with functions @op :: forall x. sig (m x) -> m x@ satisfying
 -- the equation @op x >>= k  ==  op (fmap (>>= k) x)@.
-algOpIso :: (Functor sigs, Monad m)
-         => Iso (Algebra1 (Alg sigs) m) (forall x. sigs (m x) -> m x)
+algOpIso
+  :: ( Functor sig, Monad m )
+  => Iso (forall x. Alg sig m x -> m x) (forall x. sig (m x) -> m x)
 algOpIso = Iso
   (\a sm -> a (Alg sm) >>= id)
   (\b (Alg s) -> b (fmap return s))
 
 -- | Algebra for the generic algebraic effect
 nativeAlg :: Algebra '[Alg m] m
-nativeAlg (Eff (Alg (op))) = op
+nativeAlg = (\(Alg op) -> op) :# emptyAlg
+
+-- | Staged version of `nativeAlg`
+nativeAlgC :: AlgebraC '[Alg m] m
+nativeAlgC = [|| NT $ (\(Alg op) -> op) ||] :#$ emptyAlgC

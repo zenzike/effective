@@ -4,7 +4,7 @@ module Main where
 import Control.Effect
 import Control.Effect.CodeGen
 import Control.Effect.State.Strict
-import Control.Effect.Nondet
+import Control.Effect.Nondet hiding (choose)
 import qualified Control.Effect.Maybe as Mb
 import Control.Effect.Yield
 import Data.Functor.Identity
@@ -37,7 +37,7 @@ countdown :: StateT Int Identity ()
 countdown = $$(stage
   (letPut -- @Int
   `fuseAT` upState -- @Int @Identity
-  `fuseAT` stateAT -- @(Up Int) 
+  `fuseAT` stateAT -- @(CodeQ Int)
   )
   (countdownGen [|| countdown ||]))
 
@@ -56,7 +56,7 @@ Generated code:
 catchProgram :: Int -> ExceptT () Identity ()
 catchProgram n = $$(stage
   (upExcept -- @() -- @Identity 
-  `fuseAT` exceptAT -- @(Up ())
+  `fuseAT` exceptAT -- @(CodeQ ())
   )
   (catchGen [||n||] [||catchProgram||]))
 
@@ -80,8 +80,8 @@ catchProgram2 :: Int -> StateT Int (ExceptT () Identity) ()
 catchProgram2 n = $$(stage
     ( upState @Int @(ExceptT () Identity)
       `fuseAT` upExcept -- @() @Identity
-      `fuseAT` stateAT -- @(Up Int)
-      `fuseAT` exceptAT -- @(Up ())
+      `fuseAT` stateAT -- @(CodeQ Int)
+      `fuseAT` exceptAT -- @(CodeQ ())
     )
     (catchGen [||n||] [||catchProgram||]))
 
@@ -192,7 +192,7 @@ listExample5 as = $$(stage
   `fuseAT` pushWithUpAT -- @(StateT Int Identity)
   `fuseAT` upCache @(StateT Int Identity)
   `fuseAT` upState @Int @Identity
-  `fuseAT` stateAT -- @(Up Int)
+  `fuseAT` stateAT -- @(CodeQ Int)
   ) $
   do s <- get
      i <- up [||as||]
@@ -250,7 +250,7 @@ choice' n = $$(stage (pushWithUpAT {- @Identity -}) $
 -}
 choiceST :: Int -> StateT Int (ListT Identity) Int
 choiceST n = $$(stage
-  (stateAT -- @(Up Int) 
+  (stateAT -- @(CodeQ Int) 
    `fuseAT` pushWithUpAT -- @Identity
   )
   (choiceGen [||n||] [|| choice ||]))
@@ -268,7 +268,7 @@ choiceST n = $$(stage
 ioExample :: StateT Int IO ()
 ioExample = $$(stageM (Proxy @IO)
   (upState -- @Int @IO
-   `fuseAT` stateAT @(Up Int))
+   `fuseAT` stateAT @(CodeQ Int))
   (ioProg [|| ioExample ||]))
 
 {-
@@ -282,9 +282,9 @@ ioExample = $$(stageM (Proxy @IO)
 -}
 ioExample2 :: StateT Int IO ()
 ioExample2 = $$(downTail $
-  evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+  evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(CodeQ Int))
     (do up [|| putStrLn "Hello" ||]
-        s <- get @(Up Int)
+        s <- get @(CodeQ Int)
         b <- split [|| $$s > 0 ||]
         if b then put [|| $$s - 1||] >> return (Right [|| ioExample ||])
              else return (Left [||()||])))
@@ -312,9 +312,9 @@ StateT (\ s_abe7 ->
 -}
 ioExample3 :: StateT Int IO ()
 ioExample3 = $$(stageM (Proxy @IO)
-    (upCache @(StateT Int IO) `fuseAT` upState @Int @IO `fuseAT` stateAT @(Up Int))
+    (upCache @(StateT Int IO) `fuseAT` upState @Int @IO `fuseAT` stateAT @(CodeQ Int))
     (do up [|| putStrLn "Hello" ||]
-        s <- get @(Up Int)
+        s <- get @(CodeQ Int)
         b <- split [|| $$s > 0 ||]
         if b then put [|| $$s - 1||] >> up [|| ioExample ||]
              else return [||()||]))
@@ -333,9 +333,9 @@ ioExample3 = $$(stageM (Proxy @IO)
 -}
 ioExample4 :: StateT Int IO ()
 ioExample4 = $$(stageM (Proxy @IO)
-    (upFree @(StateT Int IO) `fuseAT` upState @Int @IO `fuseAT` stateAT @(Up Int))
+    (upFree @(StateT Int IO) `fuseAT` upState @Int @IO `fuseAT` stateAT @(CodeQ Int))
     (do up [|| putStrLn "Hello" ||]
-        s <- get @(Up Int)
+        s <- get @(CodeQ Int)
         b <- split [|| $$s > 0 ||]
         if b then put [|| $$s - 1||] >> up [|| ioExample ||]
              else return [||()||]))
@@ -352,7 +352,7 @@ ioExample5 :: StateT Int IO ()
 ioExample5 = $$(stageM (Proxy @IO)
   (upCache @(StateT Int IO)
   `fuseAT` upState @Int @IO
-  `fuseAT` stateAT @(Up Int))
+  `fuseAT` stateAT @(CodeQ Int))
   (ioProg [|| ioExample ||]))
 
 
@@ -370,7 +370,7 @@ ioExample5 = $$(stageM (Proxy @IO)
 -}
 joinEx :: Bool -> StateT Int (MaybeT Identity) ()
 joinEx b = $$(stage
-  (letPut @Int `fuseAT` stateAT @(Up Int) `fuseAT` Mb.exceptAT)
+  (letPut @Int `fuseAT` stateAT @(CodeQ Int) `fuseAT` Mb.exceptAT)
   (noJoinProg [||b||]))
 
 
@@ -407,23 +407,23 @@ joinEx1 :: Bool -> StateT Int (MaybeT Identity) ()
 joinEx1 b = $$(stage
   (letPut @Int
      `fuseAT` resetAT' @(StateT Int (MaybeT Identity))
-     `fuseAT` weakenC @((~) Gen) (upState @Int @(MaybeT Identity)
-     `fuseAT` stateAT @(Up Int)
+     `fuseAT` weakenCS @((~) Gen) (upState @Int @(MaybeT Identity)
+     `fuseAT` stateAT @(CodeQ Int)
      `fuseAT` upMaybe @Identity
      `fuseAT` Mb.exceptAT))
   (resetProg [||b||]))
 {-
-The in the code above, `weakenCAnd @Monad` is for overcoming a bug (or limitation?)
+The in the code above, `weakenCSAnd @Monad` is for overcoming a bug (or limitation?)
 of the extension UndecidableSuperClasses. Without it we would get an error report:
 
 > Could not deduce ‘Monad m’
 >     arising from the head of a quantified constraint
 >     arising from a use of ‘fuseAT’
 >   from the context: CompC
->                       [StateT (Up Int), MaybeT]
+>                       [StateT (CodeQ Int), MaybeT]
 >                       ((<~$) (StateT Int (MaybeT Identity)))
 >                       (CompC
->                          [StateT (Up Int), MaybeT]
+>                          [StateT (CodeQ Int), MaybeT]
 >                          Monad
 >                          (CompC '[MaybeT] Monad (CompC '[MaybeT] Monad Monad)))
 >                       m
@@ -431,7 +431,7 @@ of the extension UndecidableSuperClasses. Without it we would get an error repor
 although `Monad m` /is/ implied by this big `CompC` constraint. I suspect that this
 is because `CompC` is defined using UndecidableSuperClasses and GHC only expands
 CompC up until a fixed step, so it failed to see that `Monad m` is implied. We
-overcome this by using `weakenC` to replace the above big @CompC@ constraint
+overcome this by using `weakenCS` to replace the above big @CompC@ constraint
 with the simpler and stronger constraint @(~) Gen@.
 
 Alternatively, we can use the combinator `fuseAT'` that keeps the constraints simple.
@@ -443,7 +443,7 @@ joinEx1' b = $$(stage
      `fuseAT'` resetAT' @(StateT Int (MaybeT Identity))
      `fuseAT`  upState @Int @(MaybeT Identity)
      `fuseAT'` upMaybe @Identity
-     `fuseAT'` stateAT @(Up Int)
+     `fuseAT'` stateAT @(CodeQ Int)
      `fuseAT'` Mb.exceptAT)
   (resetProg [||b||]))
 
@@ -467,7 +467,7 @@ joinEx2 :: Bool -> StateT Int (MaybeT Identity) ()
 joinEx2 b = $$(down $ evalAT'
   (letPut @Int
   `fuseAT'` upState @Int @Identity
-  `fuseAT'` stateAT @(Up Int)
+  `fuseAT'` stateAT @(CodeQ Int)
   `fuseAT'` Mb.exceptAT
   `fuseAT'` asAT (genAlg # joinGenAlg))
   (joinProg [||b||]))
@@ -516,8 +516,8 @@ joinEx2 b = $$(down $ evalAT'
 joinEx3 :: Bool -> StateT Int (ListT (MaybeT Identity)) ()
 joinEx3 b = $$(down $ evalAT'
   (letPut @Int
-  `fuseAT'` stateAT @(Up Int)
-  `fuseAT'` caseATSameC' (joinPush @(MaybeT Identity))
+  `fuseAT'` stateAT @(CodeQ Int)
+  `fuseAT'` caseATsameCS' (joinPush @(MaybeT Identity))
                          (weakenOEffs pushWithUpAT)
   `fuseAT'` upMaybe @Identity
   `fuseAT'` (hideAT @'[Mb.Catch] Mb.exceptAT)
@@ -550,8 +550,8 @@ joinEx3 b = $$(down $ evalAT'
 joinEx4 :: Bool -> StateT Int (ListT (MaybeT Identity)) ()
 joinEx4 b = $$(down $ evalAT'
   (letPut @Int
-  `fuseAT'` stateAT @(Up Int)
-  `fuseAT'` caseATSameC' (joinPush @(MaybeT Identity))
+  `fuseAT'` stateAT @(CodeQ Int)
+  `fuseAT'` caseATsameCS' (joinPush @(MaybeT Identity))
                          (weakenOEffs pushWithUpAT)
   `fuseAT'` upCache @(MaybeT Identity)
   `fuseAT'` upMaybe @Identity
@@ -561,14 +561,14 @@ joinEx4 b = $$(down $ evalAT'
 
 
 {-
-reset :: Gen (Up a) -> Gen (Up a)
+reset :: Gen (CodeQ a) -> Gen (CodeQ a)
 reset = return . runGen
 
-shift :: (forall b. (Up a -> Up b) -> Gen (Up b)) -> Gen (Up a)
+shift :: (forall b. (CodeQ a -> CodeQ b) -> Gen (CodeQ b)) -> Gen (CodeQ a)
 shift f = Gen $ runGen . f
 -}
 
-testShift :: Up (Identity Int)
+testShift :: CodeQ (Identity Int)
 testShift = down $
   do c <- resetGen (do ci <- shiftGen (\k -> do b' <- genLet_ (k [|| 5 ||])
                                                 return (k [|| 0 ||]))
@@ -685,8 +685,8 @@ yieldEx2 1 = return 1
 yieldEx2 i = $$(stage
   (upCache @(YResT Int Int Identity) `fuseAT` yResUpAT @Identity @Int @Int)
   (Control.Effect.Yield.mapYield
-     ((\x -> [||$$x + 1||]) :: Up Int -> Up Int)
-     ((\x -> [||$$x - 1||]) :: Up Int -> Up Int)
+     ((\x -> [||$$x + 1||]) :: CodeQ Int -> CodeQ Int)
+     ((\x -> [||$$x - 1||]) :: CodeQ Int -> CodeQ Int)
      (yieldGen [|| yieldEx ||] [||i||])))
 
 {-

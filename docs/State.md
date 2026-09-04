@@ -131,7 +131,7 @@ getAsk :: (Int, Int) ! [Get Int, Local Int, Ask Int]
 getAsk = local (+ (100 :: Int)) (do x <- get ; y <- ask ; return (x , y) )
 
 getToAsk :: Handler '[Get Int] '[Ask Int] '[] a a
-getToAsk= interpret $
+getToAsk= interpret1 $
     \(Get k) -> do y <- ask @Int
                    return (k (y))
 

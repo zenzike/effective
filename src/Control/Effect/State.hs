@@ -14,9 +14,9 @@ For lazy state, import "Control.Effect.State.Lazy" instead.
 {-# LANGUAGE TypeFamilies #-}
 
 module Control.Effect.State
-  ( module Control.Effect.State.Type,
+  ( module Control.Effect.State.Operations,
     module Control.Effect.State.Strict
   ) where
 
-import Control.Effect.State.Type
+import Control.Effect.State.Operations
 import Control.Effect.State.Strict

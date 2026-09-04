@@ -27,7 +27,7 @@ newtype ComposeT (h :: (Type -> Type) -> (Type -> Type))
                  (f :: (Type -> Type)) (a :: Type)
   = ComposeT { getComposeT :: h (k f) a }
 
-instance (Applicative m, Alternative (t1 (t2 m))) => Alternative (ComposeT t1 t2 m) where
+instance (Alternative (t1 (t2 m))) => Alternative (ComposeT t1 t2 m) where
   empty :: forall a . ComposeT t1 t2 m a
   empty = coerce (empty :: t1 (t2 m) a)
 

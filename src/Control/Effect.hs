@@ -8,17 +8,16 @@ Stability   : experimental
 This module contains the core types and functions for working with effects.
 The README file contains a tutorial on how to use this library.
 -}
-{-# LANGUAGE ExplicitNamespaces, CPP #-}
+{-# LANGUAGE ExplicitNamespaces, CPP, MagicHash #-}
 
 module Control.Effect
   ( -- * Programs
-    type (!)
-  , Progs
-  , Prog
-  , Effs (Eff, Effs)
+    Prog
+  , type (!)
   , WithName, (:@)
   , call,  callJ,  callK
   , callM, callJM, callKM
+  , callMC
   , callP
 #if MIN_VERSION_GLASGOW_HASKELL(9,10,1,0)
   , callN
@@ -31,57 +30,63 @@ module Control.Effect
   -- * Operations
   , Member(..)
   , Members(..)
-  , Injects( injs )
-  , Append (..)
+  , KnownEffs(..)
+  , dispatch
+  , dispatchC
+  , dispatchCases
 
   -- * Algebras
-  , Algebra
-  , Algebra1
-  , singAlgIso
+  , Algebra, Algebra_, AlgebraArray
+  , Case, Case_
+  , singAlgIso, singAlg
   , (#)
-  , weakenAlg
+  , emptyAlg, pattern (:#), pattern (:#.)
+  , emptyCase, pattern (:%), pattern (:%.)
   , Forward (..)
   , Forwards (..)
   , ForwardsM (..)
   , ForwardsC (..)
-  , absurdEffs
-  , (#:)
 
   -- * Handler combinators
   , Handler (..)
+  , HandlerC (..)
   , handler
   , handler'
   , Runner (..)
+  , RunnerC (..)
   , runner'
-  , runner
+  , (<:)
+  , fromRunner
   , identity
   , comp
   , weaken
   , hide
-  , bypass
-  , fromAT
-  , interpret, interpretAT, interpretM
-  , interpret1, interpretAT1, interpretM1
+  , withFwds
+  , interpret, interpretAT, interpretM, interpretMC
+  , interpret1, interpretAT1, interpretM1, interpretM1C
   , caseHdl
-  , unionHdl
-  , unscope
-  , unscopes
+  , unionHdl, unionHdlAT
 
   -- ** Fusion-based combinators
   , fuse, (|>)
-  , pipe, (||>)
+  , fuseApp, (++>)
+  , fuseC, (|>$)
+  , fuseAppC, (++>$)
+  , pipe, (\\), pipeC, (\\$)
   , pass
   , generalFuse
 
   -- * Algebra transformers
   , AlgTrans (..)
+  , AlgTransC (..)
   , asAT
   , idAT
   , compAT
   , weakenAT
-  , algTrans1
+  , algTrans1, algTrans1C
   , algTrans'
   , fuseAT, fuseAT'
+  , fuseATC
   , pipeAT
   , passAT
   , generalFuseAT
@@ -90,10 +95,11 @@ module Control.Effect
   -- * Evaluation
   , eval
   , handle
-  , handleM
-  , handleP
+  , handleC, handleM
+  , handleP, ProgAlg#
   , handleM'
   , handleP'
+  , handleMFwds, handleMFwdsC
   , handleMApp
   , handlePApp
   , evalAT
@@ -105,14 +111,25 @@ module Control.Effect
   , Apply
   , Proxy (..)
 
+  -- * Lightweight staging
+  , CodeQ
+  , AlgebraC (..)
+  , emptyCaseC
+  , emptyAlgC
+  , (#$), pattern (:#.$)
+  , NatTrans (..), type (-.>)
+  , unionAlgC, appendAlgC
+  , genAlgebra
+
   -- * Template Haskell
+  , type (~>)
   , makeGen
   , makeAlg
   , makeScp
   ) where
 
 import Control.Effect.Internal.Prog
-import Control.Effect.Internal.Effs
+import Control.Effect.Internal.Algebra
 import Control.Effect.Internal.Handler
 import Control.Effect.Internal.Runner
 import Control.Effect.Internal.AlgTrans

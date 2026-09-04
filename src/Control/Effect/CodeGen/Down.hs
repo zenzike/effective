@@ -17,7 +17,7 @@ module Control.Effect.CodeGen.Down where
 import Control.Effect
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
-import Control.Effect.CodeGen.Type
+import Control.Effect.CodeGen.Operations
 import Control.Effect.CodeGen.Gen
 
 import Data.Functor.Identity
@@ -33,15 +33,15 @@ import Control.Monad.Trans.ResumpUp
 import Control.Monad.Trans.CRes
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.Push
-import Control.Effect.Alternative ( (<|>) )
+import Control.Applicative ( (<|>) )
 
 -- | @n $~> m@ iff the type constructor @n@ at compile time lowers to the type
--- constructor @m@ at runtime. For example, the functor (Up a ->) lowers to (a ->).
+-- constructor @m@ at runtime. For example, the functor (CodeQ a ->) lowers to (a ->).
 --
 -- The instances of this type class are rather mechanical, and in the future we may
 -- try to derive them generically.
 class n $~> m where
-  down :: n (Up x) -> Up (m x)
+  down :: n (CodeQ x) -> CodeQ (m x)
 
 -- | Monads that can be lowered to @m@.
 class    (Monad n, n $~> m) => MonadDown m n where
@@ -49,17 +49,17 @@ instance (Monad n, n $~> m) => MonadDown m n where
 
 -- * Lowering instances for some basic functors
 
-instance (->) (Up a)  $~>  (->) a where
+instance (->) (CodeQ a)  $~>  (->) a where
   down f = [|| \x -> $$(f [||x||]) ||]
 
 instance Maybe $~> Maybe where
   down Nothing = [||Nothing||]
   down (Just x) = [|| Just $$x ||]
 
-instance (,) (Up a)  $~>  (,) a where
+instance (,) (CodeQ a)  $~>  (,) a where
   down (ua, ux) = [|| ($$ua, $$ux) ||]
 
-instance Either (Up e)  $~>  Either e where
+instance Either (CodeQ e)  $~>  Either e where
   down (Left e)  = [|| Left $$e ||]
   down (Right a) = [|| Right $$a ||]
 
@@ -73,12 +73,12 @@ instance (ms $~> os) => Alg ms n $~> Alg os m where
 instance (Functor ms, ms $~> os, n $~> m) => Scp ms n $~> Scp os m where
   down (Scp metaop) = [|| Scp $$(down @ms @os (fmap (down @n @m) metaop)) ||]
 
-instance CStep (Up a)  $~>  CStep a where
+instance CStep (CodeQ a)  $~>  CStep a where
   down FailS = [|| FailS ||]
   down (ChoiceS cx cy) = [|| ChoiceS $$cx $$cy ||]
   down (ActS ca cx) = [|| ActS $$ca $$cx ||]
 
-instance YStep (Up a) (Up b)  $~>  YStep a b where
+instance YStep (CodeQ a) (CodeQ b)  $~>  YStep a b where
   down (YieldS ca ck) = [|| YieldS $$ca $$(down ck) ||]
 
 -- * Lowering instances for some basic monad transformers.
@@ -93,19 +93,19 @@ instance Gen $~> Identity where
 instance Monad m => GenM m $~> m where
   down = runGenM
 
-instance (Monad n, n $~> m) => SS.StateT (Up s) n $~> SS.StateT s m where
+instance (Monad n, n $~> m) => SS.StateT (CodeQ s) n $~> SS.StateT s m where
   down (SS.StateT g) = [|| SS.StateT \s -> $$(down (fmap down (g [||s||])))||]
 
-instance (Monad n, n $~> m) => LS.StateT (Up s) n $~> LS.StateT s m where
+instance (Monad n, n $~> m) => LS.StateT (CodeQ s) n $~> LS.StateT s m where
   down (LS.StateT g) = [|| LS.StateT \s -> $$(down (fmap down (g [||s||]))) ||]
 
-instance (Monad n, n $~> m) => ReaderT (Up r) n $~> ReaderT r m where
+instance (Monad n, n $~> m) => ReaderT (CodeQ r) n $~> ReaderT r m where
   down (ReaderT g) = [|| ReaderT \r -> $$(down (g [||r||])) ||]
 
 instance (Monad n, n $~> m) => MaybeT n $~> MaybeT m where
   down (MaybeT nMb) = [|| MaybeT $$(down (fmap down nMb))||]
 
-instance (Monad n, n $~> m) => ExceptT (Up e) n $~> ExceptT e m where
+instance (Monad n, n $~> m) => ExceptT (CodeQ e) n $~> ExceptT e m where
   down (ExceptT nEx) = [|| ExceptT $$(down (fmap down nEx)) ||]
 
 instance (Monad n, n $~> m) => ListT n $~> ListT m where
@@ -119,52 +119,55 @@ instance PushT Gen $~> [] where
   down p = runGen $ runPushT p (\ca -> fmap (\cas -> [|| ($$ca : $$cas) ||]))
                                (return [|| [] ||])
 
-pushMatch ::(Monad n, Monad m, n $~> m) => PushT n (Up x) -> n (Up (Maybe (x, ListT m x)))
+pushMatch ::(Monad n, Monad m, n $~> m) => PushT n (CodeQ x) -> n (CodeQ (Maybe (x, ListT m x)))
 pushMatch p = runPushT p (\ca -> fmap (\cas -> [|| Just ($$ca, ListT (return $$cas)) ||]))
                          (return [|| Nothing ||])
 
 instance (Monad n, Monad m, n $~> m) => PushT n $~> ListT m where
-  down :: forall x. PushT n (Up x) -> Up (ListT m x)
+  down :: forall x. PushT n (CodeQ x) -> CodeQ (ListT m x)
   down p = [|| ListT $$(down (pushMatch p)) ||]
 
-resUpMatch :: forall n m s l x. (Monad n, Functor l, n $~> m, l $~> s)
-           => ResUpT l n (Up x) -> n (Up (Either x (s (ResT s m x))))
+resUpMatch
+  :: forall n m s l x.
+     ( Monad n, Functor l, n $~> m, l $~> s )
+  => ResUpT l n (CodeQ x)
+  -> n (CodeQ (Either x (s (ResT s m x))))
 resUpMatch p = runResUpT p
                  (\cx -> return [|| Left $$cx ||])
                  (\ln -> return [|| Right $$(down @l @s
                    (fmap (\c -> [|| ResT $$c ||]) (fmap (down @n @m) ln))) ||])
 
 instance (Monad n, Functor l, Functor s, n $~> m, l $~> s) => ResUpT l n $~> ResT s m where
-  down :: forall x. ResUpT l n (Up x) -> Up (ResT s m x)
+  down :: forall x. ResUpT l n (CodeQ x) -> CodeQ (ResT s m x)
   down p = [|| ResT $$(down (resUpMatch p)) ||]
 
 -- * Generating tail-recursive code.
 
 -- | The class $n $~>> m$ provides functions `downTail` and `downJoin` that are variations
--- of the function `down :: n (Up a) -> Up (m a)` for generating better code with tail recursion.
+-- of the function `down :: n (CodeQ a) -> CodeQ (m a)` for generating better code with tail recursion.
 -- When using the @CodeGen@ effect to generate a tail-recursive program, for example,
 -- @
 --   ioExample :: StateT Int IO ()
 --   ioExample = $$(down $
---      evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+--      evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(CodeQ Int))
 --        (do up [|| putStrLn "Hello" ||]
---            s <- get @(Up Int)
+--            s <- get @(CodeQ Int)
 --            b <- split [|| $$s > 0 ||]
 --            if b then put [|| $$s - 1||] >> up [|| ioExample ||]
 --                 else return [||()||]))
 -- @
--- The final `up`-operation for the tail-recursive call @up [|| ioExample ||]@ generates
+-- The final @up@-operation for the tail-recursive call @up [|| ioExample ||]@ generates
 -- an unneeded case split of the result of the recursive call, making the generated
 -- code no longer tail-recursive. We can solve this problem by replacing @up [|| ioExample ||]@
 -- with @return [|| ioExample ||]@ in the meta-program and using instead the function
--- @`downJoin` :: n (Up (m x)) -> Up (m x)@. So the example above becomes
+-- @`downJoin` :: n (CodeQ (m x)) -> CodeQ (m x)@. So the example above becomes
 --
 -- @
 --   ioExample2 :: StateT Int IO ()
 --   ioExample2 = $$(downJoin $
---     evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(Up Int))
+--     evalGenM @IO (upState @Int @IO `fuseAT` stateAT @(CodeQ Int))
 --       (do up [|| putStrLn "Hello" ||]
---           s <- get @(Up Int)
+--           s <- get @(CodeQ Int)
 --           b <- split [|| $$s > 0 ||]
 --           if b then put [|| $$s - 1||] >> return [|| ioExample ||]
 --                else return [||return ()||]))
@@ -186,12 +189,12 @@ instance (Monad n, Functor l, Functor s, n $~> m, l $~> s) => ResUpT l n $~> Res
 -- in a transparent way (by invoking `downTail` under the hood).
 
 class (Functor n, Monad m) => n $~>> m where
-  downTail :: n (Either (Up x) (Up (m x))) -> Up (m x)
+  downTail :: n (Either (CodeQ x) (CodeQ (m x))) -> CodeQ (m x)
   downTail = downJoin . fmap (\case
     Left x  -> [|| return $$x ||]
     Right y -> y)
 
-  downJoin :: n (Up (m x)) -> Up (m x)
+  downJoin :: n (CodeQ (m x)) -> CodeQ (m x)
   downJoin = downTail . fmap Right
 
 -- | Default implementation of `downTail`/`downJoin` using `down`. The generated
@@ -210,73 +213,73 @@ instance Monad m => GenM m $~>> m where
     Left x  -> [|| return $$x ||]
     Right m -> m
 
-instance (Monad n, n $~>> m) => SS.StateT (Up s) n $~>> SS.StateT s m where
+instance (Monad n, n $~>> m) => SS.StateT (CodeQ s) n $~>> SS.StateT s m where
   downTail (SS.StateT g) = [|| SS.StateT \s -> $$(downTail (fmap f (g [||s||]))) ||] where
-    f :: (Either (Up x) (Up (SS.StateT s m x)), Up s) -> Either (Up (x, s)) (Up (m (x, s)))
+    f :: (Either (CodeQ x) (CodeQ (SS.StateT s m x)), CodeQ s) -> Either (CodeQ (x, s)) (CodeQ (m (x, s)))
     f (Left x, cs)   = Left  [||($$x, $$cs)||]
     f (Right cm, cs) = Right [|| SS.runStateT $$cm $$cs ||]
 
-instance (Monad n, n $~>> m) => LS.StateT (Up s) n $~>> LS.StateT s m where
+instance (Monad n, n $~>> m) => LS.StateT (CodeQ s) n $~>> LS.StateT s m where
   downTail (LS.StateT g) = [|| LS.StateT \s -> $$(downTail (fmap f (g [||s||]))) ||] where
-    f :: (Either (Up x) (Up (LS.StateT s m x)), Up s) -> Either (Up (x, s)) (Up (m (x, s)))
+    f :: (Either (CodeQ x) (CodeQ (LS.StateT s m x)), CodeQ s) -> Either (CodeQ (x, s)) (CodeQ (m (x, s)))
     f (Left x, cs)   = Left  [||($$x, $$cs)||]
     f (Right cm, cs) = Right [|| LS.runStateT $$cm $$cs ||]
 
-instance (Monad n, n $~>> m) => ReaderT (Up r) n $~>> ReaderT r m where
+instance (Monad n, n $~>> m) => ReaderT (CodeQ r) n $~>> ReaderT r m where
   downTail (ReaderT g) = [|| ReaderT \r -> $$(downTail (fmap (f [||r||]) (g [||r||]))) ||] where
     f cr (Left x)   = Left x
     f cr (Right cm) = Right [|| runReaderT $$cm $$cr ||]
 
-instance (Monad n, n $~>> m) => ExceptT (Up e) n $~>> ExceptT e m where
+instance (Monad n, n $~>> m) => ExceptT (CodeQ e) n $~>> ExceptT e m where
   downTail (ExceptT g) = [|| ExceptT $$(downTail (fmap f g))||] where
-    f :: Either (Up e) (Either (Up x) (Up (ExceptT e m x)))
-      -> Either (Up (Either e x)) (Up (m (Either e x)))
+    f :: Either (CodeQ e) (Either (CodeQ x) (CodeQ (ExceptT e m x)))
+      -> Either (CodeQ (Either e x)) (CodeQ (m (Either e x)))
     f (Left e) = Left [|| Left $$e ||]
     f (Right (Left x)) = Left [||Right $$x||]
     f (Right (Right m)) = Right [||runExceptT $$m||]
 
 instance (Monad n, n $~>> m) => MaybeT n $~>> MaybeT m where
   downTail (MaybeT g) = [|| MaybeT $$(downTail (fmap f g)) ||] where
-    f :: Maybe (Either (Up x) (Up (MaybeT m x)))
-      -> Either (Up (Maybe x)) (Up (m (Maybe x)))
+    f :: Maybe (Either (CodeQ x) (CodeQ (MaybeT m x)))
+      -> Either (CodeQ (Maybe x)) (CodeQ (m (Maybe x)))
     f Nothing = Left [|| Nothing ||]
     f (Just (Left x)) = Left [|| Just $$x ||]
     f (Just (Right m)) = Right [|| runMaybeT $$m ||]
 
 instance PushT Gen $~>> [] where
   downTail p = runGen $ runPushT p f (return [|| [] ||]) where
-    f :: Either (Up x) (Up [x]) -> Gen (Up [x]) -> Gen (Up [x])
+    f :: Either (CodeQ x) (CodeQ [x]) -> Gen (CodeQ [x]) -> Gen (CodeQ [x])
     f (Left cx)  gxs = do xs <- gxs; return [||$$cx : $$xs||]
     f (Right cl) gxs = do xs <- gxs; return (codeApp cl xs)
 
 -- | Here we are being suboptimal by defining `downJoin` instead of
--- `downTail`. This is because the monad transformer `PushT` is defined to be
+-- `downTail`. This is because the monad transformer t`PushT` is defined to be
 --
--- > forall t. (a -> n (Up t) -> n (Up t)) -> n (Up t) -> n (Up t)
+-- > forall t. (a -> n (CodeQ t) -> n (CodeQ t)) -> n (CodeQ t) -> n (CodeQ t)
 --
 -- so we aren't able to define @tmp@ below to have type
 --
--- > p' :: n (Either (Up (Maybe (x, ListT m x)))
--- >                 (Up (m (Maybe (x, ListT m x)))))
+-- > p' :: n (Either (CodeQ (Maybe (x, ListT m x)))
+-- >                 (CodeQ (m (Maybe (x, ListT m x)))))
 --
--- We can fix this problem if we generalise `PushT` to be
+-- We can fix this problem if we generalise t`PushT` to be
 --
 -- > forall t. isSOP t => (a -> n t -> n t) -> n t -> n t
 --
--- But this seems a bit over-engineering so it is not done, at least for now.
+-- But this seems a bit over-engineered, so it is not done, at least for now.
 
 instance (Monad n, Monad m, n $~>> m) => PushT n $~>> ListT m where
-  downJoin :: forall x. PushT n (Up (ListT m x)) -> Up (ListT m x)
-  downJoin p = let p' :: n (Up (m (Maybe (x, ListT m x))))
+  downJoin :: forall x. PushT n (CodeQ (ListT m x)) -> CodeQ (ListT m x)
+  downJoin p = let p' :: n (CodeQ (m (Maybe (x, ListT m x))))
                    p' = runPushT p (\cxs -> fmap (\cys -> [|| runListT ($$cxs <|> ListT $$cys) ||]))
                                     (return [|| return Nothing ||])
                in [|| ListT $$(downJoin p') ||]
 
 instance (Monad n, Monad m, Functor s, Functor l, n $~>> m, l $~> s)
   => ResUpT l n $~>> ResT s m where
-  downJoin :: forall x. ResUpT l n (Up (ResT s m x)) -> Up (ResT s m x)
+  downJoin :: forall x. ResUpT l n (CodeQ (ResT s m x)) -> CodeQ (ResT s m x)
   downJoin p = [|| ResT $$(downJoin @n @m p') ||] where
-    p' :: n (Up (m (Either x (s (ResT s m x)))))
+    p' :: n (CodeQ (m (Either x (s (ResT s m x)))))
     p' = runResUpT p
             (\cr -> return [|| unResT $$cr ||])
             (\ln -> let g = down @l @s (fmap (\c -> [||ResT $$c||]) (fmap (downJoin @n @m) ln))

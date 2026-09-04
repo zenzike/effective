@@ -35,10 +35,10 @@ with handlers. An example of this is to apply a transformation to all the
 interpreting handler called `retell` can be defined, which takes in a function used
 to modify output:
 ```haskell
-retell :: forall w w' a . (Monoid w, Monoid w')
-       => (w -> w')
+retell :: forall w w' a .
+          (w -> w')
        -> Handler '[Tell w] '[Tell w'] '[] a a
-retell f = interpret $ \(Tell w k) ->
+retell f = interpret1 $ \(Tell w k) ->
   do tell (f w)
      return k
 ```
@@ -61,7 +61,7 @@ operations in that program. For example, the `Censor` effect is
 introduced by the accompanying `censor` operation, and is handled
 using the `censors` handler:
 ```
-censor  :: Member (Censor w) sigs => (w -> w) -> Prog sigs a -> Prog sigs a
+censor  :: Member (Censor w) effs => (w -> w) -> Prog effs a -> Prog effs a
 censors :: Monoid w => (w -> w) -> Handler '[Tell w, Censor w] '[Tell w] '[]
 ```
 The result of the `censors cipher` handler is to first apply the `cipher`
@@ -127,12 +127,12 @@ uncensors = hide (Proxy @'[Tell w]) (censors @w id |> writer_ @w)
 ```
 The key combinator here is `hide`:
 ```haskell ignore
-hide :: forall hsigs sigs osigs f . (Injects (sigs :\\ hsigs) sigs, Injects osigs osigs)
-     => Proxy hsigs
-     -> Handler sigs             osigs f
-     -> Handler (sigs :\\ hsigs) osigs f
+hide :: forall heffs effs oeffs f . (Members (effs :\\ heffs) effs, Members oeffs oeffs)
+     => Proxy heffs
+     -> Handler effs             oeffs f
+     -> Handler (effs :\\ heffs) oeffs f
 ```
-This takes in a handler, returns it where any effects provided by the type parameter `hsigs`
+This takes in a handler, returns it where any effects provided by the type parameter `heffs`
 are hidden. While this works, the version in `Control.Effect.Writer` processes
 any `censor` by ignoring its argument, and does not accumulate any output, and
 is therefore more efficient.
@@ -153,7 +153,7 @@ It is easy enough to see how a variation of `retell` could be written,
 by interpreting `PutStrLn` operations:
 ```haskell
 rePutStrLn :: (String -> String) -> Handler '[PutStrLn] '[PutStrLn] '[] a a
-rePutStrLn f = interpret $ \(PutStrLn str k) ->
+rePutStrLn f = interpret1 $ \(PutStrLn str k) ->
   do putStrLn (f str)
      return k
 ```
@@ -189,7 +189,7 @@ first transform any `putStrLn` operation into a `tell` using
 turn any `tell` back into `putStrLn` with using `tellPutStrLn`:
 ```haskell
 tellPutStrLn :: Handler '[Tell [String]] '[PutStrLn] '[] a a
-tellPutStrLn = interpret $ \(Tell strs k) ->
+tellPutStrLn = interpret1 $ \(Tell strs k) ->
   do putStrLn (unwords strs)
      return k
 ```

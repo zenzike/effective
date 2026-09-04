@@ -5,7 +5,7 @@ License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
 
-This module contains a special case of the resumption monad from "Control.Monad.Trans.CRes"
+This module contains a special case of the resumption monad from "Control.Monad.Trans.Resump"
 with the step functor being @x ↦  a × (b -> x)@ for types @a@ and @b@. This
 is used for modelling yield-based coroutines.
 -}
@@ -19,7 +19,7 @@ import Control.Monad.Trans.Resump
 -- | Step functor for yielding
 data YStep a b x = YieldS a (b -> x) deriving Functor
 
--- | The monad @CResT m@ is the coproduct of the monad @m@ and the free monad
+-- | The monad @YResT m@ is the coproduct of the monad @m@ and the free monad
 -- over YStep. In other words, the algebraic theory corresponding to @YResT m@
 -- is the sum of the theory of @m@ plus an operation that takes in an @a@ value
 -- and produces a @b@-value.

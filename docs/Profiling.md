@@ -14,12 +14,12 @@ module Profiling where
 import Prelude hiding (getLine, putStrLn)
 
 import Control.Effect
+import Control.Effect.Internal.Algebra
 import Control.Effect.Family.Algebraic
 import Control.Effect.Family.Scoped
 import Control.Effect.IO
 import Control.Effect.Writer
 
-import Data.HFunctor
 import System.CPUTime (getCPUTime)
 
 import Handlers
@@ -34,7 +34,7 @@ Timestamps
 Timestamps are often used in conjunction with logging so that the time a message
 is logged can be recorded. The traditional way of doing this might be to make
 a bespoke `logger` that ensures that there is a timestamp integrated into each
-occurence of the log:
+occurrence of the log:
 ```haskell
 logger :: String -> () ! [Tell [(Integer, String)], Alg IO]
 logger str = do time <- io getCPUTime
@@ -43,8 +43,8 @@ logger str = do time <- io getCPUTime
 However, this is a case where a reinterpretation might be better where all
 instances of `tell` are augmented with the appropriate timestamp.
 ```haskell
-telltime :: forall w a . Monoid w => Handler '[Tell w] '[Tell [(Integer, w)], Alg IO ] '[] a a
-telltime = interpret $ \(Tell (w :: w) k) ->
+telltime :: forall w a . Handler '[Tell w] '[Tell [(Integer, w)], Alg IO] '[] a a
+telltime = interpret1 $ \(Tell (w :: w) k) ->
   do time <- io getCPUTime
      tell [(time, w)]
      return k
@@ -58,13 +58,7 @@ ghci> handleIO (telltime @[String] |> censors backwards |> writer @[(Integer, [S
 A different interface is to use a scoped operation that marks
 part of the program as of interest for profiling.
 ```haskell
-type Profile = Scp Profile'
-data Profile' k where
-  Profile :: String -> k -> Profile' k
-  deriving Functor
-
-profile :: Member Profile sigs => String -> Prog sigs a -> Prog sigs a
-profile name p = call (Scp (Profile name p))
+$(makeScp [e|profile :: String ~> 1|])
 ```
 
 For example, to profile some code `p`, we need to mark it as a code of interest
@@ -80,12 +74,11 @@ thus showing how much time was spent in `p`.
 
 ```haskell
 timer :: Handler '[Profile] '[Tell [(String, Integer)], Alg IO] '[] a a
-timer = interpretM $ \oalg (Eff (Scp (Profile name p))) ->
-  do t  <- eval oalg (io getCPUTime)
+timer = interpretM1 $ \oalg (Profile name p) ->
+  do t  <- ioM oalg getCPUTime
      k  <- p
-     eval oalg $ do
-        t' <- io getCPUTime
-        tell [(name, t' - t)]
+     t' <- ioM oalg getCPUTime
+     tellM oalg [(name, t' - t)]
      return k
 ```
 How exactly `getCPUTime` is measured, and what is done with the `ask` is left
@@ -103,14 +96,12 @@ A new `profiler f instrument p` will inject the `instrument` before and after
 executed. These are then combined by the given function `f` and emitted using
 `ask`.
 ```haskell
-profiler :: (HFunctor (Effs osigs), Injects osigs (Tell [(String, b)] ': osigs))
-  => (a -> a -> b) -> Prog osigs a -> Handler '[Profile] (Tell [(String, b)] ': osigs) '[] c c
-profiler f instrument = interpretM $ \oalg (Eff (Scp (Profile name p))) ->
-  do t  <- eval oalg (weakenProg instrument)
+profiler :: (a -> a -> b) -> Prog oeffs a -> Handler '[Profile] (Tell [(String, b)] ': oeffs) '[] c c
+profiler f instrument = interpretM1 $ \oalg (Profile name p) ->
+  do t  <- eval (tailAlg oalg) instrument
      k  <- p
-     eval oalg $ do
-        t' <- weakenProg instrument
-        tell [(name, f t t')]
+     t' <- eval (tailAlg oalg) instrument
+     tellM oalg [(name, f t t')]
      return k
 ```
 
@@ -118,7 +109,7 @@ For our teletype example, we can instrument all of the `getLine` operations
 with a profiler as follows:
 ```haskell
 getLineProfile :: Handler '[GetLine] '[Profile, GetLine] '[] a a
-getLineProfile = interpret $ \(GetLine k) ->
+getLineProfile = interpret1 $ \(GetLine k) ->
   profile "getLine" (getLine >>= return . k)
 ```
 

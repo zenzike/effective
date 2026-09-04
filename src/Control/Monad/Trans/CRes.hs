@@ -5,7 +5,7 @@ License     : BSD-3-Clause
 Maintainer  : Zhixuan Yang
 Stability   : experimental
 
-This module contains a special case of the resumption monad from "Control.Monad.Trans.CRes"
+This module contains a special case of the resumption monad from "Control.Monad.Trans.Resump"
 with the step functor being @x ↦ 1 + (x × x) + (a × x)@ for a type @a@ of actions. This
 is used for modelling concurrency.
 -}
@@ -17,15 +17,15 @@ module Control.Monad.Trans.CRes (
 import Control.Monad.Trans.Resump
 import Control.Applicative ( Alternative(empty, (<|>)) )
 import Control.Monad
-import Control.Effect.Concurrency.Type (Action (..))
+import Control.Effect.Concurrency.Operations (Action (..))
 import Data.List (nub)
 
 -- | Step functor for choice and action
 data CStep a x = FailS | ChoiceS x x | ActS a x deriving Functor
 
--- | The monad `CResT m` is the coproduct of the monad `m` and the
+-- | The monad @CResT m@ is the coproduct of the monad @m@ and the
 -- free monad over CStep. In other words, the algebraic theory
--- corresponding to `CResT m` is the sum of the theory of `m`
+-- corresponding to @CResT m@ is the sum of the theory of @m@
 -- plus a nullary operation, a binary operation, and a unary operation
 -- for each action.
 type CResT a = ResT (CStep a)
@@ -33,7 +33,7 @@ type CResT a = ResT (CStep a)
 -- | The functor type for the results of running a nondeterministic process by backtracking.
 newtype ListActs a x = ListActs { unListActs :: [([a], x)] } deriving (Show, Functor)
 
--- | Traverse all nondeterministic branches and accumulate the `m`-effects
+-- | Traverse all nondeterministic branches and accumulate the @m@-effects
 -- and actions.
 -- TODO: the manipulation of the lists can be more efficient.
 runAll :: Monad m => CResT a m x -> m (ListActs a x)
@@ -149,7 +149,7 @@ done' x = return (Left x)
 jpar :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
 jpar x y = (jparL x y <|> jparR x y) <|> (jparCL x y <|> jparCR x y)
 
--- | Joined parallel composition with the left argument acts first.
+-- | Joined parallel composition in which the left argument acts first.
 jparL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
 jparL (ResT mxs) y = ResT $
   do xs <- mxs
@@ -159,11 +159,11 @@ jparL (ResT mxs) y = ResT $
        Right FailS         -> fail'
        Right (ChoiceS l r) -> jparL l y <|>: jparL r y
 
--- | Joined parallel composition with the right argument acts first.
+-- | Joined parallel composition in which the right argument acts first.
 jparR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
 jparR x y = fmap (\(a,b) -> (b,a)) (jparL y x)
 
--- | Joined parallel composition with the two arguments communicate first, but
+-- | Joined parallel composition in which the two arguments communicate first, but
 -- the monadic effect of the left argument is executed first.
 jparCL :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
 jparCL lhs rhs = ResT $
@@ -183,7 +183,7 @@ jparCL lhs rhs = ResT $
        Right FailS -> fail'
        Right (ChoiceS l r) -> jparCL l rhs <|>: jparCL r rhs
 
--- | Joined parallel composition with the two arguments communicate first, but
+-- | Joined parallel composition in which the two arguments communicate first, but
 -- the monadic effect of the right argument is executed first.
 jparCR :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m (x, y)
 jparCR lhs rhs = fmap (\(a,b) -> (b,a)) (jparCL rhs lhs)
@@ -193,8 +193,8 @@ jparCR lhs rhs = fmap (\(a,b) -> (b,a)) (jparCL rhs lhs)
 par :: (Action a, Monad m) => CResT a m x -> CResT a m y -> CResT a m x
 par x y = fmap fst (jpar x y)
 
--- | The process @res a p@ acts like @p@ under a firewall that blocks all communication of
--- @p@ with the external environment via action @a@.
+-- | The process @res a p@ acts like @p@ under a firewall that blocks all communication
+-- between @p@ and the external environment via action @a@.
 res :: (Action a, Monad m) => a -> CResT a m x -> CResT a m x
 res a p = ResT $
   do xs <- unResT p
