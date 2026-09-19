@@ -14,12 +14,7 @@ extra-source-files:
   README.md
 extra-doc-files:
   ChangeLog.md
-  docs/README.md
-  docs/Handlers.md
-  docs/Members.md
-  docs/Profiling.md
-  docs/ScopedOperations.md
-  docs/TeletypePure.md
+  docs/Tutorial.md
 
 source-repository head
   type: git
@@ -152,18 +147,26 @@ test-suite docs
     base               >= 4.16 && < 4.23,
     effective,
     hedgehog           >= 1.5  && < 1.8,
+    transformers       >= 0.4  && < 0.7,
   build-tool-depends: markdown-unlit:markdown-unlit
   other-modules:
+    Tutorial
+
+test-suite effects
+  import:        common
+  type:          exitcode-stdio-1.0
+  ghc-options:   -threaded
+  main-is:       Effects.hs
+  default-language: GHC2021
+  hs-source-dirs:  test
+  other-modules:
     Error,
-    Handlers,
-    Members,
     Nondet,
-    Parser,
-    Profiling,
-    ScopedOperations,
-    State,
-    TeletypePure,
-    Operations
+    State
+  build-depends:
+    base               >= 4.16 && < 4.23,
+    effective,
+    hedgehog           >= 1.5  && < 1.8,
 
 test-suite concur
   import:        common

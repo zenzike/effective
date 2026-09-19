@@ -1,4 +1,3 @@
-```haskell
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
@@ -115,4 +114,3 @@ example_queens = property $
 
 examples :: Group
 examples = $$(discoverPrefix "example_")
-```haskell

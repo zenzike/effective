@@ -3,9 +3,13 @@ module Main where
 import Hedgehog
 import Hedgehog.Main
 
-import Tutorial
+import Error
+import Nondet
+import State
 
 main :: IO ()
 main = defaultMain $ fmap checkParallel
-  [ Tutorial.examples
+  [ Error.examples
+  , Nondet.examples
+  , State.examples
   ]
