@@ -8,7 +8,7 @@ designed to allow users to define and interpret their own languages and
 effects. This library incorporates support for:
 
 * Algebraic, scoped, and other higher-order effects.
-* Combinators for composing effect handlers.
+* Combinators for defining and composing deep effect handlers.
 * Staged effectful programming using Typed Template Haskell.
 
 Getting Started
@@ -23,19 +23,16 @@ The longer documentation examples are also compiled and tested:
 ```console
 cabal test docs
 ```
+This compiles this readme and other examples. Each `.md` file has a matching
+`.lhs` symlink so the documentation can be compiled.
 
-Package Structure
------------------
+[`Control.Effect`](src/Control/Effect.hs) is the public entry point which
+re-exports the core program type, handler type, handler combinators, evaluation
+functions, and Template Haskell helpers for defining operations.
 
-* [`Control.Effect`](src/Control/Effect.hs) is the public entry point which
-  re-exports the core program type, handler type, handler combinators, evaluation
-  functions, and Template Haskell helpers for defining operations.
-* [`docs`](docs/README.md) contains checked literate examples. Each `.md` file has a
-  matching `.lhs` symlink so the documentation can be compiled and tested with
-  `cabal test docs`.
 
-Case Study: Teletype
---------------------
+Operations
+----------
 
 A core idea of effect handlers is to produce a program with an
 *effect signature* that describes the kinds of operations that the
@@ -69,8 +66,12 @@ echo = do str <- getLine
 ```
 The type signature stipulates that `echo` is a family of programs whose effect
 signature contains `[GetLine, PutStrLn]`, and returns a result of type `()`.
+Although a list is used, the order of effects in the signature is irrelevant.
 The effect signature says that this is a program that may use the corresponding
 `getLine` and `putStrLn` operations.
+
+Handlers
+--------
 
 The most direct interpretation of this program is to use the corresponding
 operations from `Prelude` for `getLine` and `putStrLn` to interpret
@@ -81,9 +82,11 @@ io :: Members '[Alg IO] effs => IO a -> Prog effs a
 ```
 The call to `io` records the action as syntax to be handled later on.
 
-The interpretation is given by the `teletypeIO` *handler*, defined as follows.
-For now the main type parameters of this handler of interest indicate the
-*input* effects that are consumed (`GetLine` and `PutStrLn`), and the the
+An interpretation is given by a *handler*, which processes each of the
+operations.
+For instance, the `teletypeIO` handler is defined as follows.
+The main type parameters of this handler of interest indicate the
+*input* effects that are consumed (`GetLine` and `PutStrLn`), and the
 *output* effects that are produced (`Alg IO`):
 ```haskell
 --                     +------------------------------------- input effects
@@ -97,10 +100,13 @@ teletypeIO = interpret $
   (\(GetLine k)     -> do x <- io (Prelude.getLine); return (k x)) :%
   (\(PutStrLn xs k) -> do x <- io (Prelude.putStrLn xs); return k) :% emptyCase
 ```
-Looking at the body of this handler, we can see that it functions by interpreting
-the syntax of `GetLine` and `PutStrLn` in terms of calls to `io` which
-schedules the appropriate actions. The clauses for the operations are put together
-using the binary operator `(:%)`, finished with `emptyCase`.
+Looking at the body of this handler, we can see that it functions by
+interpreting the syntax of `GetLine` and `PutStrLn` in terms of calls to `io`
+which schedules the appropriate actions. The clauses for the operations are put
+together using the binary operator `(:%)`, finished with `emptyCase`.
+
+Composing Handlers
+------------------
 
 The output effects of `teletypeIO` is `Alg IO`, which must be fully consumed
 before the program can be handled. This is achieved by composing
@@ -108,9 +114,9 @@ before the program can be handled. This is achieved by composing
 ```haskell ignore
 constIO :: Handler '[Alg IO] '[] '[ConstIO] a (IO a)
 ```
-The signature of `constIO` promises to consume `Alg IO` and produce no additional
-effects. It does so by using `ConstIO` internally, and takes the program
-result `a` into a handler result `IO a`
+The signature of `constIO` promises to consume `Alg IO` and produce no
+additional effects. It does so by using `ConstIO` internally, and takes the
+program result `a` into a handler result `IO a`.
 
 Using the pipe operator `\\`, we combine `teletypeIO` with `constIO` into
 a single handler that can interpret the `echo` program:
@@ -128,6 +134,9 @@ Hello world!
 This executes the `echo` program where input provided on the
 terminal by the user is immediately echoed back out to the terminal.
 
+Reinterpreting Operations
+-------------------------
+
 A different interpretation changes only the handler. Instead of running
 the terminal version, the same `echo` program can be given a pure input
 buffer and a pure output log by applying a different handler:
@@ -139,7 +148,7 @@ teletypeStateWriter = interpret $
                                         []    -> return (k "")
                                         x:xs' -> do put xs'
                                                     return (k x)) :%
-  (\(PutStrLn xs k) -> do tell [xs]; return k) :% emptyCase
+  (\(PutStrLn xs k) -> do tell [xs]; return k)                    :% emptyCase
 ```
 This translation replaces `getLine` and `putStrLn` with different operations.
 This can be done in terms of `get`, `put`, and `tell`, and these can
@@ -170,23 +179,83 @@ Effect handlers have allowed us to interpret the `echo` program in two different
 ways: as a terminal version that interacts with `IO`, and as a pure
 version that works with lists of input and output.
 
+Scoped Operations
+-----------------
+
+Operations like `getLine` and `putStrLn` are *algebraic*: they take values as
+parameters and return values to the program. The `effective` library also
+supports *scoped* operations, which take entire subprograms as arguments. For
+example, the `censor` operation marks a region of a program whose output
+should be transformed by a cipher:
+```haskell
+hoppy :: () ! [Tell [String], Censor [String]]
+hoppy = do tell ["Hello Alfie!"]
+           censor backwards $
+             do tell ["tortoise"]
+                censor shout $
+                  do tell ["get bigger!"]
+           tell ["Goodbye!"]
+
+backwards, shout :: [String] -> [String]
+backwards = map reverse
+shout     = map (map toUpper)
+```
+The `censors` handler applies ciphers to the `tell` operations in the regions
+they delimit, and nested ciphers accumulate:
+```console
+ghci> handle (censors @[String] id |> writer) hoppy :: ([String], ())
+(["Hello Alfie!","esiotrot","!REGGIB TEG","Goodbye!"],())
+```
+Since `censor` is ordinary operation syntax, a different handler can give it a
+different meaning, such as removing the censorship altogether.
+
 
 Documentation
 -------------
 
-A tutorial for how to use this library can be found in [docs/README.md](docs/README.md).
-Another resource is the paper [Composing and Staging Effect Handlers](https://yangzhixuan.github.io/pdf/effective-paper.pdf), which is a self-contained explanation of the design of this library.
+### Tutorial
 
-The codebase also contains some Haddock documentation (although not very complete at the moment). A
-logical order of source files is as follows:
+A tutorial can be found in
+[docs/Tutorial.md](docs/Tutorial.md). Another resource is the paper
+[Composing and Staging Effect Handlers](https://yangzhixuan.github.io/pdf/effective-paper.pdf),
+which is a self-contained explanation of the design of this library.
 
-* `Control/Effect/Internal/Algebra.hs`
-* `Control/Effect/Internal/Prog/Imp.hs`
-* `Control/Effect/Internal/AlgTrans.hs`
-* `Control/Effect/Internal/Forward.hs`
-* `Control/Effect/Internal/Runner.hs`
-* `Control/Effect/Internal/Handler.hs`
-* The standard effects in `Control/Effects/` such as `Control/Effect/Reader.hs`
+### Built-in Effects
+
+The library is exposed through
+[`Control.Effect`](https://github.com/zenzike/effective/blob/master/src/Control/Effect.hs),
+and a number of built-in effects are provided in this library
+that have their own documentation. Each of these modules defines the operations
+of one effect and one or more handlers that give them a meaning:
+
+| Module | Description | Operations | Handlers |
+| --- | --- | --- | --- |
+| [`Control.Effect.Reader`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Reader.hs) | A read-only environment. | `ask`, `asks`, `local` | `reader`, `asker` |
+| [`Control.Effect.Writer`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Writer.hs) | Output accumulated in a monoid. | `tell`, `censor` | `writer`, `writer_`, `censors`, `uncensors` |
+| [`Control.Effect.State`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/State.hs) | A single mutable value. | `get`, `put` | `state`, `state_` |
+| [`Control.Effect.Except`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Except.hs) | Exceptions that carry a value. | `throw`, `catch` | `except`, `retry` |
+| [`Control.Effect.Maybe`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Maybe.hs) | Failure without a value. | `throw`, `catch` | `except`, `retry` |
+| [`Control.Effect.IO`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/IO.hs) | Real input and output. | `io` | `constIO`, `handleIO` |
+| [`Control.Effect.Nondet`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Nondet.hs) | Choice and failure. | `empty`, `<\|>`, `select`, `once`, `cut` | `list`, `logic`, `nondet`, `backtrack` |
+| [`Control.Effect.Concurrency`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Concurrency.hs) | Processes that synchronise on actions. | `par`, `act`, `res` | `resump`, `resumpWith`, `ccsByQSem` |
+| [`Control.Effect.Yield`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Yield.hs) | Coroutines that exchange values. | `yield`, `mapYield` | `pingpongWith` |
+| [`Control.Effect.HStore`](https://github.com/zenzike/effective/tree/master/src/Control/Effect/HStore) | Mutable cells holding values of any type. | `new`, `get`, `put` | `handleHS`, `runHS` |
+| [`Control.Effect.WithName`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/WithName.hs) | Named copies of an existing effect. | `:@`, `callP` | `renameEffs`, `renameOEffs` |
+
+### Internal Implementation
+
+The modules under [`Control.Effect.Internal`](https://github.com/zenzike/effective/tree/master/src/Control/Effect/Internal)
+contain implementation details that are always subject to change. For the
+curious, a logical order in which to read them is as follows:
+
+| Module | Contents |
+| --- | --- |
+| [`Control.Effect.Internal.Algebra`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/Algebra.hs) | The data structure for storing effect operations |
+| [`Control.Effect.Internal.Prog.Imp`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/Prog/Imp.hs) | Programs in impredicative encoding |
+| [`Control.Effect.Internal.AlgTrans`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/AlgTrans.hs) | Transforming effectful operations along carrier transformers |
+| [`Control.Effect.Internal.Forward`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/Forward.hs) | Default forwarding algebras |
+| [`Control.Effect.Internal.Runner`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/Runner.hs) | Runners do initialisation and finalisation work around handling operations |
+| [`Control.Effect.Internal.Handler`](https://github.com/zenzike/effective/blob/master/src/Control/Effect/Internal/Handler.hs) | Handlers and handler combinators |
 
 <!--
 Language Extensions
@@ -219,6 +288,7 @@ import Control.Effect.IO
 import Control.Effect.State
 import Control.Effect.Writer
 
+import Data.Char (toUpper)
 import Prelude hiding (putStrLn, getLine)
 import qualified Prelude
 import Hedgehog (Group(..), property, checkParallel, (===))
@@ -231,6 +301,9 @@ props :: Group
 props = Group "README properties"
   [ ("examplePure", property $
       examplePure === (["Hello world!"], ()))
+  , ("exampleCensor", property $
+      (handle (censors @[String] id |> writer) hoppy :: ([String], ()))
+        === (["Hello Alfie!","esiotrot","!REGGIB TEG","Goodbye!"], ()))
   ]
 
 main :: IO ()

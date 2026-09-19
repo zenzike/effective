@@ -1,4 +1,3 @@
-```haskell
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE QualifiedDo #-}
@@ -145,6 +144,3 @@ example_getAsk2 = property $
 
 examples :: Group
 examples = $$(discoverPrefix "example_")
-
-
-```haskell

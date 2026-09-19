@@ -1,4 +1,3 @@
-```haskell
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds #-}
 
@@ -55,4 +54,3 @@ example_safeMonus = property $ do
 
 examples :: Group
 examples = $$(discoverPrefix "example_")
-```
