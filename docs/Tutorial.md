@@ -60,10 +60,13 @@ unconstrained.
 Looking at these types, an operation is characterised by two things:
 
 * its *parameters*, the data that the operation may make use of; and
-* its *arity*, the type of value that the operation returns to the program.
+* its *result type*, the type of value that the operation returns to the program.
 
-So `put` has a single parameter of type `s`, the new state, and its arity is
-`()`; `get` has no parameters, and its arity is `s`, the current state.
+So `put` has a single parameter of type `s`, the new state, and its result type is
+`()`; `get` has no parameters, and its result type is `s`, the current state.
+The result type is known as the *arity* in the algebraic effects literature,
+which can be understood by considering that there is one continuation for each
+value in the result type.
 
 Operations are combined into programs using `do` notation. Here is a program
 that increments the state by a given `n`:
@@ -251,9 +254,10 @@ ghci> handle (constIO |> state (40 :: Int)) helloIncr
           it = handle (constIO |> state (40 :: Int)) helloIncr
 ```
 The error message tells us that `ConstIO` is not a monad transformer,
-and this is a requirement for the effects to be forwarded through `|>` appropriately.
-In other words, `constIO` must be the final handler that is applied because
-it does not support effect forwarding.
+and this is a requirement for the effects to be forwarded *generically*
+through `|>`.
+Unless a `Forward` instance is given for a specific operation,
+`constIO` must be the final handler that is applied.
 
 
 Interpreting Operations
@@ -300,14 +304,14 @@ To do so, the following must be defined:
 In practice, this is most easily done by using a *generator*.
 
 A *generic operation* is described by exactly its name, its (optional) parameters,
-and its arity. The splice `makeGen` is a *generic generator* that takes an
+and its result type. The splice `makeGen` is a *generic generator* that takes an
 operation signature and produces the necessary boilerplate:
 ```haskell
 $(makeGen [e| getLine  :: String |])
 $(makeGen [e| putStrLn :: String ~> () |])
 ```
 This is an *algebraic signature* of the operation: the parameters, if any, are written
-before a `~>`, and the final type is the arity. Thus `getLine :: String` says
+before a `~>`, and the final type is the result type. Thus `getLine :: String` says
 that `getLine` has no parameters and returns a `String`, while
 `putStrLn :: String ~> ()` says that `putStrLn` carries a `String` and
 returns `()`.
@@ -367,7 +371,7 @@ The definition of `rephrase` provides the system with the
 information on how to proceed when a `getLine` is matched.
 This is done by matching on the syntax `GetLine k`, where
 `k` is a continuation that corresponds to the program that follows this
-operation. Since the arity of `getLine` is `String`, the continuation
+operation. Since the result type of `getLine` is `String`, the continuation
 `k` requires a string to continue.
 
 Although it would be possible to handle these effects by using the fuse operator
@@ -476,8 +480,8 @@ getLine = call (GetLine id)
 ```
 
 The code that corresponds to `$(makeGen [e| putStrLn :: String ~> () |])`
-produces a datatype that has a `String` as a parameter, and has an
-arity of `()`, which corresponds to one continuation:
+produces a datatype that has a `String` as a parameter, and has a
+result type of `()`, which corresponds to one continuation:
 ```haskell ignore
 type PutStrLn = Alg PutStrLn_
 
@@ -489,18 +493,16 @@ pattern PutStrLn str k = Alg (PutStrLn_ str k)
 putStrLn :: Member PutStrLn effs => String -> Prog effs ()
 putStrLn str = call (PutStrLn str ())
 ```
-It would have been possible, and indeed more consistent, to define this where the continuation
-is explicitly of type `() -> k`. However, this clutters the operation needlessly, so
-by convention when the arity is `()` our library makes the continuation take no argument.
+When the result type is `()` the continuation `k` takes no argument.
 
 
 Algebraic Operations
 --------------------
 
 A different way of defining operations is to use an *algebraic generator*.
-Here, an operation `op` has an arity which is a natural number `n`, and
-produces an operation that takes `n` subprograms as parameters, each
-corresponding to a continuation.
+Here, an operation `op` has an arity which is a natural
+number `n`, and produces an operation that takes `n` subprograms as
+parameters, each corresponding to a continuation.
 
 Here is an example of using an algebraic operation `confirm`,
 where the program `confirm message p q` will display 
