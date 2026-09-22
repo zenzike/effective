@@ -81,44 +81,44 @@ instance Functor sig => HFunctor (Scp sig) where
   hmap h (Scp op) = Scp (fmap h op)
 
 instance Functor sig => Forward (Scp sig) IdentityT where
-  type FwdConstraint (Scp sig) IdentityT = Functor
+  type FwdConstraint (Scp sig) IdentityT = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = IdentityT (alg (Scp (fmap runIdentityT op)))
 
 instance Functor sig => Forward (Scp sig) (ExceptT e) where
-  type FwdConstraint (Scp sig) (ExceptT e) = Functor
+  type FwdConstraint (Scp sig) (ExceptT e) = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = ExceptT (alg (Scp (fmap runExceptT op)))
 
 instance Functor sig => Forward (Scp sig) MaybeT where
-  type FwdConstraint (Scp sig) MaybeT = Functor
+  type FwdConstraint (Scp sig) MaybeT = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = MaybeT (alg (Scp (fmap runMaybeT op)))
 
 instance Functor sig => Forward (Scp sig) (StateT s) where
-  type FwdConstraint (Scp sig) (StateT s) = Functor
+  type FwdConstraint (Scp sig) (StateT s) = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = StateT (\s -> (alg (Scp (fmap (flip runStateT s) op))))
 
 instance Functor sig => Forward (Scp sig) (L.StateT s) where
-  type FwdConstraint (Scp sig) (L.StateT s) = Functor
+  type FwdConstraint (Scp sig) (L.StateT s) = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = L.StateT (\s -> (alg (Scp (fmap (flip L.runStateT s) op))))
 
 instance Functor sig => Forward (Scp sig) (WriterT s) where
-  type FwdConstraint (Scp sig) (WriterT s) = Functor
+  type FwdConstraint (Scp sig) (WriterT s) = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = WriterT (alg (Scp (fmap runWriterT op)))
 
 instance Functor sig => Forward (Scp sig) (ReaderT w) where
-  type FwdConstraint (Scp sig) (ReaderT w) = Functor
+  type FwdConstraint (Scp sig) (ReaderT w) = Monad
   {-# INLINE fwd #-}
   fwd alg (Scp op) = ReaderT (\r -> alg (Scp (fmap (flip runReaderT r) op)))
 
 -- | Unary scoped operations can be forwarded by `ListT` by applying the
 -- operation recursively to all @m@-actions inside the `ListT` value.
 instance U.Unary sig => Forward (Scp sig) ListT where
-  type FwdConstraint (Scp sig) ListT = Functor
+  type FwdConstraint (Scp sig) ListT = Monad
   fwd :: forall m. Functor m => (forall x. Scp sig m x -> m x)
       -> (forall x. Scp sig (ListT m) x -> ListT m x)
   fwd alg (Scp op) = hmap ualg (U.get op) where
@@ -144,7 +144,7 @@ A similar problem occurs for these instances of `CutListT` and `LogicT`:
 -}
 
 instance (Functor s, U.Unary sig) => Forward (Scp sig) (ResT s) where
-  type FwdConstraint (Scp sig) (ResT s) = Functor
+  type FwdConstraint (Scp sig) (ResT s) = Monad
   fwd :: forall m. Functor m => (forall x. Scp sig m x -> m x)
       -> (forall x. Scp sig (ResT s m) x -> ResT s m x)
   fwd alg (Scp op) = hmap ualg (U.get op) where

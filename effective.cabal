@@ -28,6 +28,11 @@ common common
   --cpp-options: -DINDEXED
   --cpp-options: -DPROGDIRECT
 
+flag debug
+  description: Enable debug logging features
+  manual:      True
+  default:     False
+
 
 library
   import: common
@@ -106,6 +111,9 @@ library
   hs-source-dirs:
     src
 
+  if flag(debug)
+    cpp-options: -DENABLE_DEBUG
+
   build-depends:
     base               >= 4.16   && < 4.22,
     transformers       >= 0.4    && < 0.7,
@@ -114,6 +122,7 @@ library
     ghc-prim           >= 0.8    && < 0.14,
     logict             >= 0.8.2  && < 0.9,
     template-haskell   >= 2.18   && < 2.24,
+    -- advanced-debugging
 
 test-suite readme
   type:          exitcode-stdio-1.0

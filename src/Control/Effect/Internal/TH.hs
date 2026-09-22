@@ -192,12 +192,11 @@ makeAlgPieces baseName = do
           ( NormalB
               ( applyExp
                   (VarE 'namedCall)
-                  [ LitE (StringL effStr)
-                  , ( ConE 'Alg
-                        `AppE` applyExp
-                          (ConE conName)
-                          (map VarE argNames ++ [contExpr])
-                    )
+                  [ LitE (StringL (lowerHead effStr))
+                  , ConE 'Alg
+                      `AppE` applyExp
+                        (ConE conName)
+                        (map VarE argNames ++ [contExpr])
                   ]
               )
           )

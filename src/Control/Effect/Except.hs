@@ -52,7 +52,7 @@ newtype Throw_ e k where
 {-# INLINE throw #-}
 -- > throw e >>= k = throw e
 throw :: forall e sig a . (Member (Throw e) sig) => e -> Prog sig a
-throw e = namedCall @(Throw e) "Throw" (Alg (Throw e))
+throw e = namedCall "Throw" (Alg (Throw e))
 
 -- | Internal signature for catching exceptions of type @e@.
 type Catch e = Scp (Catch_ e)

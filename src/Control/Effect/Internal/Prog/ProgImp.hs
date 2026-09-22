@@ -12,13 +12,13 @@ the representation from this module is suitable for our purpose.
 -}
 
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE MonoLocalBinds #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE MonoLocalBinds #-}
 
 module Control.Effect.Internal.Prog.ProgImp (
   -- * Program datatype
   callCounter,
+  resetCallCounter,
   namedCall,
   incrementCallCounter,
   incrementGlobalCallCounter,
@@ -47,18 +47,29 @@ import Data.IORef (IORef, newIORef, atomicModifyIORef')
 import GHC.IO (unsafePerformIO)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import qualified Language.Haskell.TH as TH
 
 {-# NOINLINE callCounter #-}
 callCounter :: IORef (Map String Int)
 callCounter = unsafePerformIO (newIORef Map.empty)
 
+resetCallCounter :: IO ()
+resetCallCounter = atomicModifyIORef' callCounter (\c -> (Map.empty, ()))
+
 globalCounterName = "global"
 
 incrementCallCounter :: String -> b -> b
-incrementCallCounter name !x = unsafePerformIO (atomicModifyIORef' callCounter (\c -> (Map.insertWith (+) name 1 c, x)))
-
 incrementGlobalCallCounter :: b -> b
+#ifdef ENABLE_DEBUG
+incrementCallCounter name !x = unsafePerformIO (atomicModifyIORef' callCounter (\c -> (Map.insertWith (+) name 1 c, x)))
 incrementGlobalCallCounter = incrementCallCounter globalCounterName
+#else
+{-# INLINE incrementCallCounter #-}
+incrementCallCounter _ = id
+{-# INLINE incrementGlobalCallCounter #-}
+incrementGlobalCallCounter = id
+#endif
+
 
 -- | The impredicative-encoding of effectful programs
 newtype Prog (effs :: [Effect]) a = Prog { runProg :: forall m. Monad m => Algebra effs m -> m a }

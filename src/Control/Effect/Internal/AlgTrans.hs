@@ -263,7 +263,7 @@ type FuseAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2 =
    ( GeneralFuseAT# effs2 effs2 effs1 effs2 oeffs1 oeffs2 ts1 ts2
    , Injects effs2 effs2 )
 
-infixr 9 `fuseAT`, `fuseAT'`
+infixl 9 `fuseAT`, `fuseAT'`
 
 -- | @fuseAT at1 at2@ composes @at1@ and @at2@ in a way that uses @at2@ maximally:
 --    1. all the input effects @effs2@ of @at2@ are visible in the input effects of the final result, and

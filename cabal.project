@@ -1,4 +1,5 @@
 packages:
     effective.cabal
+    -- ../advanced-debugging
 
 tests: True
