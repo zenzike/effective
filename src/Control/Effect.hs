@@ -124,8 +124,8 @@ module Control.Effect
   -- * Template Haskell
   , type (~>)
   , makeGen
-  , makeAlg
-  , makeScp
+  , makeAlg, Alg (..)
+  , makeScp, Scp (..)
   ) where
 
 import Control.Effect.Internal.Prog
