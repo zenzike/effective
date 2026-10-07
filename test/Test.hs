@@ -56,6 +56,7 @@ import qualified Staged.Handlers as StagedHandlers
 import qualified Staged.Programs as Staged
 import qualified Staged.Plugin as Plugin
 import qualified Internal.AlgTrans as AlgTrans
+import qualified Internal.Do as Do
 import qualified Internal.TH as TH
 
 main :: IO ()
@@ -76,6 +77,7 @@ main = defaultMain $ testGroup "effective"
   , IO.tests
   , Yield.tests
   , AlgTrans.tests
+  , Do.tests
   , StagedHandlers.tests
   , Staged.tests
   , Plugin.tests

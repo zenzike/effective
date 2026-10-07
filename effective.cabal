@@ -40,6 +40,7 @@ library
   exposed-modules:
     Control.Effect.Plugin
     Control.Effect
+    Control.Effect.Do
     Control.Effect.WithName
     Control.Effect.Family.Algebraic
     Control.Effect.Family.Scoped
@@ -179,6 +180,7 @@ test-suite test
     Fusion.Sum,
     Gen,
     Internal.AlgTrans,
+    Internal.Do,
     Internal.TH,
     Law,
     Staged.Concur,
