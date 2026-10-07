@@ -1,5 +1,12 @@
 {-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes, PartialTypeSignatures, LambdaCase, TypeFamilies, PackageImports #-}
-module StagedGen where
+{-|
+Module      : Staged.Gen
+Description : Code generators for the staging tests
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+-}
+module Staged.Gen where
 
 import Control.Effect
 import Control.Effect.CodeGen

@@ -1,7 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes, MonoLocalBinds, CPP #-}
-module Main where
+{-|
+Module      : Effect.HStore
+Description : Tests of the higher-order store
+License     : BSD-3-Clause
+Maintainer  : Nicolas Wu, Zhixuan Yang
+Stability   : experimental
+-}
+module Effect.HStore (tests) where
 
 import Prelude hiding (or)
+import Control.Exception (SomeException, try, evaluate)
 import Control.Effect
 import Control.Effect.HStore.Unsafe
 import qualified Control.Effect.HStore.Safe as Safe
@@ -9,6 +17,13 @@ import qualified Control.Effect.State as St
 import Control.Effect.Nondet.List
 import Data.List.Kind
 import Data.Functor.Identity
+
+import Hedgehog (forAll, (===))
+import Test.Tasty
+import Test.Tasty.HUnit
+
+import Gen (genInt)
+import Law (law)
 
 prog1 :: Int ! '[New, Get, Put]
 prog1 = do iRef <- new @Int 1
@@ -36,6 +51,7 @@ test2 = handle hstore landinKnot   -- 120
 goWrong :: forall effs. Members '[New, Get, Put] effs => Prog effs Int
 goWrong = do iRef <- new @Int 0
              return (handle hstore (get iRef))
+test3 :: Int
 test3 = handle hstore goWrong      -- crash
 
 
@@ -88,5 +104,58 @@ test6 :: [Int]
 test6 = Safe.runHS (handleP nondet' (prog2 @w)
                       :: forall w. Prog (Safe.HSEffs w) [Int])
 
-main :: IO ()
-main = return ()
+safeNewGet :: forall w. Int -> Prog (Safe.HSEffs w) Int
+safeNewGet v = Safe.new @Int @w v >>= Safe.get
+
+safePutGet :: forall w. Int -> Int -> Prog (Safe.HSEffs w) Int
+safePutGet v x = do r <- Safe.new @Int @w v; Safe.put r x; Safe.get r
+
+safeIndependent :: forall w. Int -> Int -> Int -> Prog (Safe.HSEffs w) Int
+safeIndependent v u x =
+  do r <- Safe.new @Int @w v; r' <- Safe.new @Int @w u; Safe.put r' x; Safe.get r
+
+crashes :: Int -> Assertion
+crashes x = do
+  r <- try (evaluate x)
+  case r of
+    Left (_ :: SomeException) -> return ()
+    Right v -> assertFailure ("no crash, result " ++ show v)
+
+tests :: TestTree
+tests = testGroup "HStore"
+  [ testGroup "Unsafe"
+    [ law "new v >>= get  =  return v" $ do
+        v <- forAll genInt
+        handle hstore (new v >>= get) === v
+    , law "put r w >> get r  =  put r w >> return w" $ do
+        v <- forAll genInt
+        w <- forAll genInt
+        handle hstore (new v >>= \r -> put r w >> get r) === w
+    , law "references are independent" $ do
+        v <- forAll genInt
+        w <- forAll genInt
+        x <- forAll genInt
+        handle hstore (do r <- new v; r' <- new w; put r' x; get r) === v
+    , testCase "references of different types" $ test1 @?= 4
+    , testCase "Landin's knot"                 $ test2 @?= 120
+    , testCase "a reference used under another handle crashes" $ crashes test3
+    , testCase "a reference from another branch crashes"       $ crashes (sum test3')
+    ]
+  , testGroup "Safe"
+    [ law "new v >>= get  =  return v" $ do
+        v <- forAll genInt
+        Safe.runHS (safeNewGet v) === v
+    , law "put r w >> get r  =  put r w >> return w" $ do
+        v <- forAll genInt
+        w <- forAll genInt
+        Safe.runHS (safePutGet v w) === w
+    , law "references are independent" $ do
+        v <- forAll genInt
+        w <- forAll genInt
+        x <- forAll genInt
+        Safe.runHS (safeIndependent v w x) === v
+    , testCase "references of different types" $ test4 @?= 4
+    , testCase "state is local if handled before nondeterminism" $ test5 @?= [0, 1]
+    , testCase "state is global if handled after nondeterminism" $ test6 @?= [0, 2]
+    ]
+  ]

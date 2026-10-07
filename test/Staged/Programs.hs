@@ -1,5 +1,12 @@
-{-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes, LambdaCase, TypeFamilies #-}
-module Main where
+{-# LANGUAGE PackageImports, BlockArguments, TemplateHaskell, ImpredicativeTypes, LambdaCase, TypeFamilies #-}
+{-|
+Module      : Staged.Programs
+Description : Tests of staged programs against their specifications
+License     : BSD-3-Clause
+Maintainer  : Nicolas Wu, Zhixuan Yang
+Stability   : experimental
+-}
+module Staged.Programs where
 
 import Control.Effect
 import Control.Effect.CodeGen
@@ -11,13 +18,22 @@ import Data.Functor.Identity
 import Control.Effect.Internal.AlgTrans
 import qualified Control.Monad.Trans.State.Strict as S
 
-import StagedGen
+import Staged.Gen
 import Control.Effect.Except
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad (join)
+-- transformers < 0.6 has a module of the same name
+import "effective" Control.Monad.Trans.List (runListT')
+
+import Hedgehog (forAll, property, (===))
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
+import Test.Tasty
+import Test.Tasty.Hedgehog
+import Test.Tasty.HUnit
 
 {-
 Generated code:
@@ -778,4 +794,104 @@ pythShallow :: Int -> [(Int, Int, Int)]
 pythShallow n = $$(stage (pushWithUpAT @Identity)
  (pythGen [||n||] [||choose||]))
 
-main = return ()
+-- | Each staged program is compared with a specification of what the
+-- generated code should compute. The programs `ioExample` to `ioExample5`
+-- write to @stdout@, and are only compiled.
+tests :: TestTree
+tests = testGroup "Staged"
+  [ testGroup "state and exceptions"
+    [ testProperty "countdown" $ property $ do
+        n <- forAll num
+        runIdentity (runStateT countdown n) === ((), min n 0)
+    , testProperty "catchProgram" $ property $ do
+        n <- forAll num
+        runIdentity (runExceptT (catchProgram n)) === Left ()
+    , testProperty "catchProgram2" $ property $ do
+        n <- forAll num
+        s <- forAll num
+        runIdentity (runExceptT (runStateT (catchProgram2 n) s)) === Left ()
+    ]
+  , testGroup "lists"
+    [ testProperty "listExample" $ property $ do
+        as <- forAll nums
+        listExample as === as
+    , testProperty "listExample'" $ property $ do
+        as <- forAll nums
+        listExample' as === as
+    , testProperty "listExample2" $ property $ do
+        as <- forAll nums
+        listExample2 as === map (+ 1) as
+    , testProperty "listExample3" $ property $ do
+        as <- forAll nums
+        listExample3 as === [ a + b | a <- as, b <- as ]
+    , testProperty "listExample4" $ property $ do
+        as <- forAll nums
+        listExample4 (* 2) (+ 3) as === [ a * 2 + (b + 3) | a <- as, b <- as ]
+    , testProperty "listExample5" $ property $ do
+        as <- forAll nums
+        s  <- forAll num
+        let run m = runIdentity (runStateT (runListT' m) s)
+        run (listExample5 (foldr ((<|>) . return) empty as))
+          === ( [ s + a + b | (a, b) <- pairs as ]
+              , last (s : [ a * b | (a, b) <- pairs as ]) )
+    , testProperty "listExample6" $ property $ do
+        as <- forAll nums
+        listExample6 as === length as
+    , testProperty "choice" $ property $ do
+        n <- forAll num
+        runIdentity (runListT' (choice n)) === [1 .. n]
+    , testProperty "choice'" $ property $ do
+        n <- forAll num
+        choice' n === [1 .. n]
+    , testProperty "choiceST" $ property $ do
+        n <- forAll num
+        s <- forAll num
+        runIdentity (runListT' (runStateT (choiceST n) s)) === [ (i, s) | i <- [1 .. n] ]
+    , testProperty "choose" $ property $ do
+        n <- forAll num
+        choose n === [1 .. n]
+    , testCase "pythShallow" $
+        pythShallow 10 @?= [(3,4,5),(4,3,5),(6,8,10),(8,6,10)]
+    ]
+  , testGroup "join points"
+    [ testProperty "joinEx" $ joins (\b -> fmap (fmap pure) . runMaybeT . runStateT (joinEx b))
+    , testProperty "joinEx1" $ joins (\b -> fmap (fmap pure) . runMaybeT . runStateT (joinEx1 b))
+    , testProperty "joinEx1'" $ joins (\b -> fmap (fmap pure) . runMaybeT . runStateT (joinEx1' b))
+    , testProperty "joinEx2" $ joins (\b -> fmap (fmap pure) . runMaybeT . runStateT (joinEx2 b))
+    , testProperty "joinEx3" $ joins (\b -> runMaybeT . runListT' . runStateT (joinEx3 b))
+    , testProperty "joinEx4" $ joins (\b -> runMaybeT . runListT' . runStateT (joinEx4 b))
+    , testProperty "testShift2" $ shifts testShift2 (* 2)
+    , testProperty "testShift3" $ shifts testShift3 (* 2)
+    , testProperty "testShift4" $ shifts testShift4 (\i -> (i * 2) * (i * 2))
+    ]
+  , testGroup "coroutines"
+    [ testProperty "yieldEx" $ property $ do
+        n <- forAll (Gen.int (Range.linear 1 100))
+        runIdentity (pingpong (yieldEx n) echo) === (Right 1 :: Either () Int)
+    , testProperty "yieldEx2" $ property $ do
+        n <- forAll (Gen.int (Range.linear 1 100))
+        runIdentity (pingpong (yieldEx2 n) echo) === (Right 1 :: Either () Int)
+    , testCase "coroutineShallow" $
+        coroutineShallow 10 @?= [101 .. 110]
+    ]
+  ]
+  where
+    num  = Gen.int (Range.linear (-5) 30)
+    nums = Gen.list (Range.linear 0 8) num
+
+    pairs as = [ (a, b) | a <- as, b <- as ]
+
+    -- Both branches of @b@ flow into the same doubling of the state.
+    joins run = property $ do
+      b <- forAll Gen.bool
+      s <- forAll num
+      runIdentity (run b s) === Just [((), if b then 20 else 40)]
+
+    shifts f spec = property $ do
+      b <- forAll Gen.bool
+      c <- forAll Gen.bool
+      runIdentity (runMaybeT (f b c))
+        === if b then Just (spec (if c then 0 else 1)) else Nothing
+
+    echo :: Int -> YResT Int Int Identity ()
+    echo a = Control.Monad.Trans.YRes.yield a echo

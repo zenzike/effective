@@ -52,6 +52,7 @@ jobs:
     - name: Build & test
       run: |
         cabal build   --project-file=cabal.project.ci
+        cabal test    --project-file=cabal.project.ci --test-show-details=direct
         cabal haddock --project-file=cabal.project.ci
         cabal sdist   --project-file=cabal.project.ci
         cabal check

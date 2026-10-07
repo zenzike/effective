@@ -1,5 +1,12 @@
 {-# LANGUAGE GADTs  #-}
-module ConcurStaged where
+{-|
+Module      : Staged.Concur
+Description : Staged handlers for the examples of concurrency
+License     : BSD-3-Clause
+Maintainer  : Zhixuan Yang
+Stability   : experimental
+-}
+module Staged.Concur where
 
 import Prelude hiding (log )
 import Control.Effect
@@ -14,25 +21,7 @@ import qualified Control.Concurrent.QSem as QSem
 import Control.Concurrent ( forkIO, QSem )
 import qualified Data.Map as M
 
-type IOPar = '[Alg IO, Par, JPar]
-
-data ActNames = Handshake | Raisehand deriving (Show, Eq, Ord)
-type HR = CCSAction ActNames
-
-bohem :: () ! [Act HR, Res HR, Par, Tell String]
-bohem = par (resHS $ par (do tell "I am just a poor boy"; handshake)
-                         (do shakehand; tell "I need no sympathy"))
-            (tell "Oh poor boy")
-
-handshake :: Member (Act HR) effs => Prog effs ()
-handshake = act (Action Handshake)
-
-shakehand :: Member (Act HR) effs => Prog effs ()
-shakehand = act (CoAction Handshake)
-
-resHS :: Member (Res HR) effs => Prog effs x -> Prog effs x
-resHS x = res (Action Handshake) x
-
+import Effect.Concurrency (IOPar, ActNames (..), HR)
 
 ioParC :: AlgebraC IOPar IO
 ioParC = ioAlgC #$ parIOAlgC #$ jparIOAlgC
