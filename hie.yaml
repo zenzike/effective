@@ -8,3 +8,6 @@ cradle:
 
     - path: "./README.lhs"
       component: "test:readme"
+
+    - path: "./test"
+      component: "test:test"

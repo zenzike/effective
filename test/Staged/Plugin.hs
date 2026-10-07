@@ -1,5 +1,13 @@
-{-# LANGUAGE BlockArguments, TemplateHaskell, ImpredicativeTypes, LambdaCase, TypeFamilies #-}
-module Main where
+{-# OPTIONS_GHC -fplugin Control.Effect.Plugin #-}
+{-# LANGUAGE PackageImports, BlockArguments, TemplateHaskell, ImpredicativeTypes, LambdaCase, TypeFamilies #-}
+{-|
+Module      : Staged.Plugin
+Description : Tests that the plugin infers the programs of Staged.Programs
+License     : BSD-3-Clause
+Maintainer  : Nicolas Wu, Zhixuan Yang
+Stability   : experimental
+-}
+module Staged.Plugin (tests) where
 
 import Control.Effect
 import Control.Effect.CodeGen
@@ -11,13 +19,23 @@ import Data.Functor.Identity
 import Control.Effect.Internal.AlgTrans
 import qualified Control.Monad.Trans.State.Strict as S
 
-import StagedGen
+import Staged.Gen
 import Control.Effect.Except
 import Control.Monad.Trans.Push
 import Control.Monad.Trans.YRes
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad (join)
+-- transformers < 0.6 has a module of the same name
+import "effective" Control.Monad.Trans.List (runListT')
+
+import Hedgehog (forAll, property, (===))
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
+import Test.Tasty
+import Test.Tasty.Hedgehog
+
+import qualified Staged.Programs as Explicit
 
 {-
 Generated code:
@@ -765,7 +783,7 @@ choose n = $$(stage (pushWithUpAT @Identity)
 -- >>> pythShallow 10
 -- [(3,4,5),(4,3,5),(6,8,10),(8,6,10)]
 {-
-test/Staged.hs:(753,19)-(754,32): Splicing expression
+test/Staged/Programs.hs:(753,19)-(754,32): Splicing expression
     stage
       (pushWithUpAT @Identity) (pythGen [|| n_a2gZ ||] [|| choose ||])
   ======>
@@ -786,4 +804,67 @@ pythShallow :: Int -> [(Int, Int, Int)]
 pythShallow n = $$(stage (pushWithUpAT @Identity)
  (pythGen [||n||] [||choose||]))
 
-main = return ()
+-- | The programs of this module are those of "Staged.Programs" without their type
+-- applications, which the plugin infers. That this module compiles is the
+-- main test. The inferred programs must also behave as the explicit ones.
+tests :: TestTree
+tests = testGroup "Plugin"
+  [ same "countdown" num $ \n ->
+      (runStateT countdown n, runStateT Explicit.countdown n)
+  , same "catchProgram" num $ \n ->
+      (runExceptT (catchProgram n), runExceptT (Explicit.catchProgram n))
+  , same "catchProgram2" num $ \n ->
+      (runExceptT (runStateT (catchProgram2 n) n), runExceptT (runStateT (Explicit.catchProgram2 n) n))
+  , same "listExample" nums $ \as -> (listExample as, Explicit.listExample as)
+  , same "listExample'" nums $ \as -> (listExample' as, Explicit.listExample' as)
+  , same "listExample2" nums $ \as -> (listExample2 as, Explicit.listExample2 as)
+  , same "listExample3" nums $ \as -> (listExample3 as, Explicit.listExample3 as)
+  , same "listExample4" nums $ \as ->
+      (listExample4 (* 2) (+ 3) as, Explicit.listExample4 (* 2) (+ 3) as)
+  , same "listExample5" nums $ \as ->
+      let run f = runStateT (runListT' (f (foldr ((<|>) . return) empty as))) 1
+      in (run listExample5, run Explicit.listExample5)
+  , same "listExample6" nums $ \as -> (listExample6 as, Explicit.listExample6 as)
+  , same "choice" num $ \n -> (runListT' (choice n), runListT' (Explicit.choice n))
+  , same "choice'" num $ \n -> (choice' n, Explicit.choice' n)
+  , same "choiceST" num $ \n ->
+      (runListT' (runStateT (choiceST n) n), runListT' (runStateT (Explicit.choiceST n) n))
+  , same "choose" num $ \n -> (choose n, Explicit.choose n)
+  , same "pythShallow" num $ \n -> (pythShallow n, Explicit.pythShallow n)
+  , same "joinEx" Gen.bool $ \b ->
+      (runMaybeT (runStateT (joinEx b) 0), runMaybeT (runStateT (Explicit.joinEx b) 0))
+  , same "joinEx1" Gen.bool $ \b ->
+      (runMaybeT (runStateT (joinEx1 b) 0), runMaybeT (runStateT (Explicit.joinEx1 b) 0))
+  , same "joinEx1'" Gen.bool $ \b ->
+      (runMaybeT (runStateT (joinEx1' b) 0), runMaybeT (runStateT (Explicit.joinEx1' b) 0))
+  , same "joinEx2" Gen.bool $ \b ->
+      (runMaybeT (runStateT (joinEx2 b) 0), runMaybeT (runStateT (Explicit.joinEx2 b) 0))
+  , same "joinEx3" Gen.bool $ \b ->
+      ( runMaybeT (runListT' (runStateT (joinEx3 b) 0))
+      , runMaybeT (runListT' (runStateT (Explicit.joinEx3 b) 0)) )
+  , same "joinEx4" Gen.bool $ \b ->
+      ( runMaybeT (runListT' (runStateT (joinEx4 b) 0))
+      , runMaybeT (runListT' (runStateT (Explicit.joinEx4 b) 0)) )
+  , same "testShift2" bools $ \(b, c) ->
+      (runMaybeT (testShift2 b c), runMaybeT (Explicit.testShift2 b c))
+  , same "testShift3" bools $ \(b, c) ->
+      (runMaybeT (testShift3 b c), runMaybeT (Explicit.testShift3 b c))
+  , same "testShift4" bools $ \(b, c) ->
+      (runMaybeT (testShift4 b c), runMaybeT (Explicit.testShift4 b c))
+  , same "yieldEx" pos $ \n -> (pingpong (yieldEx n) echo, pingpong (Explicit.yieldEx n) echo)
+  , same "yieldEx2" pos $ \n -> (pingpong (yieldEx2 n) echo, pingpong (Explicit.yieldEx2 n) echo)
+  , same "coroutineShallow" num $ \n -> (coroutineShallow n, Explicit.coroutineShallow n)
+  ]
+  where
+    num   = Gen.int (Range.linear (-5) 30)
+    nums  = Gen.list (Range.linear 0 8) num
+    pos   = Gen.int (Range.linear 1 100)
+    bools = (,) <$> Gen.bool <*> Gen.bool
+
+    echo :: Int -> YResT Int Int Identity ()
+    echo a = Control.Monad.Trans.YRes.yield a echo
+
+    same name gen both = testProperty name $ property $ do
+      x <- forAll gen
+      let (inferred, explicit) = both x
+      inferred === explicit

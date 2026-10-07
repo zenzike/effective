@@ -1,5 +1,12 @@
 {-# LANGUAGE PatternSynonyms, ViewPatterns, LambdaCase, TemplateHaskell #-}
-module Main where
+{-|
+Module      : Internal.AlgTrans
+Description : Tests of evaluation with algebra transformers
+License     : BSD-3-Clause
+Maintainer  : Nicolas Wu, Zhixuan Yang
+Stability   : experimental
+-}
+module Internal.AlgTrans (tests) where
 
 import Control.Effect
 import Control.Effect.Family.Algebraic
@@ -7,6 +14,9 @@ import Control.Effect.Maybe
 import Control.Effect.State
 import Control.Monad.Trans.Cont
 import Data.Functor.Identity
+
+import Test.Tasty
+import Test.Tasty.HUnit
 
 $(makeGen [e| var :: String ~> Int |])
 $(makeAlg [e| add :: 2 |])
@@ -60,5 +70,9 @@ test2 = evalExpr ex2
 test3 :: Maybe Int
 test3 = handle (h [("x", 3)]) ex
 
-main :: IO()
-main = return ()
+tests :: TestTree
+tests = testGroup "AlgTrans"
+  [ testCase "evalAT' on a bound variable"    $ test1 @?= Just 6
+  , testCase "evalAT' on an unbound variable" $ test2 @?= Nothing
+  , testCase "handle agrees with evalAT'"     $ test3 @?= test1
+  ]
