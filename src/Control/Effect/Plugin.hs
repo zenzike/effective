@@ -149,7 +149,11 @@ import GHC.Tc.Types.CtLoc
 #endif
 
 #if __GLASGOW_HASKELL__ >= 914
+#if __GLASGOW_HASKELL__ >= 1000
+import GHC.Builtin.WiredIn.Types (promotedConsDataCon)
+#else
 import GHC.Builtin.Types (promotedConsDataCon)
+#endif
 import GHC.Core.Coercion (mkUnivCo)
 import GHC.Core.Reduction (mkReduction)
 #endif
@@ -211,7 +215,12 @@ plugin = defaultPlugin
     , tcPluginRewrite = \_ -> emptyUFM
 #endif
     , tcPluginSolve = disambiguateAll
+#if __GLASGOW_HASKELL__ >= 1000
+    , tcPluginPostTc = pluginStopHook
+    , tcPluginShutdown = \_ -> pure ()
+#else
     , tcPluginStop = pluginStopHook
+#endif
     }
   , pluginRecompile = purePlugin
   }
