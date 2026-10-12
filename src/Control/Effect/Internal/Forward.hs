@@ -11,6 +11,7 @@ expected to be 'the canonical way' to forward the effects @effs@ along @ts@.
 -}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
@@ -84,28 +85,51 @@ class ForwardEffs effs (t :: (Type -> Type) -> (Type -> Type))  where
   fwdEffsC :: AlgTransC effs effs '[t] (FwdEffsConstraint effs t)
 
 instance ForwardEffs '[] t where
-  type FwdEffsConstraint '[] t = TruthC
+  type FwdEffsConstraint '[] t = ForwardEffs# '[] t
 
   {-# INLINE fwdEffs #-}
-  fwdEffs :: AlgTrans '[] '[] '[t] TruthC
-  fwdEffs = AlgTrans $ \_ -> emptyAlg
+  fwdEffs :: AlgTrans '[] '[] '[t] (ForwardEffs# '[] t)
+  fwdEffs = AlgTrans fwdEffs#
 
-  fwdEffsC :: AlgTransC '[] '[] '[t] TruthC
-  fwdEffsC = AlgTransC $ \_ -> emptyAlgC
+  fwdEffsC :: AlgTransC '[] '[] '[t] (ForwardEffs# '[] t)
+  fwdEffsC = AlgTransC fwdEffsC#
 
 instance ( Forward eff t
          , ForwardEffs effs t
          )
          => ForwardEffs (eff ': effs) t where
 
-  type FwdEffsConstraint (eff ': effs) t = AndC (FwdConstraint eff t) (FwdEffsConstraint effs t)
+  type FwdEffsConstraint (eff ': effs) t = ForwardEffs# (eff ': effs) t
 
   {-# INLINE fwdEffs #-}
-  fwdEffs :: AlgTrans (eff ': effs) (eff ': effs) '[t] (FwdEffsConstraint (eff ': effs) t)
-  fwdEffs = AlgTrans $ \(alg :# algs) -> fwd alg :# getAT fwdEffs algs
+  fwdEffs :: AlgTrans (eff ': effs) (eff ': effs) '[t] (ForwardEffs# (eff ': effs) t)
+  fwdEffs = AlgTrans fwdEffs#
 
-  fwdEffsC :: AlgTransC (eff : effs) (eff : effs) '[t] (FwdEffsConstraint (eff : effs) t)
-  fwdEffsC = AlgTransC $ \(ca :#$ cas) -> fwdC ca :#$ getATC fwdEffsC cas
+  fwdEffsC :: AlgTransC (eff : effs) (eff : effs) '[t] (ForwardEffs# (eff ': effs) t)
+  fwdEffsC = AlgTransC fwdEffsC#
+
+-- | @ForwardEffs# effs t m@ holds when every effect in @effs@ can be forwarded
+-- through @t@ on the carrier @m@, that is, when @'Forward' eff t@ and
+-- @'FwdConstraint' eff t m@ hold for each @eff@ in @effs@. It is the carrier
+-- constraint 'FwdEffsConstraint' of 'fwdEffs', and its methods are the
+-- forwarding algebras. Users of @effective@ do not need to mention it.
+class ForwardEffs# (effs :: [Effect]) (t :: (Type -> Type) -> (Type -> Type)) (m :: Type -> Type) where
+  fwdEffs#  :: Algebra effs m -> Algebra effs (t m)
+  fwdEffsC# :: AlgebraC effs m -> AlgebraC effs (t m)
+
+instance ForwardEffs# '[] t m where
+  {-# INLINE fwdEffs# #-}
+  fwdEffs# _ = emptyAlg
+  fwdEffsC# _ = emptyAlgC
+
+instance ( Forward eff t
+         , FwdConstraint eff t m
+         , ForwardEffs# effs t m
+         )
+         => ForwardEffs# (eff ': effs) t m where
+  {-# INLINE fwdEffs# #-}
+  fwdEffs# (alg :# algs) = fwd alg :# fwdEffs# algs
+  fwdEffsC# (ca :#$ cas) = fwdC ca :#$ fwdEffsC# cas
 
 -- | This class builds a forwarder for @effs@ along a list @ts@ of transformers
 -- by ensuring that each transformer in @ts@ can forward @effs@.

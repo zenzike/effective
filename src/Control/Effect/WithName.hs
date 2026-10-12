@@ -63,6 +63,7 @@ type name :@ eff = WithName name eff
 
 instance Forward eff t => Forward (WithName name eff) t where
   type FwdConstraint (WithName name eff) t = FwdConstraint eff t
+  {-# INLINE fwd #-}
   fwd alg (WithName op) = fwd (alg . WithName) op
 
 -- | @Rename name eff effs@ replaces (the first occurrence of) @eff@ in @effs@ with @WithName name eff@.

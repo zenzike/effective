@@ -118,9 +118,11 @@ class ProgAlg (effs :: [Effect]) (effs' :: [Effect]) (n :: Nat) where
   progAlgAux :: forall s. Sequence s => s Any
 
 instance ProgAlg '[] effs' n where
+  {-# INLINE progAlgAux #-}
   progAlgAux = nil
 
 instance (HFunctor eff, KnownNat n, ProgAlg effs effs' (n + 1)) => ProgAlg (eff ': effs) effs' n where
+  {-# INLINE progAlgAux #-}
   progAlgAux = unsafeCoerce f `cons` progAlgAux @effs @effs' @(n+1) where
     f :: forall x. eff (Prog effs') x -> Prog effs' x
     f = unsafeCall (fromIntegral $ natVal @n Proxy)
