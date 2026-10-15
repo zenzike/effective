@@ -27,26 +27,20 @@ module Control.Effect.Do ((>>)) where
 
 import Prelude hiding ((>>))
 
-import Control.Effect.Internal.Handler (Handler, (|>))
-import Control.Effect.Internal.AlgTrans (FuseAT#)
+import Control.Effect.Internal.Handler (Handler, (|>), Fuse#)
 import Control.Effect.Internal.AlgTrans.Type (MonadApply)
-import Control.Effect.Internal.Runner (FuseR#)
 import Control.Effect.Internal.Forward (ForwardsM)
-import Data.List.Kind (Union, type (:\\), type (:++))
+import Data.List.Kind (type (:\\))
 
 (>>)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
      , ForwardsM effs2 ts1
      , ForwardsM (oeffs1 :\\ effs2) ts2
-     , FuseAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2
-     , FuseR# effs2 oeffs1 oeffs2 ts1 ts2 )
+     , Fuse# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => Handler effs1 oeffs1 ts1 a1 a2   -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 a2 a3   -- ^ @h2@
-  -> Handler (effs1 `Union` effs2)
-             ((oeffs1 :\\ effs2) `Union` oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs  oeffs  ts  a1 a3
 (>>) = (|>)
 
 
