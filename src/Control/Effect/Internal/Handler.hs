@@ -33,6 +33,7 @@ different ways to wire those circuits together.
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE ImpredicativeTypes #-}
@@ -53,6 +54,7 @@ import Data.List.Kind
 import Data.Functor.Identity
 import Data.HFunctor
 import Data.Proxy
+import Data.Type.Equality ((:~:) (..))
 
 -- $namingConvention
 --
@@ -155,37 +157,53 @@ fromRunner
   -> Handler '[] '[] ts a b
 fromRunner run = Handler (Runner (\_ -> run)) (AlgTrans (const emptyAlg))
 
+-- | The internal constraints of '<:', 'unionHdl' and 'unionHdlAT'. The result
+-- has input effects @effs@ and output effects @oeffs@, which are the normal
+-- forms of @effs1 `Union` effs2@ and @oeffs1 `Union` oeffs2@.
+type UnionHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs =
+  ( UnionAT# effs1 effs2 oeffs1 oeffs2
+  , Label# (effs1 `Union` effs2)   effs
+  , Label# (oeffs1 `Union` oeffs2) oeffs )
+
 -- | Adding an algebra transformer to an existing handler. This function is supposed to be used with 
 -- `fromRunner` by @a1 <: a2 <: a3 <: ... <: fromRunner r@.
 {-# INLINE (<:) #-}
 infixr <:
 (<:)
-  :: forall effs oeffs effs' oeffs' ts a b.
-     UnionAT# effs effs' oeffs oeffs'
-  => AlgTrans effs oeffs ts Monad               -- ^ Algebra transformer to add
-  -> Handler effs' oeffs' ts a b                -- ^ Handler to extend
-  -> Handler (effs `Union` effs') (oeffs `Union` oeffs') ts a b
-algs <: Handler hrun halg = Handler (weakenREffs hrun) (weakenCS (algs `unionAT` halg))
+  :: forall effs1 oeffs1 effs2 oeffs2 ts a b effs oeffs.
+     UnionHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs
+  => AlgTrans effs1 oeffs1 ts Monad             -- ^ Algebra transformer to add
+  -> Handler effs2 oeffs2 ts a b                -- ^ Handler to extend
+  -> Handler effs  oeffs  ts a b
+algs <: Handler hrun halg
+  = castHdl refl# refl# Refl
+      (Handler (weakenREffs hrun) (weakenCS (algs `unionAT` halg)))
 
 -- | The identity handler that doesn't transform the effects.
 {-# INLINE identity #-}
 identity :: Handler effs effs '[] a a
 identity = Handler idRunner idAT
 
-type Comp# effs1 ts1 ts2 = (CompR# ts1 ts2 , CompAT# ts1 ts2)
+-- | The internal constraints of 'comp'. The composed handler has
+-- transformers @ts@, the normal form of @ts1 :++ ts2@.
+type Comp# effs1 ts1 ts2 ts =
+  ( CompR# ts1 ts2
+  , CompAT# ts1 ts2
+  , Label# (ts1 :++ ts2) ts )
 
 -- | Compose two handlers.
 {-# INLINE comp #-}
 comp
   :: ( forall m. Monad m => MonadApply ts2 m
-     , Comp# effs1 ts1 ts2 )
+     , Comp# effs1 ts1 ts2 ts )
   => Handler effs1 effs2 ts1 a1 a2
      -- ^ The first handler
   -> Handler effs2 effs3 ts2 a2 a3
      -- ^ The second handler
-  -> Handler effs1 effs3 (ts1 :++ ts2) a1 a3
+  -> Handler effs1 effs3 ts a1 a3
 comp (Handler r1 a1) (Handler r2 a2) =
-  Handler (weakenRCSMonad (compR a2 r1 r2)) (weakenCSMonad (compAT a1 a2))
+  castHdl Refl Refl refl#
+    (Handler (weakenRCSMonad (compR a2 r1 r2)) (weakenCSMonad (compAT a1 a2)))
 
 -- | Weakens a handler from @Handler effs oeffs ts fs@ to @Handler effs' oeffs' ts fs@,
 -- when @effs'@ injects into @effs@ and @oeffs@ injects into @oeffs'@.
@@ -198,38 +216,50 @@ weaken
 weaken (Handler run halg)
   = Handler (weakenR @_ @oeffs' run) (weakenEffs halg)
 
-type Hide# heffs effs oeffs = (Members (effs :\\ heffs) effs, Members oeffs oeffs)
+-- | The internal constraints of 'hide'. The result has input effects
+-- @effs'@, the normal form of @effs :\\\\ heffs@.
+type Hide# heffs effs effs' =
+  Label# (effs :\\ heffs) effs'
 
 -- | Hides the effects in @heffs@ from the handler. The type argument @heffs@
 -- must be given explicitly since it is only mentioned inside a non-injective
 -- type family `:\\`.
 {-# INLINE hide #-}
 hide
-  :: forall heffs effs oeffs ts a b.
-     Hide# heffs effs oeffs
+  :: forall heffs effs oeffs ts a b effs'.
+     ( Members (effs :\\ heffs) effs
+     , Members oeffs oeffs
+     , Hide# heffs effs effs' )
   => Proxy heffs                    -- ^ Effects to hide
   -> Handler effs oeffs ts a b      -- ^ Handler to hide effects from
-  -> Handler (effs :\\ heffs) oeffs ts a b
-hide _ h = weaken h
+  -> Handler effs' oeffs ts a b
+hide _ h = castHdl refl# Refl Refl (weaken @effs @(effs :\\ heffs) @oeffs @oeffs h)
 
-type Bypass# beffs effs oeffs =
-  ( Members (beffs :\\ effs) beffs
-  , Members beffs beffs
-  , Members effs effs
-  , Members oeffs (oeffs `Union` beffs)
-  , Members beffs (oeffs `Union` beffs) )
+-- | The internal constraints of 'withFwds'. The result has input effects
+-- @effs'@ and output effects @oeffs'@, which are the normal forms of
+-- @effs `Union` beffs@ and @oeffs `Union` beffs@.
+type Bypass# beffs effs oeffs effs' oeffs' =
+  ( Label# (effs `Union` beffs)  effs'
+  , Label# (oeffs `Union` beffs) oeffs' )
 
 -- | Operations from the output effect @oeffs@ of a handler can be added
 -- to the input effect if the handler can forward it.
 {-# INLINE withFwds #-}
 withFwds
-  :: forall beffs effs oeffs ts a b.
+  :: forall beffs effs oeffs ts a b effs' oeffs'.
      ( ForwardsM beffs ts
-     , Bypass# beffs effs oeffs )
+     , Members (beffs :\\ effs) beffs
+     , Members beffs beffs
+     , Members effs effs
+     , Members oeffs (oeffs `Union` beffs)
+     , Members beffs (oeffs `Union` beffs)
+     , Bypass# beffs effs oeffs effs' oeffs' )
   => Proxy beffs                                      -- ^ Effects to bypass
   -> Handler effs oeffs ts a b                        -- ^ Handler
-  -> Handler (effs `Union` beffs) (oeffs `Union` beffs) ts a b
-withFwds _ (Handler run alg) = Handler (weakenR run) (withFwdsAT (Proxy @beffs) alg)
+  -> Handler effs' oeffs' ts a b
+withFwds _ (Handler run alg)
+  = castHdl refl# refl# Refl
+      (Handler (weakenR run) (withFwdsAT (Proxy @beffs) alg))
 
 -- | An algebra transformer that doesn't transform the carrier can be
 -- regarded as a handler trivially.
@@ -301,58 +331,140 @@ interpretM1C
 interpretM1C mrephrase
   = HandlerC (RunnerC $ \_ -> [|| id ||]) (AlgTransC (\oalgc -> mrephrase oalgc :#$ emptyAlgC ))
 
+-- | The internal constraints of 'caseHdl'. The result has input effects
+-- @effs@, the normal form of @effs1 `Union` effs2@.
+type CaseHdl# effs1 effs2 effs =
+  ( CaseTrans# effs1 effs2
+  , Label# (effs1 `Union` effs2) effs )
+
 -- | Case splitting on the union of two effect rows. Note that `Union` is defined
 -- to be @effs1 ++ (effs2 :\\ effs1)@, so if an effect @e@ is both a member of @effs1@
 -- and @effs2@, it is consumed by the first handler.
 {-# INLINE caseHdl #-}
 caseHdl
-  :: forall effs1 effs2 oeffs ts a1 a2 a3 a4.
-     CaseTrans# effs1 effs2
+  :: forall effs1 effs2 oeffs ts a1 a2 a3 a4 effs.
+     CaseHdl# effs1 effs2 effs
   => Handler effs1 oeffs ts a1 a2
      -- ^ The first handler
   -> Handler effs2 oeffs ts a3 a4
      -- ^ The second handler
-  -> Handler (effs1 `Union` effs2) oeffs ts a1 a2
-caseHdl (Handler r1 a1) (Handler _ a2) = Handler r1 (caseATsameCS a1 a2)
+  -> Handler effs oeffs ts a1 a2
+caseHdl (Handler r1 a1) (Handler _ a2)
+  = castHdl refl# Refl Refl (Handler r1 (caseATsameCS a1 a2))
 
 -- | Case splitting on the union of two effect rows, and the two handlers may output
 -- different effects. The runner of the resulting handler is the runner of the argument.
 {-# INLINE unionHdl #-}
 unionHdl
-  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4.
-     UnionAT# effs1 effs2 oeffs1 oeffs2
+  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4 effs oeffs.
+     UnionHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs
   => Handler effs1 oeffs1 ts a1 a2
      -- ^ The first handler
   -> Handler effs2 oeffs2 ts a3 a4
      -- ^ The second handler
-  -> Handler (effs1 `Union` effs2) (oeffs1 `Union` oeffs2) ts a1 a2
-unionHdl (Handler r1 a1) (Handler _ a2) = Handler (weakenR r1) (weakenCS (unionAT a1 a2))
+  -> Handler effs oeffs ts a1 a2
+unionHdl (Handler r1 a1) (Handler _ a2)
+  = castHdl refl# refl# Refl (Handler (weakenR r1) (weakenCS (unionAT a1 a2)))
 
 -- | Case splitting on the union of two effect rows, and the two handlers may output
 -- different effects.
 {-# INLINE unionHdlAT #-}
 unionHdlAT
-  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4.
-     UnionAT# effs1 effs2 oeffs1 oeffs2
+  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4 effs oeffs.
+     UnionHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs
   => Handler  effs1 oeffs1 ts a1 a2
      -- ^ Handler
   -> AlgTrans effs2 oeffs2 ts Monad
      -- ^ Algebra transformer to combine with the handler
-  -> Handler (effs1 `Union` effs2) (oeffs1 `Union` oeffs2) ts a1 a2
-unionHdlAT (Handler r1 a1) a2 = Handler (weakenR r1) (weakenCS (unionAT a1 a2))
+  -> Handler effs oeffs ts a1 a2
+unionHdlAT (Handler r1 a1) a2
+  = castHdl refl# refl# Refl (Handler (weakenR r1) (weakenCS (unionAT a1 a2)))
+
+-- | The internal constraints of 'appendHdl'. The result has input effects
+-- @effs@ and output effects @oeffs@, which are the normal forms of
+-- @effs1 :++ effs2@ and @oeffs1 :++ oeffs2@.
+type AppendHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs =
+  ( AppendAT# effs1 effs2 oeffs1 oeffs2
+  , Label# (effs1 :++ effs2)   effs
+  , Label# (oeffs1 :++ oeffs2) oeffs )
 
 -- | Case splitting on the append of two effect rows, and the two handlers may output
 -- different effects.
 {-# INLINE appendHdl #-}
 appendHdl
-  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4.
-     AppendAT# effs1 effs2 oeffs1 oeffs2
+  :: forall effs1 effs2 oeffs1 oeffs2 ts a1 a2 a3 a4 effs oeffs.
+     AppendHdl# effs1 effs2 oeffs1 oeffs2 effs oeffs
   => Handler effs1 oeffs1 ts a1 a2
      -- ^ The first handler
   -> Handler effs2 oeffs2 ts a3 a4
      -- ^ The second handler
-  -> Handler (effs1 :++ effs2) (oeffs1 :++ oeffs2) ts a1 a2
-appendHdl (Handler r1 a1) (Handler _ a2) = Handler (weakenR r1) (weakenCS (appendAT a1 a2))
+  -> Handler effs oeffs ts a1 a2
+appendHdl (Handler r1 a1) (Handler _ a2)
+  = castHdl refl# refl# Refl (Handler (weakenR r1) (weakenCS (appendAT a1 a2)))
+
+-- | @Label# xs label@ binds @label@ to the normal form of @xs@. The instances
+-- match only once the solver has reduced @xs@ to a cons or a nil, so @label@
+-- is never bound to a stuck family application. The functional dependency does
+-- the binding: when a wanted @Label# (x ': xs) l@
+-- is improved against the second instance, the solver unifies @l@ with
+-- @x ': label@ for a fresh @label@, and the tail is bound in the same way by
+-- the recursive constraint once @xs@ has been reduced further. The
+-- functional dependency records that @xs@ determines @label@, so that a
+-- constraint with the two the wrong way round is rejected as ambiguous.
+type Label# :: [k] -> [k] -> Constraint
+class Label# xs label | xs -> label where
+  refl# :: label :~: xs
+
+instance Label# '[] '[] where
+  {-# INLINE refl# #-}
+  refl# = Refl
+
+instance Label# xs label => Label# (x ': xs) (x ': label) where
+  {-# INLINE refl# #-}
+  refl# = case refl# @_ @xs @label of Refl -> Refl
+
+-- | Casts a handler to another when their effects and transformers are equal.
+--
+-- Unlike 'Data.Type.Equality.castWith', each proof has the type cast /to/ on
+-- its left. This order is needed, the
+-- simplifier builds coercions that grow exponentially with the depth of a
+-- right-nested stack. At -O1 with GHC 9.14.1, sixteen right-nested state
+-- handlers then have coercions sixteen times the size and a first simplifier
+-- pass of 3.5 seconds against 1.1.
+{-# INLINE castHdl #-}
+castHdl
+  :: effs' :~: effs -> oeffs' :~: oeffs -> ts' :~: ts
+  -> Handler effs  oeffs  ts  a b
+  -> Handler effs' oeffs' ts' a b
+castHdl Refl Refl Refl h = h
+
+-- | Staged version of 'castHdl'.
+{-# INLINE castHdlC #-}
+castHdlC
+  :: effs' :~: effs -> oeffs' :~: oeffs -> ts' :~: ts
+  -> HandlerC effs  oeffs  ts  a b
+  -> HandlerC effs' oeffs' ts' a b
+castHdlC Refl Refl Refl h = h
+
+-- | The internal constraints of 'fuse'. The fused handler has input effects
+-- @effs@, output effects @oeffs@ and transformers @ts@, which are the normal
+-- forms of @effs1 `Union` effs2@, @(oeffs1 :\\\\ effs2) `Union` oeffs2@ and
+-- @ts1 :++ ts2@.
+type Fuse# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts =
+  ( FuseAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2
+  , FuseR# effs2 oeffs1 oeffs2 ts1 ts2
+  , Label# (effs1 `Union` effs2)               effs
+  , Label# ((oeffs1 :\\ effs2) `Union` oeffs2) oeffs
+  , Label# (ts1 :++ ts2)                       ts )
+
+-- | The internal constraints of 'pipe'. The piped handler has output effects
+-- @oeffs@ and transformers @ts@, which are the normal forms of
+-- @(oeffs1 :\\\\ effs2) `Union` oeffs2@ and @ts1 :++ ts2@.
+type Pipe# effs2 oeffs1 oeffs2 ts1 ts2 oeffs ts =
+  ( PipeAT# effs2 oeffs1 oeffs2 ts1 ts2
+  , FuseR# effs2 oeffs1 oeffs2 ts1 ts2
+  , Label# ((oeffs1 :\\ effs2) `Union` oeffs2) oeffs
+  , Label# (ts1 :++ ts2)                       ts )
 
 -- | The combinator @h1 |> h2@ is an archetype of handler fusion. Its property is that
 -- @
@@ -370,20 +482,17 @@ infixr 9 `fuse`, |>
 {-# INLINE fuse #-}
 {-# INLINE (|>) #-}
 fuse, (|>)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
      , ForwardsM effs2 ts1
      , ForwardsM (oeffs1 :\\ effs2) ts2
-     , FuseAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2
-     , FuseR# effs2 oeffs1 oeffs2 ts1 ts2 )
+     , Fuse# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => Handler effs1 oeffs1 ts1 a1 a2   -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 a2 a3   -- ^ @h2@
-  -> Handler (effs1 `Union` effs2)
-             ((oeffs1 :\\ effs2) `Union` oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs  oeffs  ts  a1 a3
 fuse (Handler run1 malg1) (Handler run2 malg2)
-  = Handler (weakenRCSMonad (fuseR malg2 run1 run2)) (weakenCSMonad (fuseAT malg1 malg2))
+  = castHdl refl# refl# refl#
+      (Handler (weakenRCSMonad (fuseR malg2 run1 run2)) (weakenCSMonad (fuseAT malg1 malg2)))
 
 -- | A synonym for `fuse`.
 (|>) = fuse
@@ -391,58 +500,60 @@ fuse (Handler run1 malg1) (Handler run2 malg2)
 -- | Staged version of `fuse`
 infixr 9 `fuseC`, |>$
 fuseC, (|>$)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
      , ForwardsM effs2 ts1
      , ForwardsM (oeffs1 :\\ effs2) ts2
-     , FuseAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2
-     , FuseR# effs2 oeffs1 oeffs2 ts1 ts2 )
+     , Fuse# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => HandlerC effs1 oeffs1 ts1 a1 a2 -- ^ @h1@
   -> HandlerC effs2 oeffs2 ts2 a2 a3 -- ^ @h2@
-  -> HandlerC (effs1 `Union` effs2)
-              ((oeffs1 :\\ effs2) `Union` oeffs2)
-              (ts1 :++ ts2)
-              a1 a3
+  -> HandlerC effs  oeffs  ts  a1 a3
 fuseC (HandlerC run1 malg1) (HandlerC run2 malg2)
-  = HandlerC (weakenRCSCMonad (fuseRC malg2 run1 run2)) (weakenCSCMonad (fuseATC malg1 malg2))
+  = castHdlC refl# refl# refl#
+      (HandlerC (weakenRCSCMonad (fuseRC malg2 run1 run2)) (weakenCSCMonad (fuseATC malg1 malg2)))
 
 (|>$) = fuseC
+
+-- | The internal constraints of 'fuseApp'. The fused handler has input
+-- effects @effs@, output effects @oeffs@ and transformers @ts@, which are the
+-- normal forms of @effs1 :++ effs2@, @oeffs1 :++ oeffs2@ and @ts1 :++ ts2@.
+type FuseApp# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts =
+  ( CompAT# ts1 ts2
+  , KnownEffs oeffs1
+  , Label# (effs1 :++ effs2)   effs
+  , Label# (oeffs1 :++ oeffs2) oeffs
+  , Label# (ts1 :++ ts2)       ts )
 
 -- | A variant of `fuse` that works with @:++@ instead of @Union@.
 infixr 9 `fuseApp`, ++>
 {-# INLINE fuseApp #-}
 fuseApp, (++>)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
-     , CompAT# ts1 ts2, KnownEffs oeffs1
-     , ForwardsM effs2 ts1, ForwardsM oeffs1 ts2 )
+     , ForwardsM effs2 ts1, ForwardsM oeffs1 ts2
+     , FuseApp# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => Handler effs1 oeffs1 ts1 a1 a2   -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 a2 a3   -- ^ @h2@
-  -> Handler (effs1 :++ effs2)
-             (oeffs1 :++ oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs  oeffs  ts  a1 a3
 fuseApp (Handler run1 malg1) (Handler run2 malg2)
-  = Handler (weakenRCSMonad (fuseAppR malg2 run1 run2)) (weakenCSMonad (fuseAppAT malg1 malg2))
+  = castHdl refl# refl# refl#
+      (Handler (weakenRCSMonad (fuseAppR malg2 run1 run2)) (weakenCSMonad (fuseAppAT malg1 malg2)))
 
 (++>) = fuseApp
 
 -- | Staged version of `fuseApp`.
 infixr 9 `fuseAppC`, ++>$
 fuseAppC, (++>$)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
-     , CompAT# ts1 ts2
      , ForwardsM effs2 ts1, ForwardsM oeffs1 ts2
-     , KnownEffs oeffs1 )
+     , FuseApp# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => HandlerC effs1 oeffs1 ts1 a1 a2   -- ^ @h1@
   -> HandlerC effs2 oeffs2 ts2 a2 a3   -- ^ @h2@
-  -> HandlerC (effs1 :++ effs2)
-              (oeffs1 :++ oeffs2)
-              (ts1 :++ ts2)
-              a1 a3
+  -> HandlerC effs  oeffs  ts  a1 a3
 fuseAppC (HandlerC run1 malg1) (HandlerC run2 malg2)
-  = HandlerC (weakenRCSCMonad (fuseAppRC run1 run2)) (weakenCSCMonad (fuseAppATC malg1 malg2))
+  = castHdlC refl# refl# refl#
+      (HandlerC (weakenRCSCMonad (fuseAppRC run1 run2)) (weakenCSCMonad (fuseAppATC malg1 malg2)))
 
 (++>$) = fuseAppC
 
@@ -453,64 +564,73 @@ infixl 9 `pipe`
 {-# INLINE pipe #-}
 {-# INLINE (\\) #-}
 pipe, (\\)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
-     , PipeAT# effs2 oeffs1 oeffs2 ts1 ts2
-     , FuseR# effs2 oeffs1 oeffs2 ts1 ts2
-     , ForwardsM (oeffs1 :\\ effs2) ts2 )
+     , ForwardsM (oeffs1 :\\ effs2) ts2
+     , Pipe# effs2 oeffs1 oeffs2 ts1 ts2 oeffs ts )
   => Handler effs1 oeffs1 ts1 a1 a2    -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 a2 a3    -- ^ @h2@
-  -> Handler effs1
-             ((oeffs1 :\\ effs2) `Union` oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs1 oeffs  ts  a1 a3
 pipe (Handler run1 malg1)  (Handler run2 malg2)
-  = Handler (weakenRCSMonad (fuseR malg2 run1 run2)) (weakenCSMonad (pipeAT malg1 malg2))
+  = castHdl Refl refl# refl#
+      (Handler (weakenRCSMonad (fuseR malg2 run1 run2)) (weakenCSMonad (pipeAT malg1 malg2)))
 
 -- | A synonym for 'pipe'
 (\\) = pipe
 
 -- | Static version of `pipe`.
 pipeC, (\\$)
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
-     , PipeAT# effs2 oeffs1 oeffs2 ts1 ts2
-     , FuseR# effs2 oeffs1 oeffs2 ts1 ts2
-     , ForwardsM (oeffs1 :\\ effs2) ts2 )
+     , ForwardsM (oeffs1 :\\ effs2) ts2
+     , Pipe# effs2 oeffs1 oeffs2 ts1 ts2 oeffs ts )
   => HandlerC effs1 oeffs1 ts1 a1 a2   -- ^ @h1@
   -> HandlerC effs2 oeffs2 ts2 a2 a3   -- ^ @h2@
-  -> HandlerC effs1
-              ((oeffs1 :\\ effs2) `Union` oeffs2)
-              (ts1 :++ ts2)
-              a1 a3
+  -> HandlerC effs1 oeffs  ts  a1 a3
 pipeC (HandlerC run1 malg1) (HandlerC run2 malg2)
-  = HandlerC (weakenRCSCMonad (fuseRC malg2 run1 run2)) (weakenCSCMonad (pipeATC malg1 malg2))
+  = castHdlC Refl refl# refl#
+      (HandlerC (weakenRCSCMonad (fuseRC malg2 run1 run2)) (weakenCSCMonad (pipeATC malg1 malg2)))
 
 -- | A synonym for 'pipe'
 (\\$) = pipeC
 
-type Pass# effs1 effs2 oeffs1 oeffs2 ts1 ts2 =
+-- | The internal constraints of 'pass'. The result has input effects @effs@,
+-- output effects @oeffs@ and transformers @ts@, which are the normal forms of
+-- @effs1 `Union` effs2@, @oeffs1 `Union` oeffs2@ and @ts1 :++ ts2@ (see
+-- 'Label#').
+type Pass# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts =
   ( PassAT# effs1 effs2 oeffs1 oeffs2 ts1 ts2 Monad
   , FuseR# effs2 oeffs1 oeffs2 ts1 ts2
-  , Members (oeffs1 `Union` oeffs2) (oeffs1 `Union` oeffs2))
+  , Label# (effs1 `Union` effs2)   effs
+  , Label# (oeffs1 `Union` oeffs2) oeffs
+  , Label# (ts1 :++ ts2)           ts )
 
 -- | @pass h1 h2@ results in a handler that handles all the effects handled by
 -- @h1@ and @h2@, but unlike @fuse@, @pass@ doesn't use @h2@ to handle the
 -- effects produced by @h1@.
 pass
-  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
      , ForwardsM  effs2 ts1
      , ForwardsM oeffs1 ts2
-     , Pass# effs1 effs2 oeffs1 oeffs2 ts1 ts2 )
+     , Members (oeffs1 `Union` oeffs2) (oeffs1 `Union` oeffs2)
+     , Pass# effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => Handler effs1 oeffs1 ts1 a1 a2         -- ^ @h1@
   -> Handler effs2 oeffs2 ts2 a2 a3         -- ^ @h2@
-  -> Handler (effs1 `Union` effs2)
-             (oeffs1 `Union` oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs  oeffs  ts  a1 a3
 pass (Handler r1 a1) (Handler r2 a2)
-  = Handler (weakenRCSMonad (passR r1 r2)) (weakenCSMonad (passAT a1 a2))
+  = castHdl refl# refl# refl#
+      (Handler (weakenRCSMonad (passR r1 r2)) (weakenCSMonad (passAT a1 a2)))
+
+-- | The internal constraints of 'generalFuse'. The result has input effects
+-- @effs@, output effects @oeffs@ and transformers @ts@, which are the normal
+-- forms of @effs1 `Union` feffs@, @(oeffs1 :\\\\ ieffs) `Union` oeffs2@ and
+-- @ts1 :++ ts2@.
+type GeneralFuse# feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts =
+  ( GeneralFuseAT# feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2
+  , Label# (effs1 `Union` feffs)               effs
+  , Label# ((oeffs1 :\\ ieffs) `Union` oeffs2) oeffs
+  , Label# (ts1 :++ ts2)                       ts )
 
 -- | `generalFuse` subsumes @fuse@, @pass@, and @pipe@ by having two type arguments
 -- @feffs@ and @ieffs@ such that
@@ -527,13 +647,13 @@ pass (Handler r1 a1) (Handler r2 a2)
 
 {-# INLINE generalFuse #-}
 generalFuse
-  :: forall feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3.
+  :: forall feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2 a1 a2 a3 effs oeffs ts.
      ( forall m. Monad m => MonadApply ts2 m
      , Members feffs effs2
      , Members ieffs effs2
      , ForwardsM feffs ts1
      , ForwardsM (oeffs1 :\\ ieffs) ts2
-     , GeneralFuseAT# feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2 )
+     , GeneralFuse# feffs ieffs effs1 effs2 oeffs1 oeffs2 ts1 ts2 effs oeffs ts )
   => Proxy feffs
      -- ^ Effects to be forwarded
   -> Proxy ieffs
@@ -542,13 +662,11 @@ generalFuse
      -- ^ The first handler
   -> Handler effs2 oeffs2 ts2 a2 a3
      -- ^ The second handler
-  -> Handler (effs1 `Union` feffs)
-             ((oeffs1 :\\ ieffs) `Union` oeffs2)
-             (ts1 :++ ts2)
-             a1 a3
+  -> Handler effs oeffs ts a1 a3
 generalFuse p1 p2 (Handler r1 a1) (Handler r2 a2)
-  = Handler (weakenRCSMonad (fuseR (weakenIEffs @ieffs a2) r1 r2))
-            (weakenCSMonad (generalFuseAT p1 p2 a1 a2))
+  = castHdl refl# refl# refl#
+      (Handler (weakenRCSMonad (fuseR (weakenIEffs @ieffs a2) r1 r2))
+               (weakenCSMonad (generalFuseAT p1 p2 a1 a2)))
 
 -- * Applying Handlers
 
